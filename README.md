@@ -1,4 +1,4 @@
-# Proyecto-Software---Teleprogreso-S.A.
+# Proyecto-Software-Teleprogreso-S.A.
 
 Proyecto de Ingeniería de Software para el desarrollo de una aplicación de supervisión de personal y generación de reportes para Teleprogreso S.A.
 
@@ -30,7 +30,7 @@ Documentación relacionada con la metodología Scrum
 
 ## 🏢 Sobre Teleprogreso S.A.
 
-Teleprogreso S.A. es una empresa guatemalteca dedicada a [breve descripción de la empresa si la tienes].
+Teleprogreso S.A. es una empresa ubicada en Fraijanes que brinda servicios de internet por fibra óptica y televisión por cable, ofrecidos a sus clientes mediante un pago mensual. Este tipo de empresas se conocen como ISP (Internet Service Provider), ya que se encargan de proveer acceso a internet y servicios de conectividad a hogares y negocios.
 
 ## 📋 Descripción del Proyecto
 
@@ -44,4 +44,4 @@ Este proyecto consiste en el desarrollo de una aplicación web/móvil para la su
 
 *Aún por definir*
 
-Última actualización: 11/02/2026
+Última actualización: 16/02/2026
