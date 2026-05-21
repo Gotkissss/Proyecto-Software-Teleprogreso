@@ -13,6 +13,7 @@ class Activo(Base):
     fecha_registro: Mapped[date]       = mapped_column(Date, nullable=False, server_default=func.now())
     descripcion:    Mapped[str | None] = mapped_column(Text, nullable=True)
     tipo:           Mapped[str]        = mapped_column(String(20), nullable=False)  # carro | material | herramienta
+    foto_url:       Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relaciones ISA
     carro:       Mapped["Carro | None"]       = relationship(back_populates="activo", uselist=False)
