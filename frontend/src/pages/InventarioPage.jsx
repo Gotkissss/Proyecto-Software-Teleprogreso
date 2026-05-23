@@ -269,3 +269,370 @@ function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
   )
 }
  
+function TablaHerramientas({ busqueda, filtroEstado, sortConfig, onSort }) {
+  const SortIcon = ({ col }) => {
+    if (sortConfig.key !== col) return <span className={styles.sortNeutral}><IconChevronsUpDown /></span>
+    return sortConfig.dir === 'asc'
+      ? <span className={styles.sortActive}><IconChevronUp /></span>
+      : <span className={styles.sortActive}><IconChevronDown /></span>
+  }
+ 
+  const datos = useMemo(() => {
+    let lista = MOCK_HERRAMIENTAS.filter(h => {
+      const q = busqueda.toLowerCase()
+      const coincide = !q ||
+        h.nombre_activo.toLowerCase().includes(q) ||
+        (h.tipo_herramienta ?? '').toLowerCase().includes(q) ||
+        (h.marca ?? '').toLowerCase().includes(q) ||
+        (h.modelo ?? '').toLowerCase().includes(q)
+      const estado = filtroEstado === 'todos' || h.estado === filtroEstado
+      return coincide && estado
+    })
+    if (sortConfig.key) {
+      lista = [...lista].sort((a, b) => {
+        const va = String(a[sortConfig.key] ?? '').toLowerCase()
+        const vb = String(b[sortConfig.key] ?? '').toLowerCase()
+        if (va < vb) return sortConfig.dir === 'asc' ? -1 : 1
+        if (va > vb) return sortConfig.dir === 'asc' ?  1 : -1
+        return 0
+      })
+    }
+    return lista
+  }, [busqueda, filtroEstado, sortConfig])
+ 
+  if (datos.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <div className={styles.emptyIcon}><IconTool /></div>
+        <p className={styles.emptyMsg}>No se encontraron herramientas con esos criterios.</p>
+      </div>
+    )
+  }
+ 
+  return (
+    <div className={styles.tableWrapper}>
+      <table className={styles.table}>
+        <thead className={styles.thead}>
+          <tr>
+            <th className={styles.th}>Herramienta</th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('tipo_herramienta')}>
+              <span>Tipo</span><SortIcon col="tipo_herramienta" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('marca')}>
+              <span>Marca</span><SortIcon col="marca" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('modelo')}>
+              <span>Modelo</span><SortIcon col="modelo" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('estado')}>
+              <span>Estado</span><SortIcon col="estado" />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {datos.map(h => (
+            <tr key={h.id_activo} className={styles.tr}>
+              <td className={styles.td}>
+                <div className={styles.activoCell}>
+                  <HerramientaMiniatura tipo={h.tipo_herramienta} />
+                  <span className={styles.activoNombre}>{h.nombre_activo}</span>
+                </div>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.tipoTag}>{h.tipo_herramienta}</span>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.textoSecundario}>{h.marca}</span>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.textoSecundario}>{h.modelo}</span>
+              </td>
+              <td className={styles.td}>
+                <Badge
+                  label={ESTADO_HERR_LABEL[h.estado] ?? h.estado}
+                  variant={ESTADO_HERR_VARIANT[h.estado] ?? 'muted'}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={styles.resultCount}>
+        Mostrando {datos.length} de {MOCK_HERRAMIENTAS.length} herramientas
+      </p>
+    </div>
+  )
+}
+ 
+/* ── Tabla Materiales ────────────────────────────────────────────────────── */
+function TablaMateriales({ busqueda, filtroEstado, sortConfig, onSort }) {
+  const SortIcon = ({ col }) => {
+    if (sortConfig.key !== col) return <span className={styles.sortNeutral}><IconChevronsUpDown /></span>
+    return sortConfig.dir === 'asc'
+      ? <span className={styles.sortActive}><IconChevronUp /></span>
+      : <span className={styles.sortActive}><IconChevronDown /></span>
+  }
+ 
+  const datos = useMemo(() => {
+    let lista = MOCK_MATERIALES.filter(m => {
+      const q = busqueda.toLowerCase()
+      const coincide = !q ||
+        m.nombre_activo.toLowerCase().includes(q) ||
+        (m.tipo_material ?? '').toLowerCase().includes(q) ||
+        (m.unidad_medida ?? '').toLowerCase().includes(q)
+      // Para materiales el filtro de estado aplica a stock bajo vs normal
+      if (filtroEstado === 'stock_bajo') return coincide && m.cantidad_disponible <= m.stock_minimo
+      if (filtroEstado === 'normal')     return coincide && m.cantidad_disponible > m.stock_minimo
+      return coincide
+    })
+    if (sortConfig.key) {
+      lista = [...lista].sort((a, b) => {
+        const va = sortConfig.key === 'cantidad_disponible'
+          ? (a[sortConfig.key] ?? 0)
+          : String(a[sortConfig.key] ?? '').toLowerCase()
+        const vb = sortConfig.key === 'cantidad_disponible'
+          ? (b[sortConfig.key] ?? 0)
+          : String(b[sortConfig.key] ?? '').toLowerCase()
+        if (va < vb) return sortConfig.dir === 'asc' ? -1 : 1
+        if (va > vb) return sortConfig.dir === 'asc' ?  1 : -1
+        return 0
+      })
+    }
+    return lista
+  }, [busqueda, filtroEstado, sortConfig])
+ 
+  if (datos.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <div className={styles.emptyIcon}><IconBox /></div>
+        <p className={styles.emptyMsg}>No se encontraron materiales con esos criterios.</p>
+      </div>
+    )
+  }
+ 
+  return (
+    <div className={styles.tableWrapper}>
+      <table className={styles.table}>
+        <thead className={styles.thead}>
+          <tr>
+            <th className={styles.th}>Material</th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('tipo_material')}>
+              <span>Tipo</span><SortIcon col="tipo_material" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('unidad_medida')}>
+              <span>Unidad</span><SortIcon col="unidad_medida" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('cantidad_disponible')}>
+              <span>Cantidad</span><SortIcon col="cantidad_disponible" />
+            </th>
+            <th className={styles.th}>Stock mínimo</th>
+            <th className={styles.th}>Nivel</th>
+          </tr>
+        </thead>
+        <tbody>
+          {datos.map(m => {
+            const stockBajo = m.cantidad_disponible <= m.stock_minimo
+            const pct = Math.min(100, Math.round((m.cantidad_disponible / Math.max(m.stock_minimo * 3, 1)) * 100))
+            return (
+              <tr key={m.id_activo} className={styles.tr}>
+                <td className={styles.td}>
+                  <div className={styles.activoCell}>
+                    <MaterialMiniatura tipo={m.tipo_material} />
+                    <span className={styles.activoNombre}>{m.nombre_activo}</span>
+                  </div>
+                </td>
+                <td className={styles.td}>
+                  <span className={styles.tipoTag}>{m.tipo_material}</span>
+                </td>
+                <td className={styles.td}>
+                  <span className={styles.textoSecundario}>{m.unidad_medida}</span>
+                </td>
+                <td className={styles.td}>
+                  <span className={`${styles.cantidadNum} ${stockBajo ? styles.cantidadBaja : ''}`}>
+                    {m.cantidad_disponible.toLocaleString()}
+                  </span>
+                </td>
+                <td className={styles.td}>
+                  <span className={styles.textoSecundario}>{m.stock_minimo.toLocaleString()}</span>
+                </td>
+                <td className={styles.td}>
+                  <div className={styles.stockBarWrap}>
+                    <div className={styles.stockBar}>
+                      <div
+                        className={`${styles.stockBarFill} ${stockBajo ? styles.stockBarBajo : styles.stockBarOk}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <Badge
+                      label={stockBajo ? 'Stock bajo' : 'Normal'}
+                      variant={stockBajo ? 'danger' : 'success'}
+                    />
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className={styles.resultCount}>
+        Mostrando {datos.length} de {MOCK_MATERIALES.length} materiales
+      </p>
+    </div>
+  )
+}
+ 
+/* ── Configuración de tabs ───────────────────────────────────────────────── */
+const TABS = [
+  {
+    id: 'vehiculos',
+    label: 'Vehículos',
+    Icon: IconCar,
+    total: MOCK_VEHICULOS.length,
+    estados: [
+      { value: 'todos',         label: 'Todos los estados' },
+      { value: 'disponible',    label: 'Disponible' },
+      { value: 'en_uso',        label: 'En uso' },
+      { value: 'mantenimiento', label: 'Mantenimiento' },
+      { value: 'fuera_servicio',label: 'Fuera de servicio' },
+    ],
+  },
+  {
+    id: 'herramientas',
+    label: 'Herramientas',
+    Icon: IconTool,
+    total: MOCK_HERRAMIENTAS.length,
+    estados: [
+      { value: 'todos',         label: 'Todos los estados' },
+      { value: 'disponible',    label: 'Disponible' },
+      { value: 'en_uso',        label: 'En uso' },
+      { value: 'mantenimiento', label: 'Mantenimiento' },
+      { value: 'dañada',        label: 'Dañada' },
+    ],
+  },
+  {
+    id: 'materiales',
+    label: 'Materiales',
+    Icon: IconBox,
+    total: MOCK_MATERIALES.length,
+    estados: [
+      { value: 'todos',      label: 'Todos' },
+      { value: 'normal',     label: 'Stock normal' },
+      { value: 'stock_bajo', label: 'Stock bajo' },
+    ],
+  },
+]
+ 
+/* ── Componente principal ────────────────────────────────────────────────── */
+export default function InventarioPage() {
+  const [tabActiva,    setTabActiva]    = useState('vehiculos')
+  const [busqueda,     setBusqueda]     = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('todos')
+  const [sortConfig,   setSortConfig]   = useState({ key: null, dir: 'asc' })
+ 
+  const tabInfo = TABS.find(t => t.id === tabActiva)
+ 
+  const handleCambiarTab = (id) => {
+    setTabActiva(id)
+    setBusqueda('')
+    setFiltroEstado('todos')
+    setSortConfig({ key: null, dir: 'asc' })
+  }
+ 
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+ 
+  return (
+    <div className={styles.page}>
+      {/* ── Header ── */}
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.title}>Inventario</h1>
+          <p className={styles.subtitle}>Consulta y seguimiento de activos operativos</p>
+        </div>
+      </div>
+ 
+      {/* ── Tabs ── */}
+      <div className={styles.tabsWrapper}>
+        <div className={styles.tabs}>
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              className={`${styles.tab} ${tabActiva === tab.id ? styles.tabActive : ''}`}
+              onClick={() => handleCambiarTab(tab.id)}
+            >
+              <span className={styles.tabIcon}><tab.Icon /></span>
+              <span className={styles.tabLabel}>{tab.label}</span>
+              <span className={`${styles.tabCount} ${tabActiva === tab.id ? styles.tabCountActive : ''}`}>
+                {tab.total}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+ 
+      {/* ── Toolbar: buscador + filtro ── */}
+      <div className={styles.toolbar}>
+        <div className={styles.searchWrap}>
+          <span className={styles.searchIcon}><IconSearch /></span>
+          <input
+            type="search"
+            className={styles.searchInput}
+            placeholder={`Buscar ${tabInfo?.label.toLowerCase()}...`}
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+          />
+          {busqueda && (
+            <button className={styles.searchClear} onClick={() => setBusqueda('')} aria-label="Limpiar">
+              <IconX />
+            </button>
+          )}
+        </div>
+        <div className={styles.filterWrap}>
+          <span className={styles.filterIcon}><IconFilter /></span>
+          <select
+            className={styles.filterSelect}
+            value={filtroEstado}
+            onChange={e => { setFiltroEstado(e.target.value); setSortConfig({ key: null, dir: 'asc' }) }}
+          >
+            {tabInfo?.estados.map(e => (
+              <option key={e.value} value={e.value}>{e.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+ 
+      {/* ── Contenido por tab ── */}
+      <div className={styles.tabContent}>
+        {tabActiva === 'vehiculos' && (
+          <TablaVehiculos
+            busqueda={busqueda}
+            filtroEstado={filtroEstado}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+          />
+        )}
+        {tabActiva === 'herramientas' && (
+          <TablaHerramientas
+            busqueda={busqueda}
+            filtroEstado={filtroEstado}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+          />
+        )}
+        {tabActiva === 'materiales' && (
+          <TablaMateriales
+            busqueda={busqueda}
+            filtroEstado={filtroEstado}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+ 

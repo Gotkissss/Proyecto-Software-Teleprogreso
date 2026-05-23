@@ -362,3 +362,220 @@
   vertical-align: middle;
 }
  
+/* ── Celda activo (miniatura + nombre) ─────────────────────── */
+.activoCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 200px;
+}
+ 
+.activoNombre {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+ 
+/* ── Miniatura de activo ───────────────────────────────────── */
+.miniatura {
+  width: 52px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  flex-shrink: 0;
+  gap: 2px;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+ 
+.miniaturaLabel {
+  font-size: 0.625rem;
+  font-weight: 800;
+  color: inherit;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  opacity: 0.6;
+}
+ 
+/* ── Tags y textos ─────────────────────────────────────────── */
+.placaTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  border: 1px solid var(--color-border);
+}
+ 
+.tipoTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+ 
+.textoSecundario {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+ 
+.capacidadBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-alt);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  border: 1px solid var(--color-border);
+}
+ 
+/* ── Cantidad y stock ──────────────────────────────────────── */
+.cantidadNum {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+ 
+.cantidadBaja {
+  color: var(--color-danger-dark);
+}
+ 
+.stockBarWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+ 
+.stockBar {
+  width: 80px;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+ 
+.stockBarFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 400ms ease;
+  min-width: 4px;
+}
+ 
+.stockBarOk {
+  background: var(--color-success);
+}
+ 
+.stockBarBajo {
+  background: var(--color-danger);
+}
+ 
+/* ── Contador de resultados ────────────────────────────────── */
+.resultCount {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  margin: 0;
+}
+ 
+/* ── Estado vacío ──────────────────────────────────────────── */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+}
+ 
+.emptyIcon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-4);
+}
+ 
+.emptyIcon svg {
+  width: 28px;
+  height: 28px;
+}
+ 
+.emptyMsg {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin: 0;
+}
+ 
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .tableWrapper {
+    overflow-x: auto;
+  }
+  .table {
+    min-width: 640px;
+  }
+}
+ 
+@media (max-width: 640px) {
+  .page {
+    padding: var(--space-5) var(--space-4) var(--space-10);
+  }
+  .title {
+    font-size: 1.5rem;
+  }
+  .tabs {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 0.875rem;
+  }
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .searchWrap {
+    min-width: 0;
+    width: 100%;
+  }
+  .filterSelect {
+    min-width: 0;
+    width: 100%;
+  }
+}
+ 
