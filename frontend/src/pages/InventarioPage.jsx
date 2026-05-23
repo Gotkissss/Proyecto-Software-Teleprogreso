@@ -169,3 +169,103 @@ function MaterialMiniatura({ tipo }) {
     </div>
   )
 }
+
+function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
+  const SortIcon = ({ col }) => {
+    if (sortConfig.key !== col) return <span className={styles.sortNeutral}><IconChevronsUpDown /></span>
+    return sortConfig.dir === 'asc'
+      ? <span className={styles.sortActive}><IconChevronUp /></span>
+      : <span className={styles.sortActive}><IconChevronDown /></span>
+  }
+ 
+  const datos = useMemo(() => {
+    let lista = MOCK_VEHICULOS.filter(v => {
+      const q = busqueda.toLowerCase()
+      const coincide = !q ||
+        v.nombre_activo.toLowerCase().includes(q) ||
+        v.placa.toLowerCase().includes(q) ||
+        v.marca.toLowerCase().includes(q) ||
+        v.modelo.toLowerCase().includes(q)
+      const estado = filtroEstado === 'todos' || v.estado_vehiculo === filtroEstado
+      return coincide && estado
+    })
+    if (sortConfig.key) {
+      lista = [...lista].sort((a, b) => {
+        const va = String(a[sortConfig.key] ?? '').toLowerCase()
+        const vb = String(b[sortConfig.key] ?? '').toLowerCase()
+        if (va < vb) return sortConfig.dir === 'asc' ? -1 : 1
+        if (va > vb) return sortConfig.dir === 'asc' ?  1 : -1
+        return 0
+      })
+    }
+    return lista
+  }, [busqueda, filtroEstado, sortConfig])
+ 
+  if (datos.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <div className={styles.emptyIcon}><IconCar /></div>
+        <p className={styles.emptyMsg}>No se encontraron vehículos con esos criterios.</p>
+      </div>
+    )
+  }
+ 
+  return (
+    <div className={styles.tableWrapper}>
+      <table className={styles.table}>
+        <thead className={styles.thead}>
+          <tr>
+            <th className={styles.th}>Vehículo</th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('placa')}>
+              <span>Placa</span><SortIcon col="placa" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('marca')}>
+              <span>Marca</span><SortIcon col="marca" />
+            </th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('modelo')}>
+              <span>Modelo</span><SortIcon col="modelo" />
+            </th>
+            <th className={styles.th}>Cap.</th>
+            <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('estado_vehiculo')}>
+              <span>Estado</span><SortIcon col="estado_vehiculo" />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {datos.map(v => (
+            <tr key={v.id_activo} className={styles.tr}>
+              <td className={styles.td}>
+                <div className={styles.activoCell}>
+                  <VehiculoMiniatura marca={v.marca} color={v.color} />
+                  <span className={styles.activoNombre}>{v.nombre_activo}</span>
+                </div>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.placaTag}>{v.placa}</span>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.textoSecundario}>{v.marca}</span>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.textoSecundario}>{v.modelo}</span>
+              </td>
+              <td className={styles.td}>
+                <span className={styles.capacidadBadge}>{v.capacidad}</span>
+              </td>
+              <td className={styles.td}>
+                <Badge
+                  label={ESTADO_VEHICULO_LABEL[v.estado_vehiculo] ?? v.estado_vehiculo}
+                  variant={ESTADO_VEHICULO_VARIANT[v.estado_vehiculo] ?? 'muted'}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={styles.resultCount}>
+        Mostrando {datos.length} de {MOCK_VEHICULOS.length} vehículos
+      </p>
+    </div>
+  )
+}
+ 
