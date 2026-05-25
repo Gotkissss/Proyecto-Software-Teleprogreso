@@ -50,6 +50,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route path="carros/:id" element={<CarroDetallePage />} />
             <Route index element={<Navigate to="/supervisor/dashboard" replace />} />
             <Route path="dashboard"    element={<DashboardPage />} />
             <Route path="alertas"      element={<AlertasPage />} />
