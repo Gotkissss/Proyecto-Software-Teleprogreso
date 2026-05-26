@@ -1,49 +1,3 @@
-# backend/app/routers/activos.py
-"""
-Router de Activos — Teleprogreso S.A.
---------------------------------------
-Implementa los endpoints de la Historia 1, 2, 3 y 4 del sprint.
-Todos los endpoints de este modulo fueron desarrollados por Gualim.
-
-Endpoints implementados:
-
-  T2.1  GET  /activos/materiales/bajo-stock
-        Retorna materiales donde cantidad_disponible < stock_minimo.
-        Usado por AlertasPage.jsx (seccion Stock critico).
-
-  T3.1  GET  /activos/carros/{id}/herramientas
-        Lista las herramientas asignadas a un carro especifico.
-        Usado por CarroDetallePage.jsx.
-
-  T3.2  POST /activos/carros/{id}/herramientas
-        Asigna una herramienta disponible a un carro.
-        Body: { id_herramienta: int }
-        Usado por ModalAsignarHerramientas.jsx.
-
-  T3.3  DELETE /activos/carros/{id}/herramientas/{id_h}
-        Libera (desasigna) una herramienta del carro.
-        Usado por CarroDetallePage.jsx (boton Liberar).
-
-  T4.1  POST /activos/carros/{id}/asignar
-        Asigna un tecnico a un vehiculo.
-        Reglas: 1 tecnico = 1 carro, vehiculo disponible, tecnico activo.
-        Body: { id_empleado: int }
-
-  T4.2  DELETE /activos/carros/{id}/asignacion
-        Libera al tecnico asignado al vehiculo.
-
-Endpoints complementarios (para que el frontend pueda listar activos):
-  GET  /activos/carros
-  GET  /activos/carros/{id}
-  GET  /activos/herramientas
-  GET  /activos/materiales
-
-Control de acceso:
-  - Todos requieren JWT valido.
-  - Las mutaciones (POST/DELETE) requieren rol admin o supervisor.
-  - Las consultas (GET) permiten cualquier rol autenticado.
-"""
-
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -71,7 +25,7 @@ router = APIRouter(prefix="/activos", tags=["Activos"])
 # ENDPOINTS DE MATERIALES
 # ═══════════════════════════════════════════════════════════
 
-# ─── T2.1  GET /activos/materiales/bajo-stock ──────────────────────────────
+# ─── GET /activos/materiales/bajo-stock ──────────────────────────────
 @router.get(
     "/materiales/bajo-stock",
     response_model=List[MaterialResponse],
@@ -84,12 +38,6 @@ async def get_materiales_bajo_stock(
 ):
     """
     Retorna todos los materiales donde cantidad_disponible < stock_minimo.
-
-    Usado por AlertasPage.jsx en la seccion "Stock critico".
-    El frontend muestra:
-    - Badge rojo para materiales sin existencias (cantidad == 0)
-    - Badge naranja para materiales con stock insuficiente
-
     Roles: cualquier empleado autenticado.
     """
     result = await db.execute(
@@ -174,7 +122,6 @@ async def get_herramientas(
 ):
     """
     Lista todas las herramientas del inventario.
-    Usado por ModalAsignarHerramientas.jsx para poblar el multi-select.
     Roles: cualquier empleado autenticado.
     """
     result = await db.execute(
@@ -329,7 +276,7 @@ async def get_carro_by_id(
 # T3 — HERRAMIENTAS DE UN CARRO
 # ═══════════════════════════════════════════════════════════
 
-# ─── T3.1  GET /activos/carros/{id}/herramientas ───────────────────────────
+# ─── GET /activos/carros/{id}/herramientas ───────────────────────────
 @router.get(
     "/carros/{id}/herramientas",
     response_model=List[HerramientaEnCarroResponse],
@@ -344,10 +291,6 @@ async def get_herramientas_de_carro(
     """
     Lista todas las herramientas actualmente asignadas al vehiculo indicado.
     Incluye datos de la tabla CarroHerramienta (fecha_asignacion, estado_entrega, comentario).
-
-    El shape de respuesta coincide exactamente con lo que espera
-    CarroDetallePage.jsx para renderizar la lista de herramientas.
-
     Roles: cualquier empleado autenticado.
     """
     # Verificar que el carro existe
@@ -389,7 +332,7 @@ async def get_herramientas_de_carro(
     ]
 
 
-# ─── T3.2  POST /activos/carros/{id}/herramientas ─────────────────────────
+# ─── POST /activos/carros/{id}/herramientas ─────────────────────────
 @router.post(
     "/carros/{id}/herramientas",
     response_model=HerramientaEnCarroResponse,
@@ -491,7 +434,7 @@ async def asignar_herramienta_a_carro(
     )
 
 
-# ─── T3.3  DELETE /activos/carros/{id}/herramientas/{id_h} ────────────────
+# ─── DELETE /activos/carros/{id}/herramientas/{id_h} ────────────────
 @router.delete(
     "/carros/{id}/herramientas/{id_h}",
     summary="Liberar una herramienta de un vehiculo",
@@ -551,7 +494,7 @@ async def liberar_herramienta_de_carro(
 # T4 — ASIGNACION DE TECNICO A CARRO
 # ═══════════════════════════════════════════════════════════
 
-# ─── T4.1  POST /activos/carros/{id}/asignar ──────────────────────────────
+# ─── POST /activos/carros/{id}/asignar ──────────────────────────────
 @router.post(
     "/carros/{id}/asignar",
     summary="Asignar un tecnico a un vehiculo",
@@ -566,7 +509,7 @@ async def asignar_tecnico_a_carro(
     """
     Asigna un tecnico activo a un vehiculo disponible.
 
-    Reglas de negocio (T4.3):
+    Reglas de negocio:
     1. El vehiculo debe existir y estar en estado 'disponible'.
     2. El tecnico debe existir y estar 'activo'.
     3. Un tecnico solo puede tener un vehiculo asignado a la vez (1 tecnico = 1 carro).
@@ -689,7 +632,7 @@ async def asignar_tecnico_a_carro(
     }
 
 
-# ─── T4.2  DELETE /activos/carros/{id}/asignacion ─────────────────────────
+# ─── DELETE /activos/carros/{id}/asignacion ─────────────────────────
 @router.delete(
     "/carros/{id}/asignacion",
     summary="Liberar el tecnico asignado a un vehiculo",
