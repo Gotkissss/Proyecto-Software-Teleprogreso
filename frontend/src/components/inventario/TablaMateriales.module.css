@@ -1,0 +1,191 @@
+/* ── Estado: cargando / error / vacío ─────────────────────────── */
+.stateBox {
+  padding: var(--space-8);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.stateError {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* ── Wrapper de tabla ─────────────────────────────────────────── */
+.tableWrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.thead {
+  background: var(--color-bg);
+}
+
+.th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.thSortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.thSortable:hover {
+  color: var(--color-text);
+}
+
+.thSortable span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sortNeutral { opacity: 0.4; display: inline-flex; }
+.sortActive  { color: var(--color-primary); display: inline-flex; }
+
+.tr {
+  transition: background-color var(--transition);
+}
+
+.tr:hover {
+  background: var(--color-bg);
+}
+
+.trAlerta {
+  background: #fff7ed;
+}
+
+.trAlerta:hover {
+  background: #ffedd5;
+}
+
+.td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+/* ── Celda principal: miniatura + nombre ──────────────────────── */
+.materialCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nombre {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Miniatura ────────────────────────────────────────────────── */
+.miniatura {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.miniaturaImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.miniaturaIniciales {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  border: 1px solid #c7d2fe;
+  flex-shrink: 0;
+}
+
+/* ── Cantidad / stock ─────────────────────────────────────────── */
+.numero {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.numeroAlerta {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.unidad {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+/* ── Acciones ─────────────────────────────────────────────────── */
+.acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition);
+  font-family: var(--font-sans);
+}
+
+.btnEditar:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.btnEliminar {
+  color: #b91c1c;
+}
+
+.btnEliminar:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.resultCount {
+  margin: 12px 4px 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
