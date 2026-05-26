@@ -1,0 +1,22 @@
+/* Estilos adicionales propios del modal de eliminar.
+   El overlay y el panel se reutilizan desde ModalNuevoActivo.module.css. */
+
+.mensaje {
+  font-size: 0.9375rem;
+  color: var(--color-text, #111827);
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
+
+.nombre {
+  font-weight: 700;
+}
+
+.btnEliminar {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btnEliminar:hover:not(:disabled) {
+  background: #b91c1c;
+}
