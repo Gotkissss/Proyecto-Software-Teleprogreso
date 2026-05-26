@@ -200,3 +200,128 @@ async def get_herramientas(
     ]
 
 
+# ═══════════════════════════════════════════════════════════
+# ENDPOINTS DE CARROS
+# ═══════════════════════════════════════════════════════════
+
+# ─── GET /activos/carros ──────────────────────────────────────────────────
+@router.get(
+    "/carros",
+    response_model=List[CarroResponse],
+    summary="Listar todos los vehiculos",
+    status_code=status.HTTP_200_OK,
+)
+async def get_carros(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Lista todos los vehiculos del inventario con su tecnico asignado (si aplica).
+    Roles: cualquier empleado autenticado.
+    """
+    result = await db.execute(
+        select(Activo, Carro)
+        .join(Carro, Carro.id_activo == Activo.id_activo)
+        .order_by(Activo.nombre_activo)
+    )
+    rows = result.all()
+
+    # Para cada carro, obtener tecnico asignado en una sola consulta
+    ids_carros = [carro.id_activo for _, carro in rows]
+
+    asignaciones: dict[int, EmpleadoCarro] = {}
+    if ids_carros:
+        result_asig = await db.execute(
+            select(EmpleadoCarro)
+            .options(selectinload(EmpleadoCarro.empleado))
+            .where(EmpleadoCarro.id_carro.in_(ids_carros))
+        )
+        for asig in result_asig.scalars().all():
+            asignaciones[asig.id_carro] = asig
+
+    respuesta = []
+    for activo, carro in rows:
+        asig = asignaciones.get(carro.id_activo)
+        respuesta.append(
+            CarroResponse(
+                id_activo=activo.id_activo,
+                nombre_activo=activo.nombre_activo,
+                descripcion=activo.descripcion,
+                tipo=activo.tipo,
+                fecha_registro=activo.fecha_registro,
+                placa=carro.placa,
+                marca=carro.marca,
+                modelo=carro.modelo,
+                capacidad=carro.capacidad,
+                estado_vehiculo=carro.estado_vehiculo,
+                id_empleado_asignado=asig.id_empleado if asig else None,
+                nombre_empleado_asignado=(
+                    f"{asig.empleado.nombre} {asig.empleado.apellido}"
+                    if asig and asig.empleado
+                    else None
+                ),
+            )
+        )
+
+    return respuesta
+
+
+# ─── GET /activos/carros/{id} ─────────────────────────────────────────────
+@router.get(
+    "/carros/{id}",
+    response_model=CarroResponse,
+    summary="Obtener detalle de un vehiculo",
+    status_code=status.HTTP_200_OK,
+)
+async def get_carro_by_id(
+    id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Devuelve el detalle de un vehiculo por su id_activo.
+    Roles: cualquier empleado autenticado.
+    """
+    result = await db.execute(
+        select(Activo, Carro)
+        .join(Carro, Carro.id_activo == Activo.id_activo)
+        .where(Activo.id_activo == id)
+    )
+    row = result.one_or_none()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontro ningun vehiculo con id={id}.",
+        )
+
+    activo, carro = row
+
+    # Tecnico asignado
+    result_asig = await db.execute(
+        select(EmpleadoCarro)
+        .options(selectinload(EmpleadoCarro.empleado))
+        .where(EmpleadoCarro.id_carro == id)
+    )
+    asig = result_asig.scalar_one_or_none()
+
+    return CarroResponse(
+        id_activo=activo.id_activo,
+        nombre_activo=activo.nombre_activo,
+        descripcion=activo.descripcion,
+        tipo=activo.tipo,
+        fecha_registro=activo.fecha_registro,
+        placa=carro.placa,
+        marca=carro.marca,
+        modelo=carro.modelo,
+        capacidad=carro.capacidad,
+        estado_vehiculo=carro.estado_vehiculo,
+        id_empleado_asignado=asig.id_empleado if asig else None,
+        nombre_empleado_asignado=(
+            f"{asig.empleado.nombre} {asig.empleado.apellido}"
+            if asig and asig.empleado
+            else None
+        ),
+    )
+
+
