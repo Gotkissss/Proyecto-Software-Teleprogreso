@@ -157,3 +157,46 @@ async def get_materiales(
     ]
 
 
+# ═══════════════════════════════════════════════════════════
+# ENDPOINTS DE HERRAMIENTAS
+# ═══════════════════════════════════════════════════════════
+
+# ─── GET /activos/herramientas ─────────────────────────────────────────────
+@router.get(
+    "/herramientas",
+    response_model=List[HerramientaResponse],
+    summary="Listar todas las herramientas",
+    status_code=status.HTTP_200_OK,
+)
+async def get_herramientas(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Lista todas las herramientas del inventario.
+    Usado por ModalAsignarHerramientas.jsx para poblar el multi-select.
+    Roles: cualquier empleado autenticado.
+    """
+    result = await db.execute(
+        select(Activo, Herramienta)
+        .join(Herramienta, Herramienta.id_activo == Activo.id_activo)
+        .order_by(Activo.nombre_activo)
+    )
+    rows = result.all()
+
+    return [
+        HerramientaResponse(
+            id_activo=activo.id_activo,
+            nombre_activo=activo.nombre_activo,
+            descripcion=activo.descripcion,
+            tipo=activo.tipo,
+            fecha_registro=activo.fecha_registro,
+            tipo_herramienta=herramienta.tipo_herramienta,
+            marca=herramienta.marca,
+            modelo=herramienta.modelo,
+            estado=herramienta.estado,
+        )
+        for activo, herramienta in rows
+    ]
+
+
