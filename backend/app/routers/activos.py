@@ -325,3 +325,225 @@ async def get_carro_by_id(
     )
 
 
+# ═══════════════════════════════════════════════════════════
+# T3 — HERRAMIENTAS DE UN CARRO
+# ═══════════════════════════════════════════════════════════
+
+# ─── T3.1  GET /activos/carros/{id}/herramientas ───────────────────────────
+@router.get(
+    "/carros/{id}/herramientas",
+    response_model=List[HerramientaEnCarroResponse],
+    summary="Listar herramientas asignadas a un vehiculo",
+    status_code=status.HTTP_200_OK,
+)
+async def get_herramientas_de_carro(
+    id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Lista todas las herramientas actualmente asignadas al vehiculo indicado.
+    Incluye datos de la tabla CarroHerramienta (fecha_asignacion, estado_entrega, comentario).
+
+    El shape de respuesta coincide exactamente con lo que espera
+    CarroDetallePage.jsx para renderizar la lista de herramientas.
+
+    Roles: cualquier empleado autenticado.
+    """
+    # Verificar que el carro existe
+    result_carro = await db.execute(
+        select(Carro).where(Carro.id_activo == id)
+    )
+    carro = result_carro.scalar_one_or_none()
+
+    if not carro:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontro ningun vehiculo con id={id}.",
+        )
+
+    # Join CarroHerramienta → Herramienta → Activo
+    result = await db.execute(
+        select(CarroHerramienta, Herramienta, Activo)
+        .join(Herramienta, Herramienta.id_activo == CarroHerramienta.id_herramienta)
+        .join(Activo, Activo.id_activo == Herramienta.id_activo)
+        .where(CarroHerramienta.id_carro == id)
+        .order_by(Activo.nombre_activo)
+    )
+    rows = result.all()
+
+    return [
+        HerramientaEnCarroResponse(
+            id_activo=activo.id_activo,
+            nombre_activo=activo.nombre_activo,
+            descripcion=activo.descripcion,
+            tipo_herramienta=herramienta.tipo_herramienta,
+            marca=herramienta.marca,
+            modelo=herramienta.modelo,
+            estado=herramienta.estado,
+            fecha_asignacion=relacion.fecha_asignacion,
+            estado_entrega=relacion.estado_entrega,
+            comentario=relacion.comentario,
+        )
+        for relacion, herramienta, activo in rows
+    ]
+
+
+# ─── T3.2  POST /activos/carros/{id}/herramientas ─────────────────────────
+@router.post(
+    "/carros/{id}/herramientas",
+    response_model=HerramientaEnCarroResponse,
+    summary="Asignar una herramienta a un vehiculo",
+    status_code=status.HTTP_201_CREATED,
+)
+async def asignar_herramienta_a_carro(
+    id: int,
+    body: AsignarHerramientaRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_supervisor)],
+):
+    """
+    Asigna una herramienta disponible al vehiculo especificado.
+
+    Reglas de negocio:
+    - El vehiculo debe existir.
+    - La herramienta debe existir y estar en estado 'disponible'.
+    - La herramienta no puede estar ya asignada al mismo carro.
+
+    Roles: admin, supervisor.
+    """
+    # 1. Verificar carro
+    result_carro = await db.execute(
+        select(Carro).where(Carro.id_activo == id)
+    )
+    carro = result_carro.scalar_one_or_none()
+    if not carro:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontro ningun vehiculo con id={id}.",
+        )
+
+    # 2. Verificar herramienta existe y esta disponible
+    result_herr = await db.execute(
+        select(Herramienta, Activo)
+        .join(Activo, Activo.id_activo == Herramienta.id_activo)
+        .where(Herramienta.id_activo == body.id_herramienta)
+    )
+    row_herr = result_herr.one_or_none()
+
+    if not row_herr:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontro ninguna herramienta con id={body.id_herramienta}.",
+        )
+
+    herramienta, activo = row_herr
+
+    if herramienta.estado != "disponible":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"La herramienta '{activo.nombre_activo}' no esta disponible "
+                f"(estado actual: '{herramienta.estado}'). "
+                "Solo se pueden asignar herramientas en estado 'disponible'."
+            ),
+        )
+
+    # 3. Verificar que no este ya asignada a este carro
+    result_existe = await db.execute(
+        select(CarroHerramienta).where(
+            CarroHerramienta.id_carro == id,
+            CarroHerramienta.id_herramienta == body.id_herramienta,
+        )
+    )
+    if result_existe.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"La herramienta '{activo.nombre_activo}' ya esta asignada a este vehiculo."
+            ),
+        )
+
+    # 4. Crear la relacion en CarroHerramienta
+    nueva_asignacion = CarroHerramienta(
+        id_carro=id,
+        id_herramienta=body.id_herramienta,
+        estado_entrega="Buenas condiciones",
+    )
+    db.add(nueva_asignacion)
+
+    # 5. Marcar herramienta como en uso
+    herramienta.estado = "en_uso"
+
+    await db.flush()
+
+    return HerramientaEnCarroResponse(
+        id_activo=activo.id_activo,
+        nombre_activo=activo.nombre_activo,
+        descripcion=activo.descripcion,
+        tipo_herramienta=herramienta.tipo_herramienta,
+        marca=herramienta.marca,
+        modelo=herramienta.modelo,
+        estado=herramienta.estado,
+        fecha_asignacion=nueva_asignacion.fecha_asignacion,
+        estado_entrega=nueva_asignacion.estado_entrega,
+        comentario=nueva_asignacion.comentario,
+    )
+
+
+# ─── T3.3  DELETE /activos/carros/{id}/herramientas/{id_h} ────────────────
+@router.delete(
+    "/carros/{id}/herramientas/{id_h}",
+    summary="Liberar una herramienta de un vehiculo",
+    status_code=status.HTTP_200_OK,
+)
+async def liberar_herramienta_de_carro(
+    id: int,
+    id_h: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_supervisor)],
+):
+    """
+    Desasigna (libera) una herramienta del vehiculo especificado.
+    La herramienta vuelve al estado 'disponible'.
+
+    Reglas de negocio:
+    - La relacion carro-herramienta debe existir.
+
+    Roles: admin, supervisor.
+    """
+    # Buscar la relacion
+    result = await db.execute(
+        select(CarroHerramienta).where(
+            CarroHerramienta.id_carro == id,
+            CarroHerramienta.id_herramienta == id_h,
+        )
+    )
+    relacion = result.scalar_one_or_none()
+
+    if not relacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"La herramienta id={id_h} no esta asignada al vehiculo id={id}."
+            ),
+        )
+
+    # Liberar la herramienta (vuelve a disponible)
+    result_herr = await db.execute(
+        select(Herramienta).where(Herramienta.id_activo == id_h)
+    )
+    herramienta = result_herr.scalar_one_or_none()
+    if herramienta:
+        herramienta.estado = "disponible"
+
+    # Eliminar la relacion
+    await db.delete(relacion)
+
+    return {
+        "detail": f"Herramienta id={id_h} liberada del vehiculo id={id} correctamente.",
+        "id_carro": id,
+        "id_herramienta": id_h,
+    }
+
+
