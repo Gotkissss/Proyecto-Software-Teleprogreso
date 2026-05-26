@@ -1,7 +1,6 @@
 /* ============================================================
    AlertasPage.module.css
-   Teleprogreso S.A. — Gestión de Alertas Operativas
-   Lenguaje visual: SaaS moderno, tipografía Inter, paleta corporativa
+   Teleprogreso S.A. — Alertas Operativas + Stock Crítico
    ============================================================ */
 
 .page {
@@ -14,7 +13,7 @@
   animation: fadeIn 400ms ease-out;
 }
 
-/* ── Título ────────────────────────────────────────────────── */
+/*  Título  */
 .title {
   position: relative;
   font-size: 1.875rem;
@@ -38,14 +37,88 @@
   background: var(--gradient-primary);
 }
 
-/* ── Centro / loading ──────────────────────────────────────── */
+/*  Tabs */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
+  margin-bottom: var(--space-6);
+  width: fit-content;
+  box-shadow: var(--shadow-xs);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 9px var(--space-5);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.tab:hover:not(.tabActive) {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.tabActive {
+  background: var(--gradient-primary);
+  color: #fff;
+  box-shadow: var(--shadow-primary-sm);
+}
+
+/* Badges numéricos dentro del tab */
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tabBadgeDanger {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.tabBadgeWarning {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+/* Tab activo: badges con fondo semitransparente */
+.tabActive .tabBadge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* Paneles de tab*/
+.tabPanel {
+  animation: fadeIn 300ms ease-out;
+}
+
+/*  Centro / loading */
 .center {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 60vh;
-  color: var(--color-text-secondary);
-  font-size: 0.9375rem;
+  min-height: 40vh;
 }
 
 .errorMsg {
@@ -59,10 +132,10 @@
   font-weight: 500;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 
-/* ── Lista de alertas ──────────────────────────────────────── */
+/*  Lista de alertas  */
 .alertasList {
   list-style: none;
   margin: 0;
@@ -72,7 +145,7 @@
   gap: var(--space-3);
 }
 
-/* ── Item de alerta ────────────────────────────────────────── */
+/*  Item de alerta  */
 .alertaItem {
   position: relative;
   background: var(--color-surface);
@@ -107,11 +180,21 @@
   border-left-color: var(--color-danger);
 }
 
-.alertaItem:hover::before {
-  opacity: 1;
+.alertaItem:hover::before { opacity: 1; }
+
+.advertencia {
+  border-left-color: var(--color-warning);
 }
 
-/* ── Cabecera de la alerta ─────────────────────────────────── */
+.advertencia:hover {
+  border-left-color: var(--color-warning);
+}
+
+.advertencia::before {
+  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%);
+}
+
+/*  Cabecera de la alerta  */
 .alertaHeader {
   display: flex;
   align-items: center;
@@ -119,12 +202,19 @@
   flex-wrap: wrap;
 }
 
-.alertaTarea {
+.alertaHora {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.alertaMensaje {
   font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
+  line-height: 1.55;
   margin: 0;
-  letter-spacing: -0.01em;
 }
 
 .alertaTecnico {
@@ -140,27 +230,13 @@
   margin: 0;
 }
 
-.alertaTecnico strong {
-  font-weight: 700;
-}
-
-.alertaHora {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-}
-
-/* ── Cuerpo de la alerta ───────────────────────────────────── */
-.alertaMensaje {
-  font-size: 0.9375rem;
+.alertaTarea {
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
-  line-height: 1.55;
   margin: 0;
 }
 
-/* ── Botón resolver ────────────────────────────────────────── */
+/*  Botón resolver  */
 .resolverBtn {
   align-self: flex-start;
   margin-top: var(--space-2);
@@ -184,17 +260,13 @@
   box-shadow: 0 6px 16px rgba(229, 57, 53, 0.32);
 }
 
-.resolverBtn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
 .resolverBtn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-/* ── Estado vacío ──────────────────────────────────────────── */
+/*  Estado vacío  */
 .emptyState {
   display: flex;
   flex-direction: column;
@@ -229,7 +301,300 @@
   margin: 0;
 }
 
-/* ── Responsive ────────────────────────────────────────────── */
+/* 
+   SECCIÓN STOCK CRÍTICO
+ */
+
+/* Resumen rápido (3 tarjetas numéricas) */
+.stockResumen {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.stockResumenCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xs);
+  text-align: center;
+  transition: var(--transition);
+}
+
+.stockResumenCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.stockResumenNum {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.stockResumenLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.stockResumenCritico {
+  border-color: var(--color-danger-light);
+  background: var(--color-danger-bg);
+}
+
+.stockResumenCritico .stockResumenNum {
+  color: var(--color-danger-dark);
+}
+
+.stockResumenBajo {
+  border-color: var(--color-warning-light);
+  background: var(--color-warning-bg);
+}
+
+.stockResumenBajo .stockResumenNum {
+  color: var(--color-warning-dark);
+}
+
+.stockResumenTotal {
+  border-color: var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+.stockResumenTotal .stockResumenNum {
+  color: var(--color-text);
+}
+
+/* Lista de materiales */
+.stockList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Tarjeta individual de material */
+.stockCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: var(--transition);
+}
+
+.stockCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.stockCard_critico {
+  border-left-color: var(--color-danger);
+  background: linear-gradient(
+    to right,
+    rgba(229, 57, 53, 0.03) 0%,
+    var(--color-surface) 120px
+  );
+}
+
+.stockCard_bajo {
+  border-left-color: var(--color-warning);
+  background: linear-gradient(
+    to right,
+    rgba(217, 119, 6, 0.03) 0%,
+    var(--color-surface) 120px
+  );
+}
+
+/* Cabecera de la tarjeta */
+.stockCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stockCardInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.stockCardNombre {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.stockCardTipo {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.stockCardDesc {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Barra de stock */
+.stockBarWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stockBarTrack {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: visible;
+}
+
+.stockBarFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 4px;
+}
+
+/* Línea vertical del mínimo: siempre al 50% del track */
+.stockBarMinLine {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 2px;
+  height: calc(100% + 6px);
+  background: var(--color-text-muted);
+  border-radius: var(--radius-full);
+  opacity: 0.5;
+}
+
+.stockBarMinLine::after {
+  content: 'mín';
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.stockBarLabels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stockBarDisponible {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.stockBarDisponible strong {
+  font-weight: 800;
+  font-size: 0.875rem;
+}
+
+.stockBarMinimo {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* Mensaje de déficit */
+.stockDeficit {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  line-height: 1.4;
+}
+
+.stockDeficit_critico {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+  border: 1px solid var(--color-danger-light);
+}
+
+.stockDeficit_bajo {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border: 1px solid var(--color-warning-light);
+}
+
+/* Nota al pie */
+.stockFootnote {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: var(--space-4);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* Error con hint del backend */
+.stockErrorWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stockErrorHint {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  line-height: 1.6;
+}
+
+.stockErrorHint code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--color-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--color-primary-dark);
+}
+
+/* Responsive  */
 @media (max-width: 640px) {
   .page {
     padding: var(--space-5) var(--space-4) var(--space-10);
@@ -237,11 +602,28 @@
   .title {
     font-size: 1.5rem;
   }
+  .tabs {
+    width: 100%;
+  }
+  .tab {
+    flex: 1;
+    justify-content: center;
+  }
   .alertaHeader {
     gap: var(--space-2);
   }
   .alertaHora {
     margin-left: 0;
     width: 100%;
+  }
+  .stockResumen {
+    grid-template-columns: 1fr;
+  }
+  .stockCard {
+    padding: var(--space-4) var(--space-5);
+  }
+  .stockCardHeader {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
