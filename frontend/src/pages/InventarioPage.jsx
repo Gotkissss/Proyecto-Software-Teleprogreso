@@ -1,5 +1,9 @@
 import { useState, useMemo } from 'react'
 import Badge from '../components/ui/Badge'
+import TablaMateriales from '../components/inventario/TablaMateriales'
+import ModalNuevoActivo from '../components/inventario/ModalNuevoActivo'
+import ModalEditarActivo from '../components/inventario/ModalEditarActivo'
+import ModalEliminarActivo from '../components/inventario/ModalEliminarActivo'
 import styles from './InventarioPage.module.css'
  
 /* ── Iconos ──────────────────────────────────────────────────────────────── */
@@ -364,8 +368,11 @@ function TablaHerramientas({ busqueda, filtroEstado, sortConfig, onSort }) {
   )
 }
  
-/* ── Tabla Materiales ────────────────────────────────────────────────────── */
-function TablaMateriales({ busqueda, filtroEstado, sortConfig, onSort }) {
+/* ── Tabla Materiales: ahora se usa el componente importado desde
+       components/inventario/TablaMateriales.jsx, que consume el backend
+       real vía inventarioService.getActivos() ─────────────────────────── */
+// eslint-disable-next-line no-unused-vars
+function _TablaMaterialesObsoleta_NO_USAR({ busqueda, filtroEstado, sortConfig, onSort }) {
   const SortIcon = ({ col }) => {
     if (sortConfig.key !== col) return <span className={styles.sortNeutral}><IconChevronsUpDown /></span>
     return sortConfig.dir === 'asc'
@@ -524,10 +531,24 @@ const TABS = [
  
 /* ── Componente principal ────────────────────────────────────────────────── */
 export default function InventarioPage() {
-  const [tabActiva,    setTabActiva]    = useState('vehiculos')
-  const [busqueda,     setBusqueda]     = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('todos')
-  const [sortConfig,   setSortConfig]   = useState({ key: null, dir: 'asc' })
+  const [tabActiva,         setTabActiva]         = useState('vehiculos')
+  const [busqueda,          setBusqueda]          = useState('')
+  const [filtroEstado,      setFiltroEstado]      = useState('todos')
+  const [sortConfig,        setSortConfig]        = useState({ key: null, dir: 'asc' })
+  const [mostrarModalNuevo,    setMostrarModalNuevo]    = useState(false)
+  const [mostrarModalEditar,   setMostrarModalEditar]   = useState(false)
+  const [mostrarModalEliminar, setMostrarModalEliminar] = useState(false)
+  const [activoSeleccionado,   setActivoSeleccionado]   = useState(null)
+  const [refreshKey,           setRefreshKey]           = useState(0)
+
+  const handleEditar = (activo) => {
+    setActivoSeleccionado(activo)
+    setMostrarModalEditar(true)
+  }
+  const handleEliminar = (activo) => {
+    setActivoSeleccionado(activo)
+    setMostrarModalEliminar(true)
+  }
  
   const tabInfo = TABS.find(t => t.id === tabActiva)
  
@@ -553,6 +574,22 @@ export default function InventarioPage() {
           <h1 className={styles.title}>Inventario</h1>
           <p className={styles.subtitle}>Consulta y seguimiento de activos operativos</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setMostrarModalNuevo(true)}
+          style={{
+            padding: '10px 18px',
+            background: '#4f46e5',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: '0.9375rem',
+            cursor: 'pointer',
+          }}
+        >
+          + Nuevo activo
+        </button>
       </div>
  
       {/* ── Tabs ── */}
@@ -629,9 +666,32 @@ export default function InventarioPage() {
             filtroEstado={filtroEstado}
             sortConfig={sortConfig}
             onSort={handleSort}
+            refreshKey={refreshKey}
+            onEditar={handleEditar}
+            onEliminar={handleEliminar}
           />
         )}
       </div>
+
+      <ModalNuevoActivo
+        isOpen={mostrarModalNuevo}
+        onClose={() => setMostrarModalNuevo(false)}
+        onActivoCreado={() => setRefreshKey(k => k + 1)}
+      />
+
+      <ModalEditarActivo
+        isOpen={mostrarModalEditar}
+        activo={activoSeleccionado}
+        onClose={() => { setMostrarModalEditar(false); setActivoSeleccionado(null) }}
+        onActivoEditado={() => setRefreshKey(k => k + 1)}
+      />
+
+      <ModalEliminarActivo
+        isOpen={mostrarModalEliminar}
+        activo={activoSeleccionado}
+        onClose={() => { setMostrarModalEliminar(false); setActivoSeleccionado(null) }}
+        onActivoEliminado={() => setRefreshKey(k => k + 1)}
+      />
     </div>
   )
 }
