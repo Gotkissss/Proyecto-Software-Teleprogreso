@@ -1,0 +1,209 @@
+/* ── Overlay ─────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: var(--space-6);
+  overflow-y: auto;
+  animation: fadeIn 180ms ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Panel ───────────────────────────────────────────────────── */
+.panel {
+  background: var(--color-surface, #ffffff);
+  border-radius: var(--radius-2xl, 16px);
+  box-shadow: var(--shadow-xl, 0 20px 40px rgba(0,0,0,0.18));
+  padding: 28px 28px 24px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: scaleIn 200ms ease-out;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text, #111827);
+  margin: 0;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.closeBtn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* ── Form ────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+}
+
+.required {
+  color: #b91c1c;
+  margin-left: 2px;
+}
+
+.input,
+.select {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text, #111827);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus,
+.select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.inputError {
+  border-color: #dc2626;
+}
+
+.errorMsg {
+  color: #b91c1c;
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+/* ── Imagen ──────────────────────────────────────────────────── */
+.fileWrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: #f3f4f6;
+}
+
+.previewPlaceholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  border: 1px dashed var(--color-border, #d1d5db);
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 0.8125rem;
+  text-align: center;
+  padding: 8px;
+}
+
+.fileInput {
+  font-size: 0.875rem;
+}
+
+/* ── Error global del modal ──────────────────────────────────── */
+.errorBox {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+/* ── Botones ─────────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn {
+  font-family: inherit;
+  padding: 9px 18px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.btnCancelar {
+  background: #fff;
+  border-color: var(--color-border, #d1d5db);
+  color: var(--color-text, #111827);
+}
+
+.btnCancelar:hover {
+  background: #f3f4f6;
+}
+
+.btnGuardar {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.btnGuardar:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.btnGuardar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
