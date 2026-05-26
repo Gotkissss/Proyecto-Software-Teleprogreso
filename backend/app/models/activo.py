@@ -13,6 +13,7 @@ class Activo(Base):
     fecha_registro: Mapped[date]       = mapped_column(Date, nullable=False, server_default=func.now())
     descripcion:    Mapped[str | None] = mapped_column(Text, nullable=True)
     tipo:           Mapped[str]        = mapped_column(String(20), nullable=False)  # carro | material | herramienta
+    foto_url:       Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relaciones ISA
     carro:       Mapped["Carro | None"]       = relationship(back_populates="activo", uselist=False)
@@ -66,11 +67,11 @@ class Herramienta(Base):
 class CarroHerramienta(Base):
     __tablename__ = "carro_herramienta"
 
-    id_carro:        Mapped[int]        = mapped_column(Integer, ForeignKey("carro.id_activo", ondelete="CASCADE"), primary_key=True)
-    id_herramienta:  Mapped[int]        = mapped_column(Integer, ForeignKey("herramienta.id_activo", ondelete="CASCADE"), primary_key=True)
-    fecha_asignacion: Mapped[datetime]  = mapped_column(DateTime, nullable=False, server_default=func.now())
-    estado_entrega:  Mapped[str | None] = mapped_column(String(30), nullable=True)
-    comentario:      Mapped[str | None] = mapped_column(Text, nullable=True)
+    id_carro:         Mapped[int]        = mapped_column(Integer, ForeignKey("carro.id_activo", ondelete="CASCADE"), primary_key=True)
+    id_herramienta:   Mapped[int]        = mapped_column(Integer, ForeignKey("herramienta.id_activo", ondelete="CASCADE"), primary_key=True)
+    fecha_asignacion: Mapped[datetime]   = mapped_column(DateTime, nullable=False, server_default=func.now())
+    estado_entrega:   Mapped[str | None] = mapped_column(String(30), nullable=True)
+    comentario:       Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relaciones
     carro:       Mapped["Carro"]       = relationship(back_populates="herramientas")
