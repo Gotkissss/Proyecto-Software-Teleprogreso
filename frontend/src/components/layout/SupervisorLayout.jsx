@@ -37,6 +37,13 @@ const IconEmpleados = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 )
+const IconInventario = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+)
 const IconBell = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -56,6 +63,7 @@ const NAV_ITEMS = [
   { to: '/supervisor/alertas',      label: 'Alertas',    Icon: IconAlertas },
   { to: '/supervisor/reasignacion', label: 'Reasignar',  Icon: IconReasignar },
   { to: '/supervisor/empleados',    label: 'Empleados',  Icon: IconEmpleados },
+  { to: '/supervisor/inventario',   label: 'Inventario', Icon: IconInventario },
 ]
 
 export default function SupervisorLayout() {
