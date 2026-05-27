@@ -1,0 +1,359 @@
+/* ─────────────────────────────────────────────────────────
+   EquipoPage.module.css
+   Teleprogreso S.A. — Mi equipo (técnico móvil)
+   SCRUM-125 / 126 / 127 / 128
+───────────────────────────────────────────────────────── */
+
+.page {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  min-height: 100vh;
+  padding: var(--space-5) var(--space-4) var(--space-12);
+  color: var(--color-text);
+  box-sizing: border-box;
+  animation: fadeIn 400ms ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ── Centro (loading / error) ───────────────────────────── */
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: var(--space-4);
+}
+
+.loadingText {
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+}
+
+.errorText {
+  font-size: 0.9375rem;
+  color: var(--color-danger-dark);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-light);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  text-align: center;
+  max-width: 320px;
+}
+
+/* ── Sección genérica ───────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.sectionIconWrap svg { width: 16px; height: 16px; }
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.herramientasCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ── Estado vacío ───────────────────────────────────────── */
+.emptyCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-5);
+  background: var(--color-surface);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-xl);
+  text-align: center;
+}
+
+.emptyIlustration {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-alt);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-full);
+}
+.emptyIlustration svg { width: 24px; height: 24px; }
+
+.emptyTitle {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.emptyDesc {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 260px;
+}
+
+/* ── Card de vehículo (SCRUM-126) ───────────────────────── */
+.vehiculoCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.vehiculoImagen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-5);
+  background: linear-gradient(135deg, #e3f0ff 0%, #f0f7ff 100%);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vehiculoInfo {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.vehiculoTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.vehiculoNombre {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.vehiculoPlaca {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.06em;
+}
+
+.vehiculoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vehiculoDataItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dataLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+}
+
+.dataValue {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.vehiculoDesc {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Estado badge ───────────────────────────────────────── */
+.estadoBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.estadoDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.estadoDisponible {
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
+  border: 1px solid var(--color-success-light);
+}
+.estadoEnUso {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border: 1px solid var(--color-warning-light);
+}
+.estadoMantenimiento {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+  border: 1px solid var(--color-danger-light);
+}
+
+/* ── Grid de herramientas (SCRUM-127) ───────────────────── */
+.herramientasGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.herramientaCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+.herramientaCard:hover {
+  background: var(--color-primary-50, #f0f7ff);
+  box-shadow: var(--shadow-sm);
+}
+
+.herramientaIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: var(--color-bg-alt);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.herramientaIconWrap svg { width: 18px; height: 18px; }
+
+.herramientaBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.herramientaNombre {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.herramientaTipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: var(--color-primary-dark);
+  font-weight: 600;
+}
+.herramientaTipo svg { width: 11px; height: 11px; }
+
+.herramientaMeta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Estado herramienta ─────────────────────────────────── */
+.herramientaEstado {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.herrDisponible {
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
+  border: 1px solid var(--color-success-light);
+}
+.herrEnUso {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border: 1px solid var(--color-warning-light);
+}
+.herrMantenimiento {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+  border: 1px solid var(--color-danger-light);
+}
