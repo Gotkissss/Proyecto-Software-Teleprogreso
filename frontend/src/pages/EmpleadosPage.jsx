@@ -18,7 +18,7 @@ import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import styles from './EmpleadosPage.module.css'
 
-const USE_MOCK = false
+const USE_MOCK = true
 
 const MOCK_EMPLEADOS = [
   { id_empleado: 1, nombre: 'Carlos', apellido: 'Administrador', correo: 'admin@teleprogreso.com', rol: 'admin', estado: 'activo', telefono: '5550-0001', fecha_contratacion: '2020-01-15', placa_vehiculo: null },
