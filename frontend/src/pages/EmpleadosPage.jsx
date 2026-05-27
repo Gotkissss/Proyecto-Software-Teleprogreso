@@ -21,12 +21,12 @@ import styles from './EmpleadosPage.module.css'
 const USE_MOCK = false
 
 const MOCK_EMPLEADOS = [
-  { id_empleado: 1, nombre: 'Carlos', apellido: 'Administrador', correo: 'admin@teleprogreso.com', rol: 'admin', estado: 'activo', telefono: '5550-0001', fecha_contratacion: '2020-01-15' },
-  { id_empleado: 2, nombre: 'Juan', apellido: 'Pérez García', correo: 'tecnico@teleprogreso.com', rol: 'tecnico', estado: 'activo', telefono: '5550-0002', fecha_contratacion: '2022-06-01' },
-  { id_empleado: 3, nombre: 'María', apellido: 'López Ruiz', correo: 'supervisora@teleprogreso.com', rol: 'supervisor', estado: 'activo', telefono: '5550-0003', fecha_contratacion: '2021-03-10' },
-  { id_empleado: 4, nombre: 'Carlos', apellido: 'Hernández', correo: 'carlos.h@teleprogreso.com', rol: 'tecnico', estado: 'activo', telefono: '5550-0004', fecha_contratacion: '2023-01-20' },
-  { id_empleado: 5, nombre: 'Ana', apellido: 'Rodríguez Soto', correo: 'ana.r@teleprogreso.com', rol: 'tecnico', estado: 'inactivo', telefono: '5550-0005', fecha_contratacion: '2022-09-15' },
-  { id_empleado: 6, nombre: 'Roberto', apellido: 'Gómez', correo: 'roberto.g@teleprogreso.com', rol: 'gerente', estado: 'activo', telefono: '5550-0006', fecha_contratacion: '2019-07-01' },
+  { id_empleado: 1, nombre: 'Carlos', apellido: 'Administrador', correo: 'admin@teleprogreso.com', rol: 'admin', estado: 'activo', telefono: '5550-0001', fecha_contratacion: '2020-01-15', placa_vehiculo: null },
+  { id_empleado: 2, nombre: 'Juan', apellido: 'Pérez García', correo: 'tecnico@teleprogreso.com', rol: 'tecnico', estado: 'activo', telefono: '5550-0002', fecha_contratacion: '2022-06-01', placa_vehiculo: 'P-123ABC' },
+  { id_empleado: 3, nombre: 'María', apellido: 'López Ruiz', correo: 'supervisora@teleprogreso.com', rol: 'supervisor', estado: 'activo', telefono: '5550-0003', fecha_contratacion: '2021-03-10', placa_vehiculo: null },
+  { id_empleado: 4, nombre: 'Carlos', apellido: 'Hernández', correo: 'carlos.h@teleprogreso.com', rol: 'tecnico', estado: 'activo', telefono: '5550-0004', fecha_contratacion: '2023-01-20', placa_vehiculo: 'P-456DEF' },
+  { id_empleado: 5, nombre: 'Ana', apellido: 'Rodríguez Soto', correo: 'ana.r@teleprogreso.com', rol: 'tecnico', estado: 'inactivo', telefono: '5550-0005', fecha_contratacion: '2022-09-15', placa_vehiculo: null },
+  { id_empleado: 6, nombre: 'Roberto', apellido: 'Gómez', correo: 'roberto.g@teleprogreso.com', rol: 'gerente', estado: 'activo', telefono: '5550-0006', fecha_contratacion: '2019-07-01', placa_vehiculo: null },
 ]
 
 const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
@@ -743,6 +743,9 @@ export default function EmpleadosPage() {
                 <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('fecha_contratacion')}>
                   <span>Contratación</span><SortIcon colKey="fecha_contratacion" />
                 </th>
+                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('placa_vehiculo')}>
+                  <span>Vehículo</span><SortIcon colKey="placa_vehiculo" />
+                </th>
                 <th className={`${styles.th} ${styles.thAcciones}`}>Acciones</th>
               </tr>
             </thead>
@@ -782,6 +785,11 @@ export default function EmpleadosPage() {
                           ? new Date(emp.fecha_contratacion + 'T12:00:00').toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })
                           : <span className={styles.sinDato}>—</span>}
                       </span>
+                    </td>
+                    <td className={styles.td}>
+                        {emp.placa_vehiculo
+                          ? <span className={styles.placaVehiculo}>{emp.placa_vehiculo}</span>
+                          : <span className={styles.sinDato}>—</span>}
                     </td>
                     <td className={`${styles.td} ${styles.tdAcciones}`}>
                       <button className={styles.btnEditar} onClick={() => { setEditError(null); setEmpleadoEditar(emp) }} title={`Editar a ${emp.nombre}`}>
