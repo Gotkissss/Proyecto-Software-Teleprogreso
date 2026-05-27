@@ -53,12 +53,12 @@ const IconChevronsUpDown = () => (
  
 /* ── Mock data ───────────────────────────────────────────────────────────── */
 const MOCK_VEHICULOS = [
-  { id_activo: 1, nombre_activo: 'Pickup Toyota Hilux',  placa: 'P-123ABC', marca: 'Toyota',    modelo: 'Hilux 2022',     capacidad: 5, estado_vehiculo: 'disponible',   color: '#1e3a5f' },
-  { id_activo: 2, nombre_activo: 'Van Kia Pregio',       placa: 'P-456DEF', marca: 'Kia',       modelo: 'Pregio 2021',    capacidad: 8, estado_vehiculo: 'en_uso',       color: '#2d6a4f' },
-  { id_activo: 3, nombre_activo: 'Moto Honda CG 150',    placa: 'M-789GHI', marca: 'Honda',     modelo: 'CG 150 2023',    capacidad: 1, estado_vehiculo: 'disponible',   color: '#7b2d00' },
-  { id_activo: 4, nombre_activo: 'Pickup Ford Ranger',   placa: 'P-321JKL', marca: 'Ford',      modelo: 'Ranger 2020',    capacidad: 5, estado_vehiculo: 'mantenimiento',color: '#1e3a5f' },
-  { id_activo: 5, nombre_activo: 'Camión Isuzu NQR',     placa: 'C-654MNO', marca: 'Isuzu',     modelo: 'NQR 2019',       capacidad: 2, estado_vehiculo: 'disponible',   color: '#3d405b' },
-  { id_activo: 6, nombre_activo: 'Van Mercedes Sprinter',placa: 'P-987PQR', marca: 'Mercedes',  modelo: 'Sprinter 2022',  capacidad: 9, estado_vehiculo: 'en_uso',       color: '#2d6a4f' },
+  { id_activo: 1, nombre_activo: 'Pickup Toyota Hilux',  placa: 'P-123ABC', marca: 'Toyota',    modelo: 'Hilux 2022',     capacidad: 5, estado_vehiculo: 'disponible',   color: '#1e3a5f', nombre_empleado_asignado: null },
+  { id_activo: 2, nombre_activo: 'Van Kia Pregio',       placa: 'P-456DEF', marca: 'Kia',       modelo: 'Pregio 2021',    capacidad: 8, estado_vehiculo: 'en_uso',       color: '#2d6a4f', nombre_empleado_asignado: null },
+  { id_activo: 3, nombre_activo: 'Moto Honda CG 150',    placa: 'M-789GHI', marca: 'Honda',     modelo: 'CG 150 2023',    capacidad: 1, estado_vehiculo: 'disponible',   color: '#7b2d00', nombre_empleado_asignado: null },
+  { id_activo: 4, nombre_activo: 'Pickup Ford Ranger',   placa: 'P-321JKL', marca: 'Ford',      modelo: 'Ranger 2020',    capacidad: 5, estado_vehiculo: 'mantenimiento',color: '#1e3a5f', nombre_empleado_asignado: null },
+  { id_activo: 5, nombre_activo: 'Camión Isuzu NQR',     placa: 'C-654MNO', marca: 'Isuzu',     modelo: 'NQR 2019',       capacidad: 2, estado_vehiculo: 'disponible',   color: '#3d405b', nombre_empleado_asignado: null },
+  { id_activo: 6, nombre_activo: 'Van Mercedes Sprinter',placa: 'P-987PQR', marca: 'Mercedes',  modelo: 'Sprinter 2022',  capacidad: 9, estado_vehiculo: 'en_uso',       color: '#2d6a4f', nombre_empleado_asignado: null },
 ]
  
 const MOCK_HERRAMIENTAS = [
@@ -73,11 +73,11 @@ const MOCK_HERRAMIENTAS = [
 ]
  
 const MOCK_MATERIALES = [
-  { id_activo: 1, nombre_activo: 'Cable fibra óptica G657A2',   tipo_material: 'Cable',      unidad_medida: 'metro',  cantidad_disponible: 1500, stock_minimo: 200 },
+  { id_activo: 1, nombre_activo: 'Cable fibra óptica G657A2',    tipo_material: 'Cable',      unidad_medida: 'metro',   cantidad_disponible: 1500, stock_minimo: 200 },
   { id_activo: 2, nombre_activo: 'Conector SC/APC',             tipo_material: 'Conector',   unidad_medida: 'unidad', cantidad_disponible: 320,  stock_minimo: 50  },
   { id_activo: 3, nombre_activo: 'Manga de empalme dome 24FO',  tipo_material: 'Accesorio',  unidad_medida: 'unidad', cantidad_disponible: 45,   stock_minimo: 10  },
   { id_activo: 4, nombre_activo: 'ONT ZTE F670L',               tipo_material: 'Equipo',     unidad_medida: 'unidad', cantidad_disponible: 18,   stock_minimo: 5   },
-  { id_activo: 5, nombre_activo: 'Cable UTP Cat 6 Panduit',     tipo_material: 'Cable',      unidad_medida: 'metro',  cantidad_disponible: 800,  stock_minimo: 100 },
+  { id_activo: 5, nombre_activo: 'Cable UTP Cat 6 Panduit',      tipo_material: 'Cable',      unidad_medida: 'metro',   cantidad_disponible: 800,  stock_minimo: 100 },
   { id_activo: 6, nombre_activo: 'Patch cord LC/UPC 1m',        tipo_material: 'Cable',      unidad_medida: 'unidad', cantidad_disponible: 95,   stock_minimo: 20  },
   { id_activo: 7, nombre_activo: 'Grapa plástica negra 1/4"',   tipo_material: 'Fijación',   unidad_medida: 'caja',   cantidad_disponible: 60,   stock_minimo: 10  },
   { id_activo: 8, nombre_activo: 'Router MikroTik hAP ac²',     tipo_material: 'Equipo',     unidad_medida: 'unidad', cantidad_disponible: 8,    stock_minimo: 3   },
@@ -170,7 +170,7 @@ function MaterialMiniatura({ tipo }) {
   )
 }
 
-function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
+function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort, onAsignarTecnico, vehiculosMock = MOCK_VEHICULOS }) {
   const SortIcon = ({ col }) => {
     if (sortConfig.key !== col) return <span className={styles.sortNeutral}><IconChevronsUpDown /></span>
     return sortConfig.dir === 'asc'
@@ -179,7 +179,7 @@ function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
   }
  
   const datos = useMemo(() => {
-    let lista = MOCK_VEHICULOS.filter(v => {
+    let lista = vehiculosMock.filter(v => {
       const q = busqueda.toLowerCase()
       const coincide = !q ||
         v.nombre_activo.toLowerCase().includes(q) ||
@@ -199,7 +199,7 @@ function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
       })
     }
     return lista
-  }, [busqueda, filtroEstado, sortConfig])
+  }, [busqueda, filtroEstado, sortConfig, vehiculosMock])
  
   if (datos.length === 0) {
     return (
@@ -229,6 +229,8 @@ function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
             <th className={`${styles.th} ${styles.thSortable}`} onClick={() => onSort('estado_vehiculo')}>
               <span>Estado</span><SortIcon col="estado_vehiculo" />
             </th>
+            <th className={styles.th}>Asignado a</th>
+            <th className={styles.th}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -258,12 +260,25 @@ function TablaVehiculos({ busqueda, filtroEstado, sortConfig, onSort }) {
                   variant={ESTADO_VEHICULO_VARIANT[v.estado_vehiculo] ?? 'muted'}
                 />
               </td>
+              <td className={styles.td}>
+                <span className={styles.textoSecundario}>
+                  {v.nombre_empleado_asignado || 'Sin asignar'}
+                </span>
+              </td>
+              <td className={styles.td}>
+                <button
+                  onClick={() => onAsignarTecnico(v)}
+                  style={{padding:'6px 14px',background:'var(--gradient-primary)',color:'#fff',border:'none',borderRadius:'var(--radius-md)',fontSize:'0.8125rem',fontWeight:600,cursor:'pointer',fontFamily:'var(--font-sans)',boxShadow:'var(--shadow-primary-sm)',whiteSpace:'nowrap'}}
+                >
+                  Asignar técnico
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className={styles.resultCount}>
-        Mostrando {datos.length} de {MOCK_VEHICULOS.length} vehículos
+        Mostrando {datos.length} de {vehiculosMock.length} vehículos
       </p>
     </div>
   )
@@ -521,6 +536,69 @@ const TABS = [
     ],
   },
 ]
+
+/* ── Componente Modal ────────────────────────────────────────────────────── */
+function ModalAsignarTecnico({ vehiculo, onCerrar, onAsignar }) {  
+  const [tecnicoId, setTecnicoId] = useState('')  
+  const [guardando, setGuardando] = useState(false)  
+  const [error, setError] = useState(null)  
+  const MOCK_TECNICOS = [    
+    { id: 2, nombre_completo: 'Juan Pérez García', tareas_activas: 2 },    
+    { id: 4, nombre_completo: 'Carlos Hernández', tareas_activas: 1 },    
+    { id: 5, nombre_completo: 'Ana Rodríguez', tareas_activas: 0 },  
+  ]  
+  const handleConfirmar = async () => {    
+    if (!tecnicoId) return    
+    setGuardando(true)    
+    setError(null)    
+    try {      
+      // TODO: await apiClient.post(`/activos/carros/${vehiculo.id_activo}/asignar`, { id_empleado: Number(tecnicoId) })      
+      await new Promise(r => setTimeout(r, 500))      
+      const tec = MOCK_TECNICOS.find(t => t.id === Number(tecnicoId))      
+      onAsignar(vehiculo.id_activo, tec)    
+    } catch (err) {      
+      setError(err?.response?.data?.detail || 'Error al asignar técnico.')      
+      setGuardando(false)    
+    }  
+  }  
+  return (    
+    <div style={{position:'fixed',inset:0,background:'rgba(11,30,58,0.5)',backdropFilter:'blur(6px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'24px'}} onClick={onCerrar}>      
+      <div style={{background:'var(--color-surface)',border:'1px solid var(--color-border)',borderRadius:'var(--radius-2xl)',boxShadow:'var(--shadow-xl)',width:'100%',maxWidth:'480px',padding:'32px',animation:'fadeInScale 280ms cubic-bezier(0.34,1.56,0.64,1)'}} onClick={e => e.stopPropagation()}>        
+        <h2 style={{fontSize:'1.125rem',fontWeight:800,color:'var(--color-text)',margin:'0 0 4px',letterSpacing:'-0.01em'}}>Asignar técnico</h2>        
+        <p style={{fontSize:'0.875rem',color:'var(--color-text-secondary)',margin:'0 0 24px'}}>          
+          Vehículo: <strong>{vehiculo.placa}</strong> — {vehiculo.nombre_activo}        
+        </p>        
+        {error && (          
+          <div style={{background:'var(--color-danger-bg)',border:'1px solid var(--color-danger-light)',color:'var(--color-danger-dark)',borderRadius:'var(--radius-md)',padding:'10px 14px',fontSize:'0.8125rem',fontWeight:500,marginBottom:'16px'}}>            
+            {error}          
+          </div>        
+        )}        
+        <label style={{display:'block',fontSize:'0.75rem',fontWeight:700,color:'var(--color-text-secondary)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:'8px'}}>          
+          Seleccionar técnico        
+        </label>        
+        <select          
+          value={tecnicoId}          
+          onChange={e => setTecnicoId(e.target.value)}          
+          disabled={guardando}          
+          style={{width:'100%',height:'46px',padding:'0 40px 0 14px',border:'1.5px solid var(--color-border)',borderRadius:'var(--radius-md)',fontSize:'0.9375rem',color:'var(--color-text)',background:'var(--color-bg)',outline:'none',appearance:'none',backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 12px center',fontFamily:'var(--font-sans)',marginBottom:'24px'}}        
+        >          
+          <option value="">— Selecciona un técnico —</option>          
+          {MOCK_TECNICOS.map(tec => (            
+            <option key={tec.id} value={tec.id}>              
+              {tec.nombre_completo} — {tec.tareas_activas} tarea{tec.tareas_activas !== 1 ? 's' : ''} activa{tec.tareas_activas !== 1 ? 's' : ''}            
+            </option>          
+          ))}        
+        </select>        
+        <div style={{display:'flex',gap:'12px',justifyContent:'flex-end'}}>          
+          <button onClick={onCerrar} disabled={guardando} style={{padding:'10px 20px',background:'var(--color-bg-alt)',color:'var(--color-text)',border:'1.5px solid transparent',borderRadius:'var(--radius-md)',fontSize:'0.875rem',fontWeight:600,cursor:'pointer',fontFamily:'var(--font-sans)'}}>            
+            Cancelar          
+          </button>          
+          <button onClick={handleConfirmar} disabled={!tecnicoId || guardando} style={{padding:'10px 22px',background:'var(--gradient-primary)',color:'#fff',border:'none',borderRadius:'var(--radius-md)',fontSize:'0.875rem',fontWeight:600,cursor:'pointer',fontFamily:'var(--font-sans)',boxShadow:'var(--shadow-primary-sm)',opacity:(!tecnicoId||guardando)?0.55:1}}>            
+            {guardando ? 'Asignando...' : 'Asignar'}          
+          </button>        
+        </div>      </div>    </div>  
+  )
+}
  
 /* ── Componente principal ────────────────────────────────────────────────── */
 export default function InventarioPage() {
@@ -528,6 +606,10 @@ export default function InventarioPage() {
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [sortConfig,   setSortConfig]   = useState({ key: null, dir: 'asc' })
+  
+  // Estados para SCRUM-120
+  const [modalAsignarTecnico, setModalAsignarTecnico] = useState(null)
+  const [vehiculosMock, setVehiculosMock] = useState(MOCK_VEHICULOS)
  
   const tabInfo = TABS.find(t => t.id === tabActiva)
  
@@ -567,13 +649,13 @@ export default function InventarioPage() {
               <span className={styles.tabIcon}><tab.Icon /></span>
               <span className={styles.tabLabel}>{tab.label}</span>
               <span className={`${styles.tabCount} ${tabActiva === tab.id ? styles.tabCountActive : ''}`}>
-                {tab.total}
+                {tab.id === 'vehiculos' ? vehiculosMock.length : tab.total}
               </span>
             </button>
           ))}
         </div>
       </div>
- 
+
       {/* ── Toolbar: buscador + filtro ── */}
       <div className={styles.toolbar}>
         <div className={styles.searchWrap}>
@@ -604,35 +686,53 @@ export default function InventarioPage() {
           </select>
         </div>
       </div>
- 
-      {/* ── Contenido por tab ── */}
-      <div className={styles.tabContent}>
-        {tabActiva === 'vehiculos' && (
-          <TablaVehiculos
-            busqueda={busqueda}
-            filtroEstado={filtroEstado}
-            sortConfig={sortConfig}
-            onSort={handleSort}
-          />
-        )}
-        {tabActiva === 'herramientas' && (
-          <TablaHerramientas
-            busqueda={busqueda}
-            filtroEstado={filtroEstado}
-            sortConfig={sortConfig}
-            onSort={handleSort}
-          />
-        )}
-        {tabActiva === 'materiales' && (
-          <TablaMateriales
-            busqueda={busqueda}
-            filtroEstado={filtroEstado}
-            sortConfig={sortConfig}
-            onSort={handleSort}
-          />
-        )}
-      </div>
+
+      {/* ── Tablas de Contenido ── */}
+      {tabActiva === 'vehiculos' && (
+        <TablaVehiculos
+          busqueda={busqueda}
+          filtroEstado={filtroEstado}
+          sortConfig={sortConfig}
+          onSort={handleSort}
+          onAsignarTecnico={(v) => setModalAsignarTecnico(v)}
+          vehiculosMock={vehiculosMock}
+        />
+      )}
+
+      {tabActiva === 'herramientas' && (
+        <TablaHerramientas
+          busqueda={busqueda}
+          filtroEstado={filtroEstado}
+          sortConfig={sortConfig}
+          onSort={handleSort}
+        />
+      )}
+
+      {tabActiva === 'materiales' && (
+        <TablaMateriales
+          busqueda={busqueda}
+          filtroEstado={filtroEstado}
+          sortConfig={sortConfig}
+          onSort={handleSort}
+        />
+      )}
+
+      {/* Modales y utilidades dinámicas */}
+      {modalAsignarTecnico && (
+        <ModalAsignarTecnico
+          vehiculo={modalAsignarTecnico}
+          onCerrar={() => setModalAsignarTecnico(null)}
+          onAsignar={(idActivo, tec) => {
+            setVehiculosMock(prev => prev.map(v =>
+              v.id_activo === idActivo
+                ? { ...v, nombre_empleado_asignado: tec.nombre_completo }
+                : v
+            ))
+            setModalAsignarTecnico(null)
+          }}
+        />
+      )}
     </div>
   )
 }
- 
+
