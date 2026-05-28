@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
 import styles from './InventarioPage.module.css'
@@ -6,70 +6,71 @@ import {
   getCarros, getHerramientas, getMateriales,
   crearActivo, editarActivo, eliminarActivo,
   asignarTecnicoACarro, liberarTecnicoDeCarro,
+  asignarHerramientaACarro,
 } from '../api/inventarioService'
 import apiClient from '../api/client'
 
 /* ── Iconos ──────────────────────────────────────────────────────────────── */
 const IconCar = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/>
     <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
   </svg>
 )
 const IconTool = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
   </svg>
 )
 const IconBox = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
     <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
   </svg>
 )
 const IconSearch = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 )
 const IconX = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 )
 const IconFilter = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
   </svg>
 )
 const IconChevronUp = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <polyline points="18 15 12 9 6 15"/>
   </svg>
 )
 const IconChevronDown = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <polyline points="6 9 12 15 18 9"/>
   </svg>
 )
 const IconChevronsUpDown = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <polyline points="7 15 12 20 17 15"/><polyline points="7 9 12 4 17 9"/>
   </svg>
 )
 const IconPlus = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
   </svg>
 )
 const IconEdit = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>
 )
 const IconTrash = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/>
     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
     <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -77,7 +78,7 @@ const IconTrash = () => (
   </svg>
 )
 const IconRefresh = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 4 23 10 17 10"/>
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
   </svg>
@@ -503,7 +504,7 @@ function TablaVehiculos({ datos, loading, sortConfig, onSort, onAsignarTecnico, 
   )
 }
 
-function TablaHerramientas({ datos, loading, sortConfig, onSort, onEditar, onEliminar }) {
+function TablaHerramientas({ datos, loading, sortConfig, onSort, onAsignarCarro, onEditar, onEliminar }) {
   if (loading) return <div className={styles.loadingState}><Spinner size="lg"/><p>Cargando herramientas...</p></div>
   if (datos.length === 0) return <div className={styles.emptyState}><div className={styles.emptyIcon}><IconTool/></div><p className={styles.emptyMsg}>No se encontraron herramientas con esos criterios.</p></div>
   return (
@@ -527,6 +528,7 @@ function TablaHerramientas({ datos, loading, sortConfig, onSort, onEditar, onEli
               <td className={styles.td}><Badge label={ESTADO_HERR_LABEL[h.estado]??h.estado} variant={ESTADO_HERR_VARIANT[h.estado]??'muted'}/></td>
               <td className={styles.td}>
                 <div style={{display:'flex',gap:'6px'}}>
+                  <button onClick={()=>onAsignarCarro(h)} style={{padding:'5px 8px',background:'linear-gradient(135deg,var(--color-primary),var(--color-primary-dark,#0055cc))',color:'#fff',border:'none',borderRadius:'var(--radius-md)',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontSize:'0.78rem',fontFamily:'var(--font-sans)',fontWeight:600}}>Asignar a vehículo</button>
                   <button onClick={()=>onEditar(h)} style={{padding:'5px 8px',background:'var(--color-bg-alt)',color:'var(--color-text)',border:'1px solid var(--color-border)',borderRadius:'var(--radius-md)',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontSize:'0.78rem',fontFamily:'var(--font-sans)'}}><IconEdit/></button>
                   <button onClick={()=>onEliminar(h)} style={{padding:'5px 8px',background:'var(--color-danger-bg)',color:'var(--color-danger)',border:'1px solid var(--color-danger-light)',borderRadius:'var(--radius-md)',cursor:'pointer',display:'flex',alignItems:'center',fontSize:'0.78rem',fontFamily:'var(--font-sans)'}}><IconTrash/></button>
                 </div>
@@ -630,6 +632,61 @@ function filtrarYOrdenar(lista, busqueda, filtroEstado, sortConfig, tipo) {
 }
 
 /* ── Componente principal ────────────────────────────────────────────────── */
+
+// ── Modal: Asignar herramienta a un carro ─────────────────────────────────
+function ModalAsignarHerramientaACarro({ herramienta, carros, onCerrar, onAsignada }) {
+  const [carroId, setCarroId] = React.useState('')
+  const [guardando, setGuardando] = React.useState(false)
+  const [error, setError] = React.useState(null)
+
+  const handleConfirmar = async () => {
+    if (!carroId) return
+    setGuardando(true); setError(null)
+    try {
+      await asignarHerramientaACarro(Number(carroId), herramienta.id_activo)
+      const carro = carros.find(c => c.id_activo === Number(carroId))
+      onAsignada(herramienta.id_activo, carro)
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Error al asignar herramienta.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const overlayStyle = {position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'16px'}
+  const boxStyle    = {background:'var(--color-bg)',borderRadius:'var(--radius-lg)',padding:'28px',width:'100%',maxWidth:'420px',boxShadow:'var(--shadow-xl)'}
+  const inputStyle  = {width:'100%',padding:'9px 12px',border:'1.5px solid var(--color-border)',borderRadius:'var(--radius-md)',fontSize:'0.875rem',fontFamily:'var(--font-sans)',background:'var(--color-bg)',color:'var(--color-text)',boxSizing:'border-box',cursor:'pointer'}
+
+  return (
+    <div style={overlayStyle} onClick={onCerrar}>
+      <div style={boxStyle} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+          <h3 style={{margin:0,fontSize:'1.05rem',fontWeight:700,color:'var(--color-text)'}}>Asignar a vehículo</h3>
+          <button onClick={onCerrar} style={{background:'none',border:'none',cursor:'pointer',color:'var(--color-text-secondary)',display:'flex',padding:'4px'}}><IconX/></button>
+        </div>
+        <p style={{fontSize:'0.875rem',color:'var(--color-text-secondary)',marginBottom:'18px'}}>
+          Selecciona el vehículo al que deseas asignar <strong>{herramienta.nombre_activo}</strong>.
+        </p>
+        <select value={carroId} onChange={e=>setCarroId(e.target.value)} style={inputStyle}>
+          <option value="">— Selecciona un vehículo —</option>
+          {carros.filter(c=>c.estado_vehiculo!=='fuera_de_servicio').map(c => (
+            <option key={c.id_activo} value={c.id_activo}>
+              {c.placa} — {c.nombre_activo}{c.nombre_empleado_asignado ? ` (${c.nombre_empleado_asignado})` : ' (Sin técnico)'}
+            </option>
+          ))}
+        </select>
+        {error && <p style={{color:'var(--color-danger)',fontSize:'0.8rem',marginTop:'8px'}}>{error}</p>}
+        <div style={{display:'flex',gap:'10px',justifyContent:'flex-end',marginTop:'22px'}}>
+          <button onClick={onCerrar} disabled={guardando} style={{padding:'10px 20px',background:'var(--color-bg-alt)',color:'var(--color-text)',border:'1.5px solid transparent',borderRadius:'var(--radius-md)',fontSize:'0.875rem',fontWeight:600,cursor:'pointer',fontFamily:'var(--font-sans)'}}>Cancelar</button>
+          <button onClick={handleConfirmar} disabled={!carroId||guardando} style={{padding:'10px 22px',background:'var(--gradient-primary)',color:'#fff',border:'none',borderRadius:'var(--radius-md)',fontSize:'0.875rem',fontWeight:600,cursor:'pointer',fontFamily:'var(--font-sans)',boxShadow:'var(--shadow-primary-sm)',opacity:(!carroId||guardando)?0.55:1}}>
+            {guardando ? 'Asignando…' : 'Asignar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function InventarioPage() {
   const [tabActiva, setTabActiva] = useState('vehiculos')
   const [busqueda, setBusqueda] = useState('')
@@ -648,6 +705,7 @@ export default function InventarioPage() {
   const [modalEditar, setModalEditar] = useState(null)     // activo a editar
   const [modalEliminar, setModalEliminar] = useState(null) // activo a eliminar
   const [modalAsignarTecnico, setModalAsignarTecnico] = useState(null)
+  const [modalAsignarHerramienta, setModalAsignarHerramienta] = useState(null)
 
   const tabInfo = TABS.find(t => t.id === tabActiva)
 
@@ -693,6 +751,10 @@ export default function InventarioPage() {
     setHerramientas(p => p.filter(h => h.id_activo!==id))
     setMateriales(p => p.filter(m => m.id_activo!==id))
     setModalEliminar(null)
+  }
+  const handleAsignadaACarro = (idHerramienta, carro) => {
+    // Optionally update herramienta state to reflect assignment
+    setModalAsignarHerramienta(null)
   }
   const handleAsignado = (idActivo, tec) => {
     setVehiculos(p => p.map(v => v.id_activo===idActivo ? {...v, nombre_empleado_asignado: tec?`${tec.nombre} ${tec.apellido}`:null, estado_vehiculo:'en_uso'} : v))
@@ -762,6 +824,7 @@ export default function InventarioPage() {
       )}
       {tabActiva === 'herramientas' && (
         <TablaHerramientas datos={datosFiltrados} loading={loading} sortConfig={sortConfig} onSort={handleSort}
+          onAsignarCarro={h=>setModalAsignarHerramienta(h)}
           onEditar={h=>setModalEditar(h)} onEliminar={h=>setModalEliminar(h)}/>
       )}
       {tabActiva === 'materiales' && (
@@ -774,6 +837,7 @@ export default function InventarioPage() {
       {modalEditar && <ModalEditarActivo activo={modalEditar} onCerrar={()=>setModalEditar(null)} onEditado={handleEditado}/>}
       {modalEliminar && <ModalEliminar activo={modalEliminar} onCerrar={()=>setModalEliminar(null)} onEliminado={handleEliminado}/>}
       {modalAsignarTecnico && <ModalAsignarTecnico vehiculo={modalAsignarTecnico} onCerrar={()=>setModalAsignarTecnico(null)} onAsignado={handleAsignado}/>}
+      {modalAsignarHerramienta && <ModalAsignarHerramientaACarro herramienta={modalAsignarHerramienta} carros={vehiculos} onCerrar={()=>setModalAsignarHerramienta(null)} onAsignada={handleAsignadaACarro}/>}
     </div>
   )
 }
