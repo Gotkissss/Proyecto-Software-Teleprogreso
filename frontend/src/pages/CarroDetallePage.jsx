@@ -19,18 +19,14 @@ import Spinner from '../components/ui/Spinner'
 import ModalAsignarHerramientas from '../components/carros/ModalAsignarHerramientas'
 import styles from './CarroDetallePage.module.css'
 
-// TODO (backend — back ): descomentar cuando estén listos
-// import {
-//   getCarroById,
-//   getHerramientasDeCarro,
-//   asignarHerramientaACarro,
-//   liberarHerramientaDeCarro,
-// } from '../api/carroService'
+import {
+  getCarroById,
+  getHerramientasDeCarro,
+  asignarHerramientaACarro,
+  liberarHerramientaDeCarro,
+} from '../api/carroService'
 
-/* 
-   FLAG DE MOCK
-   Cambiar a false cuando el compañero termine los 3 endpoints */
-const USE_MOCK = true
+const USE_MOCK = false
 
 /*MOCK DATA */
 const MOCK_CARRO = {
@@ -206,20 +202,12 @@ export default function CarroDetallePage() {
       setLoading(true)
       setError(null)
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 550))
-          setCarro(MOCK_CARRO)
-          setHerramientas(MOCK_HERRAMIENTAS_ASIGNADAS)
-        } else {
-          // TODO (backend): descomentar cuando SCRUM-111 esté listo
-          // const [carroData, herrData] = await Promise.all([
-          //   getCarroById(id),
-          //   getHerramientasDeCarro(id),
-          // ])
-          // setCarro(carroData)
-          // setHerramientas(herrData)
-          throw new Error('SCRUM-111: endpoint no implementado aún. Activa USE_MOCK = true.')
-        }
+        const [carroData, herrData] = await Promise.all([
+            getCarroById(id),
+            getHerramientasDeCarro(id),
+          ])
+          setCarro(carroData)
+          setHerramientas(herrData)
       } catch (err) {
         setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar el vehículo.')
       } finally {
@@ -238,30 +226,11 @@ export default function CarroDetallePage() {
   /*  Asignar herramientas (desde modal)  */
   const handleAsignar = async (idsSeleccionados) => {
     try {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 600))
-        // Simulamos agregar al estado local
-        const nuevas = idsSeleccionados.map((idH) => ({
-          id_activo: idH,
-          nombre_activo: `Herramienta #${idH}`,
-          tipo_herramienta: 'General',
-          marca: '—',
-          modelo: '—',
-          estado: 'disponible',
-          fecha_asignacion: new Date().toISOString(),
-          estado_entrega: null,
-          comentario: null,
-        }))
-        setHerramientas((prev) => [...prev, ...nuevas])
-      } else {
-        // TODO (backend): descomentar cuando esté listo
-        // await Promise.all(
-        //   idsSeleccionados.map((idH) => asignarHerramientaACarro(id, idH))
-        // )
-        // const herrActualizadas = await getHerramientasDeCarro(id)
-        // setHerramientas(herrActualizadas)
-        throw new Error('SCRUM-112: endpoint no implementado aún.')
-      }
+        await Promise.all(
+          idsSeleccionados.map((idH) => asignarHerramientaACarro(id, idH))
+        )
+        const herrActualizadas = await getHerramientasDeCarro(id)
+        setHerramientas(herrActualizadas)
       setModalAsignar(false)
       mostrarExito(
         `${idsSeleccionados.length} herramienta${idsSeleccionados.length !== 1 ? 's asignadas' : ' asignada'} correctamente.`
@@ -276,15 +245,8 @@ export default function CarroDetallePage() {
     setLiberando(true)
     setErrorMsg(null)
     try {
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 500))
-        setHerramientas((prev) => prev.filter((h) => h.id_activo !== idHerramienta))
-      } else {
-        // TODO (backend): descomentar cuando esté listo
-        // await liberarHerramientaDeCarro(id, idHerramienta)
-        // setHerramientas((prev) => prev.filter((h) => h.id_activo !== idHerramienta))
-        throw new Error('SCRUM-113: endpoint no implementado aún.')
-      }
+      await liberarHerramientaDeCarro(id, idHerramienta)
+      setHerramientas((prev) => prev.filter((h) => h.id_activo !== idHerramienta))
       setHerramientaLiberar(null)
       mostrarExito('Herramienta liberada y disponible para reasignación.')
     } catch (err) {

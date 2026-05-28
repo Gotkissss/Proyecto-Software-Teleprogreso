@@ -15,6 +15,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Spinner from '../ui/Spinner'
 import styles from './ModalAsignarHerramientas.module.css'
+import { getHerramientas } from '../../api/carroService'
 
 /*  Iconos  */
 const IconX = () => (
@@ -84,12 +85,10 @@ export default function ModalAsignarHerramientas({
     const fetchHerramientas = async () => {
       setLoading(true)
       try {
-        // TODO (backend) se tiene que  reemplazar mock por llamada real cuando esté GET /activos/herramientas
-        // const data = await getHerramientas()
-        await new Promise((r) => setTimeout(r, 450))
-        // Excluir las ya asignadas al carro
-        const disponibles = MOCK_HERRAMIENTAS_DISPONIBLES.filter(
-          (h) => !herramientasYa.includes(h.id_activo)
+        const data = await getHerramientas()
+        // Excluir las ya asignadas al carro y las que no están disponibles
+        const disponibles = data.filter(
+          (h) => !herramientasYa.includes(h.id_activo) && h.estado === 'disponible'
         )
         setHerramientas(disponibles)
       } catch (err) {

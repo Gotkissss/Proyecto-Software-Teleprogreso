@@ -48,10 +48,8 @@ export async function getCarroById(id) {
  * TODO (backend — gualim): Implementar GET /activos/carros/{id}/herramientas
  */
 export async function getHerramientasDeCarro(idCarro) {
-  // TODO (backend — gualim SCRUM-111): descomentar cuando esté listo
-  // const { data } = await apiClient.get(`/activos/carros/${idCarro}/herramientas`)
-  // return Array.isArray(data) ? data : []
-  throw new Error('SCRUM-111: GET /activos/carros/{id}/herramientas no implementado aún.')
+  const { data } = await apiClient.get(`/activos/carros/${idCarro}/herramientas`)
+  return Array.isArray(data) ? data : []
 }
 
 /**
@@ -64,13 +62,11 @@ export async function getHerramientasDeCarro(idCarro) {
  * @param {number} idHerramienta
  */
 export async function asignarHerramientaACarro(idCarro, idHerramienta) {
-  // TODO (backend — gualim SCRUM-112): descomentar cuando esté listo
-  // const { data } = await apiClient.post(
-  //   `/activos/carros/${idCarro}/herramientas`,
-  //   { id_herramienta: idHerramienta }
-  // )
-  // return data
-  throw new Error('SCRUM-112: POST /activos/carros/{id}/herramientas no implementado aún.')
+  const { data } = await apiClient.post(
+    `/activos/carros/${idCarro}/herramientas`,
+    { id_herramienta: idHerramienta }
+  )
+  return data
 }
 
 /**
@@ -83,9 +79,7 @@ export async function asignarHerramientaACarro(idCarro, idHerramienta) {
  * @param {number} idHerramienta
  */
 export async function liberarHerramientaDeCarro(idCarro, idHerramienta) {
-  // TODO (backend — gualim SCRUM-113): descomentar cuando esté listo
-  // await apiClient.delete(`/activos/carros/${idCarro}/herramientas/${idHerramienta}`)
-  throw new Error('SCRUM-113: DELETE /activos/carros/{id}/herramientas/{id_h} no implementado aún.')
+  await apiClient.delete(`/activos/carros/${idCarro}/herramientas/${idHerramienta}`)
 }
 
 /*  Herramientas globales */

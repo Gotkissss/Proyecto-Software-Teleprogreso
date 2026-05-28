@@ -15,11 +15,17 @@ import { useState, useEffect } from 'react'
 import Spinner from '../components/ui/Spinner'
 import styles from './EquipoPage.module.css'
 
-// TODO (backend): descomentar cuando SCRUM-129 esté listo
-// import { getMiEquipo } from '../api/equipoService'
+const API_BASE = import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : 'https://backend-production-6d60.up.railway.app')
 
-/* ─── FLAG DE MOCK ───────────────────────────────────────────────────────── */
-const USE_MOCK = true
+const fotoUrl = (url) => {
+  if (!url) return null
+  return url.startsWith('http') ? url : API_BASE + url
+}
+
+import { getMiEquipo } from '../api/equipoService'
 
 /* ─── MOCK DATA ──────────────────────────────────────────────────────────── */
 const MOCK_VEHICULO = {
@@ -122,17 +128,9 @@ export default function EquipoPage() {
       setLoading(true)
       setError(null)
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 600))
-          setVehiculo(MOCK_VEHICULO)
-          setHerramientas(MOCK_HERRAMIENTAS)
-        } else {
-          // TODO (backend — SCRUM-129): descomentar cuando esté listo
-          // const { vehiculo, herramientas } = await getMiEquipo()
-          // setVehiculo(vehiculo)
-          // setHerramientas(herramientas)
-          throw new Error('SCRUM-129: endpoint no implementado aún. Activa USE_MOCK = true.')
-        }
+        const { vehiculo: v, herramientas: h } = await getMiEquipo()
+          setVehiculo(v)
+          setHerramientas(h)
       } catch (err) {
         setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar tu equipo.')
       } finally {
@@ -193,7 +191,10 @@ export default function EquipoPage() {
           <div className={styles.vehiculoCard}>
             {/* Imagen / ilustración grande */}
             <div className={styles.vehiculoImagen}>
-              <VehiculoIlustracion color="#1e3a5f" />
+              {fotoUrl(vehiculo.foto_url)
+                ? <img src={fotoUrl(vehiculo.foto_url)} alt={vehiculo.nombre_activo} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>
+                : <VehiculoIlustracion color="#1e3a5f" />
+              }
             </div>
 
             {/* Info principal */}

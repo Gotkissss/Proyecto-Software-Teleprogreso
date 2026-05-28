@@ -290,3 +290,100 @@ async def update_estado_empleado(
     empleado.estado = data.estado
 
     return empleado
+
+# ─── GET /empleados/mi-equipo ─────────────────────────────────────────────
+# T5.1: Endpoint para que el técnico autenticado vea su vehículo + herramientas
+
+from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta
+from app.models.empleado import EmpleadoCarro
+from app.schemas.activo import CarroResponse, HerramientaEnCarroResponse
+
+
+@router.get(
+    "/mi-equipo",
+    summary="Ver el vehículo y herramientas asignadas al técnico autenticado",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mi_equipo(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Devuelve el vehículo asignado al técnico autenticado y las herramientas
+    que lleva ese vehículo.
+
+    Respuesta:
+      {
+        "vehiculo": CarroResponse | null,
+        "herramientas": HerramientaEnCarroResponse[]
+      }
+
+    Roles: cualquier empleado autenticado (principalmente técnicos).
+    """
+    # 1. Buscar asignación carro↔empleado
+    result_asig = await db.execute(
+        select(EmpleadoCarro)
+        .where(EmpleadoCarro.id_empleado == current_user.id_empleado)
+    )
+    asig = result_asig.scalar_one_or_none()
+
+    if not asig:
+        return {"vehiculo": None, "herramientas": []}
+
+    # 2. Obtener datos del carro
+    result_carro = await db.execute(
+        select(Activo, Carro)
+        .join(Carro, Carro.id_activo == Activo.id_activo)
+        .where(Carro.id_activo == asig.id_carro)
+    )
+    row_carro = result_carro.one_or_none()
+
+    if not row_carro:
+        return {"vehiculo": None, "herramientas": []}
+
+    activo_carro, carro = row_carro
+
+    vehiculo = CarroResponse(
+        id_activo=activo_carro.id_activo,
+        nombre_activo=activo_carro.nombre_activo,
+        descripcion=activo_carro.descripcion,
+        tipo=activo_carro.tipo,
+        fecha_registro=activo_carro.fecha_registro,
+        foto_url=activo_carro.foto_url,
+        placa=carro.placa,
+        marca=carro.marca,
+        modelo=carro.modelo,
+        capacidad=carro.capacidad,
+        estado_vehiculo=carro.estado_vehiculo,
+        id_empleado_asignado=current_user.id_empleado,
+        nombre_empleado_asignado=f"{current_user.nombre} {current_user.apellido}",
+    )
+
+    # 3. Obtener herramientas del carro
+    result_herr = await db.execute(
+        select(CarroHerramienta, Herramienta, Activo)
+        .join(Herramienta, Herramienta.id_activo == CarroHerramienta.id_herramienta)
+        .join(Activo, Activo.id_activo == Herramienta.id_activo)
+        .where(CarroHerramienta.id_carro == asig.id_carro)
+        .order_by(Activo.nombre_activo)
+    )
+    rows_herr = result_herr.all()
+
+    herramientas = [
+        HerramientaEnCarroResponse(
+            id_activo=activo.id_activo,
+            nombre_activo=activo.nombre_activo,
+            descripcion=activo.descripcion,
+            foto_url=activo.foto_url,
+            tipo_herramienta=herramienta.tipo_herramienta,
+            marca=herramienta.marca,
+            modelo=herramienta.modelo,
+            estado=herramienta.estado,
+            fecha_asignacion=relacion.fecha_asignacion,
+            estado_entrega=relacion.estado_entrega,
+            comentario=relacion.comentario,
+        )
+        for relacion, herramienta, activo in rows_herr
+    ]
+
+    return {"vehiculo": vehiculo, "herramientas": herramientas}

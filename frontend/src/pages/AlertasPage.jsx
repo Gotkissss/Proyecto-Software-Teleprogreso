@@ -23,7 +23,7 @@ import { useEffect, useState } from 'react'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import StockBadge from '../components/ui/StockBadge'
-// import { getMaterialesBajoStock } from '../api/materialService'  // descomentar cuando el backend esté listo
+import { getMaterialesBajoStock } from '../api/materialService'
 import { calcularPorcentajeStock, clasificarStock } from '../api/materialService'
 import styles from './AlertasPage.module.css'
 
@@ -32,9 +32,7 @@ import styles from './AlertasPage.module.css'
  */
 const USE_MOCK_ALERTAS = true
 
-// TODO (backend — Gualim): Implementar GET /activos/materiales/bajo-stock
-// Cuando esté listo, cambiar a false y descomentar la llamada real.
-const USE_MOCK_STOCK = true
+const USE_MOCK_STOCK = false
 
 /*  MOCK: Alertas operativas */
 const MOCK_ALERTAS = [
@@ -246,19 +244,8 @@ export default function AlertasPage() {
   useEffect(() => {
     const fetchStock = async () => {
       try {
-        if (USE_MOCK_STOCK) {
-          // Simulación: datos mock ya filtrados (cantidad < minimo)
-          await new Promise((r) => setTimeout(r, 500))
-          setMateriales(MOCK_MATERIALES_BAJO_STOCK)
-        } else {
-          // TODO (backend — gualin): descomentar cuando esté listo
-          // GET /activos/materiales/bajo-stock
-          // const data = await getMaterialesBajoStock()
-          // setMateriales(data)
-
-          // Fallback temporal: lanzar error para indicar que falta el endpoint
-          throw new Error('Endpoint /activos/materiales/bajo-stock no implementado aún.')
-        }
+        const data = await getMaterialesBajoStock()
+          setMateriales(data)
       } catch (err) {
         setErrorSt(
           err?.response?.data?.detail ||
