@@ -10,7 +10,7 @@ import {
 import Spinner from '../components/ui/Spinner'
 import styles from './PausasPage.module.css'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 const IconClock   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 const IconPause   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -24,12 +24,6 @@ const IconCoffee  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const IconLogin   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
 
 const JORNADA_TOTAL_SEGUNDOS = 8 * 3600 // 8 horas
-
-const MOCK_TIPOS_PAUSA = [
-  { id: 'almuerzo', label: 'Pausa de Almuerzo',       duracion_max_min: 60 },
-  { id: 'tecnica',  label: 'Pausa Técnica (Soporte)', duracion_max_min: 15 },
-  { id: 'personal', label: 'Pausa Personal',           duracion_max_min: 10 },
-]
 
 const secsToHHMM = (s) => {
   const h = Math.floor(s / 3600)

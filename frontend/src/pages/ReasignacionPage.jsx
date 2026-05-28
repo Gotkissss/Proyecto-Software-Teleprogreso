@@ -11,20 +11,6 @@ import styles from './ReasignacionPage.module.css'
 
 const USE_MOCK = false
 
-const MOCK_TAREAS = [
-  { id: 1, titulo: 'Instalación fibra óptica - Los Álamos', estado: 'pendiente', tecnico: { id: 2, nombre_completo: 'Juan Pérez García' } },
-  { id: 2, titulo: 'Reparación de señal - El Ahorro', estado: 'en_progreso', tecnico: { id: 2, nombre_completo: 'Juan Pérez García' } },
-  { id: 3, titulo: 'Mantenimiento - Carlos Mendoza', estado: 'pendiente', tecnico: { id: 3, nombre_completo: 'María López' } },
-  { id: 4, titulo: 'Instalación TV Cable - Sabor Latino', estado: 'pendiente', tecnico: null },
-]
-
-const MOCK_TECNICOS = [
-  { id: 2, nombre_completo: 'Juan Pérez García', tareas_activas: 2 },
-  { id: 3, nombre_completo: 'María López', tareas_activas: 1 },
-  { id: 4, nombre_completo: 'Carlos Hernández', tareas_activas: 3 },
-  { id: 5, nombre_completo: 'Ana Rodríguez', tareas_activas: 0 },
-]
-
 const LIMITE_TAREAS = 3
 
 export default function ReasignacionPage() {

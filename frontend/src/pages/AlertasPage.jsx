@@ -10,11 +10,9 @@
  *
  * Para el stock crítico:
  *   - Consume GET /activos/materiales/bajo-stock (implementado por Gualim en backend)
- *   - Mientras no esté listo el endpoint, USE_MOCK_STOCK = true filtra en
  *     el frontend a partir de datos de muestra.
  *
  * Cuando gualim termine el backend:
- *   1. Cambiar USE_MOCK_STOCK a false
  *   2. Descomentar la llamada real a getMaterialesBajoStock()
  * ---------------------------------------------------------------------------
  */
@@ -30,96 +28,14 @@ import styles from './AlertasPage.module.css'
 /* 
    FLAGS DE MOCK
  */
-const USE_MOCK_ALERTAS = true
+const USE_MOCK_ALERTAS = false
 
 const USE_MOCK_STOCK = false
 
 /*  MOCK: Alertas operativas */
-const MOCK_ALERTAS = [
-  {
-    id: 1,
-    nivel: 'critico',
-    mensaje: 'Tarea con más de 2 horas de retraso',
-    tecnico: { nombre_completo: 'Juan Pérez García' },
-    tarea: { titulo: 'Reparación de señal - Tienda El Ahorro' },
-    fecha_hora: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    resuelta: false,
-  },
-  {
-    id: 2,
-    nivel: 'advertencia',
-    mensaje: 'Tarea sin asignar hace más de 1 hora',
-    tecnico: null,
-    tarea: { titulo: 'Instalación TV Cable - Restaurante Sabor Latino' },
-    fecha_hora: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-    resuelta: false,
-  },
-  {
-    id: 3,
-    nivel: 'advertencia',
-    mensaje: 'Técnico en pausa prolongada (más de 45 min)',
-    tecnico: { nombre_completo: 'Carlos Hernández' },
-    tarea: null,
-    fecha_hora: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
-    resuelta: false,
-  },
-  {
-    id: 4,
-    nivel: 'critico',
-    mensaje: 'Incidencia reportada por el técnico en el sitio',
-    tecnico: { nombre_completo: 'María López' },
-    tarea: { titulo: 'Mantenimiento preventivo - Carlos Mendoza' },
-    fecha_hora: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-    resuelta: false,
-  },
-]
-
 /*  MOCK: Materiales para stock crítico  */
 // Simula lo que devolvería GET /activos/materiales/bajo-stock
 // Solo incluye materiales donde cantidad_disponible < stock_minimo
-const MOCK_MATERIALES_BAJO_STOCK = [
-  {
-    id_activo: 1,
-    nombre_activo: 'Cable coaxial RG-6',
-    descripcion: 'Cable para distribución de TV cable',
-    tipo: 'material',
-    cantidad_disponible: 0,
-    stock_minimo: 50,
-    unidad_medida: 'metros',
-    tipo_material: 'Cable',
-  },
-  {
-    id_activo: 2,
-    nombre_activo: 'Conector F macho',
-    descripcion: 'Conector para terminaciones de cable coaxial',
-    tipo: 'material',
-    cantidad_disponible: 8,
-    stock_minimo: 100,
-    unidad_medida: 'unidades',
-    tipo_material: 'Conector',
-  },
-  {
-    id_activo: 3,
-    nombre_activo: 'Splitter 2 salidas',
-    descripcion: 'Divisor de señal de 2 vías para TV cable',
-    tipo: 'material',
-    cantidad_disponible: 3,
-    stock_minimo: 20,
-    unidad_medida: 'unidades',
-    tipo_material: 'Divisor',
-  },
-  {
-    id_activo: 4,
-    nombre_activo: 'Fibra óptica monomodo',
-    descripcion: 'Cable de fibra óptica para instalaciones',
-    tipo: 'material',
-    cantidad_disponible: 15,
-    stock_minimo: 200,
-    unidad_medida: 'metros',
-    tipo_material: 'Fibra',
-  },
-]
-
 /*  Helpers */
 const formatHora = (isoString) => {
   const fecha = new Date(isoString)

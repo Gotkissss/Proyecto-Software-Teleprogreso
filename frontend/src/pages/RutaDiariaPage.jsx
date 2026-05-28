@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getMiRuta } from '../api/rutaService'
+import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
 import styles from './RutaDiariaPage.module.css'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
 const IconClock    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -17,59 +17,6 @@ const IconAlert    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconPlay     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 const IconX        = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-
-const MOCK_RUTA = {
-  fecha: new Date().toISOString().split('T')[0],
-  tecnico: { nombre_completo: 'Juan Pérez', cargo: 'Técnico de Campo' },
-  alerta: { mensaje: 'Tienes 1 servicio urgente pendiente en tu ruta.' },
-  servicios: [
-    {
-      id_servicio: 1,
-      estado: 'pendiente',
-      prioridad: 'urgente',
-      nombre: 'Tienda El Ahorro',
-      direccion: 'Barrio El Centro, 3 Calle',
-      tipo: 'Reparación',
-      km: 8,
-    },
-    {
-      id_servicio: 2,
-      estado: 'pendiente',
-      prioridad: 'media',
-      nombre: 'Residencial Los Álamos - Bloque B',
-      direccion: 'Calle 15, Ave. Circunvalación',
-      tipo: 'Instalación',
-      km: 5,
-    },
-    {
-      id_servicio: 3,
-      estado: 'pendiente',
-      prioridad: 'media',
-      nombre: 'Carlos Mendoza',
-      direccion: 'Col. Universidad, Casa 4',
-      tipo: 'Mantenimiento',
-      km: 7,
-    },
-    {
-      id_servicio: 4,
-      estado: 'pendiente',
-      prioridad: 'alta',
-      nombre: 'María Josefa Rodríguez',
-      direccion: 'Res. El Portal, Senda 3',
-      tipo: 'Mantenimiento',
-      km: 6,
-    },
-    {
-      id_servicio: 5,
-      estado: 'pendiente',
-      prioridad: 'media',
-      nombre: 'Restaurante Sabor Latino',
-      direccion: 'Bo. Guamilito, 5 Ave 4 Calle',
-      tipo: 'Reparación',
-      km: 9,
-    },
-  ],
-}
 
 const ESTADO_LABEL = {
   completado:  'Completado',
@@ -263,7 +210,7 @@ export default function RutaDiariaPage() {
           // Ordena: urgentes primero, luego por prioridad, completadas al final
           setServicios(ordenarServicios(MOCK_RUTA.servicios))
         } else {
-          const data = await getMiRuta()
+          const data = await getMiRuta(user?.id_empleado)
           setRuta(data)
           setServicios(ordenarServicios(data.servicios))
         }
@@ -285,16 +232,23 @@ export default function RutaDiariaPage() {
     return [...pendientes, ...completadas]
   }
 
-  const handleIniciar = (idServicio) => {
+  const handleIniciar = async (idServicio) => {
+    // Optimistic update
     setServicios((prev) =>
       prev.map((s) =>
         s.id_servicio === idServicio ? { ...s, estado: 'en_progreso' } : s
       )
     )
-    // Actualiza el panel abierto también
     setDetalleAbierto((prev) =>
       prev && prev.id_servicio === idServicio ? { ...prev, estado: 'en_progreso' } : prev
     )
+    if (!USE_MOCK) {
+      try {
+        await iniciarServicio(idServicio)
+      } catch (err) {
+        console.warn('No se pudo confirmar inicio en servidor:', err?.response?.data?.detail ?? err.message)
+      }
+    }
   }
 
   const handleTerminar = (idServicio) => {

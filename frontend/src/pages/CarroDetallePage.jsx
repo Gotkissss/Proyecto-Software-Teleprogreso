@@ -5,10 +5,8 @@
  * Ruta sugerida: /supervisor/carros/:id
  *
  *  Los endpoints de backend pues igual  están comentados
- * en carroService.js. Mientras no estén listos, USE_MOCK = true.
  *
  * Cuando se  termine el backend:
- *   1. Cambiar USE_MOCK = false
  *   2. Los comentarios en carroService.js indican qué descomentar en cada caso
  * ---------------------------------------------------------------------------
  */
@@ -29,53 +27,6 @@ import {
 const USE_MOCK = false
 
 /*MOCK DATA */
-const MOCK_CARRO = {
-  id_activo: 1,
-  nombre_activo: 'Vehículo Operativo 01',
-  placa: 'P-123ABC',
-  marca: 'Toyota',
-  modelo: 'Hilux',
-  capacidad: 5,
-  estado_vehiculo: 'disponible',
-  descripcion: 'Pickup doble cabina asignada a ruta norte. Revisión técnica vigente.',
-}
-
-const MOCK_HERRAMIENTAS_ASIGNADAS = [
-  {
-    id_activo: 2,
-    nombre_activo: 'Escalera telescópica 6m',
-    tipo_herramienta: 'Escalera',
-    marca: 'Werner',
-    modelo: 'MT-13',
-    estado: 'disponible',
-    fecha_asignacion: '2025-04-10T08:00:00Z',
-    estado_entrega: 'Buenas condiciones',
-    comentario: null,
-  },
-  {
-    id_activo: 3,
-    nombre_activo: 'Multímetro digital',
-    tipo_herramienta: 'Medición',
-    marca: 'Fluke',
-    modelo: '117',
-    estado: 'disponible',
-    fecha_asignacion: '2025-04-10T08:00:00Z',
-    estado_entrega: 'Buenas condiciones',
-    comentario: 'Calibrado en marzo',
-  },
-  {
-    id_activo: 7,
-    nombre_activo: 'Fusionadora de fibra',
-    tipo_herramienta: 'Empalme',
-    marca: 'Fujikura',
-    modelo: 'FSM-80S',
-    estado: 'disponible',
-    fecha_asignacion: '2025-05-01T09:00:00Z',
-    estado_entrega: 'Buenas condiciones',
-    comentario: null,
-  },
-]
-
 /*  Iconos  */
 const IconBack = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

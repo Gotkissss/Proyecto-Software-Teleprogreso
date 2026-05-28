@@ -17,28 +17,6 @@ import styles from './DashboardPage.module.css'
 const USE_MOCK = false
 
 /* ── MOCK DATA (solo como fallback de desarrollo) ────────────────────────── */
-const MOCK_METRICAS = {
-  tecnicos_activos:   4,
-  tareas_completadas: 12,
-  tareas_pendientes:  8,
-  tareas_retrasadas:  2,
-}
-
-const MOCK_TECNICOS = [
-  { id: 1, nombre_completo: 'Juan Pérez García',   estado: 'activo',   tareas_asignadas: 6 },
-  { id: 2, nombre_completo: 'María López',         estado: 'activo',   tareas_asignadas: 4 },
-  { id: 3, nombre_completo: 'Carlos Hernández',    estado: 'en_pausa', tareas_asignadas: 3 },
-  { id: 4, nombre_completo: 'Ana Rodríguez',       estado: 'activo',   tareas_asignadas: 5 },
-]
-
-const MOCK_TAREAS = [
-  { id: 1, titulo: 'Instalación fibra óptica - Los Álamos',  estado: 'pendiente',   tecnico: { nombre_completo: 'Juan Pérez García' } },
-  { id: 2, titulo: 'Reparación de señal - El Ahorro',        estado: 'en_progreso', tecnico: { nombre_completo: 'María López' } },
-  { id: 3, titulo: 'Mantenimiento preventivo - Carlos M.',   estado: 'completado',  tecnico: { nombre_completo: 'Carlos Hernández' } },
-  { id: 4, titulo: 'Instalación TV Cable - Sabor Latino',    estado: 'pendiente',   tecnico: { nombre_completo: 'Ana Rodríguez' } },
-  { id: 5, titulo: 'Revisión equipo - María Josefa R.',      estado: 'pendiente',   tecnico: { nombre_completo: 'Juan Pérez García' } },
-]
-
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 /**

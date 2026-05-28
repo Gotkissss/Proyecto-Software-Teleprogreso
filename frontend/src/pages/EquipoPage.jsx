@@ -7,8 +7,7 @@
  * SCRUM-128: Estado vacío si el técnico no tiene vehículo asignado
  * SCRUM-129: Consume equipoService.js → GET /empleados/mi-equipo
  *
- * FLAG: USE_MOCK = true mientras el endpoint no esté listo.
- * Para activar el backend: cambiar USE_MOCK = false.
+
  */
 
 import { useState, useEffect } from 'react'
@@ -28,43 +27,6 @@ const fotoUrl = (url) => {
 import { getMiEquipo } from '../api/equipoService'
 
 /* ─── MOCK DATA ──────────────────────────────────────────────────────────── */
-const MOCK_VEHICULO = {
-  id_activo: 1,
-  nombre_activo: 'Pickup Toyota Hilux',
-  placa: 'P-123ABC',
-  marca: 'Toyota',
-  modelo: 'Hilux 2022',
-  estado_vehiculo: 'en_uso',
-  descripcion: 'Pickup doble cabina asignada a ruta norte.',
-}
-
-const MOCK_HERRAMIENTAS = [
-  {
-    id_activo: 2,
-    nombre_activo: 'Escalera telescópica 6m',
-    tipo_herramienta: 'Escalera',
-    marca: 'Werner',
-    modelo: 'MT-13',
-    estado: 'disponible',
-  },
-  {
-    id_activo: 3,
-    nombre_activo: 'Multímetro digital',
-    tipo_herramienta: 'Medidor',
-    marca: 'Fluke',
-    modelo: '117',
-    estado: 'disponible',
-  },
-  {
-    id_activo: 7,
-    nombre_activo: 'Fusionadora de fibra',
-    tipo_herramienta: 'Empalme',
-    marca: 'Fujikura',
-    modelo: 'FSM-80S',
-    estado: 'en_uso',
-  },
-]
-
 /* ─── ICONOS ─────────────────────────────────────────────────────────────── */
 const IconCar = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

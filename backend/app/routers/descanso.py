@@ -28,6 +28,33 @@ from app.models.empleado import Empleado
 router = APIRouter(prefix="/descanso", tags=["Descanso"])
 
 
+# GET /descanso/tipos
+# Configuración estática de los tipos de pausa según normativa de Teleprogreso S.A.
+# No requiere autenticación — son datos de configuración pública del sistema.
+
+@router.get(
+    "/tipos",
+    summary="Listar tipos de pausa disponibles",
+    status_code=status.HTTP_200_OK,
+)
+async def get_tipos_pausa():
+    """
+    Retorna la lista de tipos de pausa permitidos según la normativa operativa.
+    Estos valores son estáticos: no vienen de la BD.
+
+    Campos:
+      - id:              identificador interno usado al iniciar la pausa
+      - label:           nombre visible en la UI
+      - duracion_max_min: duración máxima permitida en minutos
+    """
+    return [
+        {"id": "almuerzo", "label": "Pausa de Almuerzo",        "duracion_max_min": 60},
+        {"id": "tecnica",  "label": "Pausa Técnica (Soporte)",  "duracion_max_min": 15},
+        {"id": "personal", "label": "Pausa Personal",            "duracion_max_min": 10},
+    ]
+
+
+
 
 # POST /descanso/iniciar
 # Registra el inicio de un descanso para el empleado autenticado, siempre que tenga una jornada activa y no haya otro descanso en curso.
@@ -177,71 +204,6 @@ async def finalizar_descanso(
 
     return {
         "message": "Descanso finalizado correctamente",
-        "id_descanso": descanso_activo.id_descanso,
-        "id_asistencia": jornada_activa.id_asistencia,
-        "empleado": f"{current_user.nombre} {current_user.apellido}",
-        "hora_inicio": descanso_activo.hora_inicio.strftime("%H:%M:%S"),
-        "hora_fin": now.time().strftime("%H:%M:%S"),
-    }
-
-
-
-# GET /descanso/activo
-# Consulta si el empleado autenticado tiene un descanso activo en este momento, buscando la jornada activa y luego un descanso sin hora_fin asociado a esa jornada.
-
-@router.get(
-    "/activo",
-    summary="Consultar descanso activo",
-    status_code=status.HTTP_200_OK,
-)
-async def get_descanso_activo(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[Empleado, Depends(get_current_empleado)],
-):
-    """
-    Consulta si el empleado autenticado tiene un descanso activo en este momento.
-
-    util para que el frontend sincronice el estado del boton Pausar/Reanudar.
-
-    Errores que se pueden dar:
-    - 401 si el token es invalido o expirado.
-    - 403 si la cuenta esta inactiva.
-    """
-    # Buscar jornada activa del empleado
-    result_jornada = await db.execute(
-        select(Asistencia).where(
-            Asistencia.id_empleado == current_user.id_empleado,
-            Asistencia.hora_salida.is_(None),
-        )
-    )
-    jornada_activa = result_jornada.scalar_one_or_none()
-
-    # Si no hay jornada, entonces obviamente no hay descanso activo
-    if not jornada_activa:
-        return {
-            "en_descanso": False,
-            "id_descanso": None,
-            "hora_inicio": None,
-        }
-
-    # Buscar descanso activo en esa jornada
-    result_descanso = await db.execute(
-        select(Descanso).where(
-            Descanso.id_asistencia == jornada_activa.id_asistencia,
-            Descanso.hora_fin.is_(None),
-        )
-    )
-    descanso_activo = result_descanso.scalar_one_or_none()
-
-    if not descanso_activo:
-        return {
-            "en_descanso": False,
-            "id_descanso": None,
-            "hora_inicio": None,
-        }
-
-    return {
-        "en_descanso": True,
         "id_descanso": descanso_activo.id_descanso,
         "hora_inicio": descanso_activo.hora_inicio.strftime("%H:%M:%S"),
     }

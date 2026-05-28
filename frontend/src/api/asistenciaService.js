@@ -2,67 +2,67 @@
  * api/asistenciaService.js
  * ---------------------------------------------------------------------------
  * Servicio para la pantalla "Pausas y Asistencia".
- * 
- * Endpoints esperados del backend FastAPI:
- *   GET   /asistencias/hoy                     → AsistenciaHoy
- *   POST  /asistencias/entrada                 → AsistenciaHoy
- *   POST  /asistencias/salida                  → AsistenciaHoy
- *   POST  /asistencias/pausa/iniciar           → PausaResponse
- *   POST  /asistencias/pausa/finalizar         → PausaResponse
- *   GET   /asistencias/pausas/tipos            → TipoPausa[]
- *   POST  /asistencias/finalizar-jornada       → JornadaFinalizada
+ *
+ * Mapeo de endpoints reales:
+ *   GET   /asistencia/hoy        → AsistenciaHoy
+ *   POST  /asistencia/entrada    → registrar entrada
+ *   POST  /asistencia/salida     → finalizar jornada
+ *   POST  /descanso/iniciar      → iniciar pausa
+ *   POST  /descanso/finalizar    → finalizar pausa activa
+ *   GET   /descanso/tipos        → TipoPausa[] (configuración estática)
  * ---------------------------------------------------------------------------
  */
 
 import apiClient from './client'
 
 /**
+ * Normaliza la respuesta de asistencia al formato que espera PausasPage.
+ * Añade defaults para campos que el backend todavía no calcula (e.g. productividad).
+ */
+function normalizarAsistencia(data) {
+  return {
+    id_asistencia:            data.id_asistencia ?? null,
+    fecha:                    data.fecha ?? new Date().toISOString().split('T')[0],
+    hora_entrada:             data.hora_entrada ?? null,
+    hora_salida:              data.hora_salida ?? null,
+    tiempo_en_pausa_segundos: data.tiempo_en_pausa_segundos ?? 0,
+    productividad_pct:        data.productividad_pct ?? 0,
+  }
+}
+
+/**
  * Obtiene el estado de asistencia del día actual para el usuario autenticado.
- * 
- * Response esperada:
- * {
- *   id_asistencia: 1,
- *   fecha: "2024-05-24",
- *   hora_entrada: "2024-05-24T08:00:00Z" | null,
- *   hora_salida: null,
- *   tiempo_activo_segundos: 15621,
- *   en_pausa: false,
- *   tiempo_en_pausa_segundos: 3900,
- *   productividad_pct: 92,
- *   historial: [
- *     {
- *       tipo: "entrada" | "pausa" | "reanudacion" | "salida",
- *       label: "Inicio de Jornada",
- *       hora_inicio: "08:00 AM",
- *       hora_fin: null,
- *       duracion_segundos: null
- *     }
- *   ]
- * }
+ * Si no hay jornada hoy (404) devuelve un objeto vacío en lugar de lanzar error,
+ * para que PausasPage muestre el botón "Registrar Entrada".
  */
 export const getAsistenciaHoy = async () => {
-  const { data } = await apiClient.get('/asistencias/hoy')
-  return data
+  try {
+    const { data } = await apiClient.get('/asistencia/hoy')
+    return normalizarAsistencia(data)
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      // Sin jornada hoy → estado inicial limpio
+      return normalizarAsistencia({})
+    }
+    throw err
+  }
 }
 
 /**
  * Registra la entrada al inicio de la jornada.
- * Opcionalmente recibe coordenadas GPS.
  */
-export const registrarEntrada = async (lat = null, lon = null) => {
-  const { data } = await apiClient.post('/asistencias/entrada', { lat, lon })
-  return data
+export const registrarEntrada = async () => {
+  const { data } = await apiClient.post('/asistencia/entrada')
+  return normalizarAsistencia(data)
 }
 
 /**
- * Inicia una pausa.
- * 
- * @param {string} tipoPausa - ID o nombre del tipo de pausa (ej: 'almuerzo', 'tecnica')
+ * Inicia una pausa (el backend registra un descanso; el tipo se gestiona en frontend).
+ *
+ * @param {string} _tipoPausa - Ignorado por el backend actual; se reserva para futuro.
  */
-export const iniciarPausa = async (tipoPausa) => {
-  const { data } = await apiClient.post('/asistencias/pausa/iniciar', {
-    tipo_pausa: tipoPausa,
-  })
+export const iniciarPausa = async (_tipoPausa) => {
+  const { data } = await apiClient.post('/descanso/iniciar')
   return data
 }
 
@@ -70,14 +70,14 @@ export const iniciarPausa = async (tipoPausa) => {
  * Finaliza la pausa activa actual.
  */
 export const finalizarPausa = async () => {
-  const { data } = await apiClient.post('/asistencias/pausa/finalizar')
+  const { data } = await apiClient.post('/descanso/finalizar')
   return data
 }
 
 /**
  * Obtiene los tipos de pausa disponibles según la normativa.
- * 
- * Response esperada:
+ *
+ * Response:
  * [
  *   { id: 'almuerzo', label: 'Pausa de Almuerzo', duracion_max_min: 60 },
  *   { id: 'tecnica',  label: 'Pausa Técnica (Soporte)', duracion_max_min: 15 },
@@ -85,15 +85,14 @@ export const finalizarPausa = async () => {
  * ]
  */
 export const getTiposPausa = async () => {
-  const { data } = await apiClient.get('/asistencias/pausas/tipos')
+  const { data } = await apiClient.get('/descanso/tipos')
   return data
 }
 
 /**
- * Finaliza la jornada laboral del día.
- * El backend actualizará la ubicación y estado en el panel de supervisión.
+ * Finaliza la jornada laboral del día (registra la hora de salida).
  */
 export const finalizarJornada = async () => {
-  const { data } = await apiClient.post('/asistencias/finalizar-jornada')
+  const { data } = await apiClient.post('/asistencia/salida')
   return data
 }

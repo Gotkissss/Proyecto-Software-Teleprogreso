@@ -25,13 +25,14 @@ Importate:
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_empleado, require_admin
 from app.core.security import hash_password
 from app.db.session import get_db
-from app.models.empleado import Empleado
+from app.models.empleado import Empleado, EmpleadoCarro
+from app.models.activo import Carro
 from app.schemas.empleado import (
     EmpleadoCreate,
     EmpleadoEstadoUpdate,
@@ -70,13 +71,16 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
         description="Buscar por nombre, apellido o correo (búsqueda parcial)",
     ),
 ):
-   
-    # Construir la query base
-    query = select(Empleado)
+
+    # Query base con LEFT JOIN a EmpleadoCarro → Carro para obtener placa_vehiculo
+    query = (
+        select(Empleado, Carro.placa)
+        .outerjoin(EmpleadoCarro, EmpleadoCarro.id_empleado == Empleado.id_empleado)
+        .outerjoin(Carro, Carro.id_activo == EmpleadoCarro.id_carro)
+    )
 
     # Aplicar filtro por rol si se proporciono
     if rol:
-        # Validar que el rol sea uno de los permitidos
         roles_validos = {"admin", "supervisor", "tecnico", "gerente"}
         if rol not in roles_validos:
             raise HTTPException(
@@ -104,7 +108,6 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
     # Aplicar busqueda de texto libre (case-insensitive) si se proporciono
     if buscar:
         termino = f"%{buscar.strip().lower()}%"
-        from sqlalchemy import func, or_
         query = query.where(
             or_(
                 func.lower(Empleado.nombre).like(termino),
@@ -117,11 +120,29 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
     query = query.order_by(Empleado.nombre, Empleado.apellido)
 
     result = await db.execute(query)
-    empleados = result.scalars().all()
+    rows = result.all()  # lista de (Empleado, placa | None)
+
+    # Construir respuestas incluyendo placa_vehiculo del JOIN
+    empleados_response = [
+        EmpleadoResponse(
+            id_empleado=emp.id_empleado,
+            nombre=emp.nombre,
+            apellido=emp.apellido,
+            correo=emp.correo,
+            rol=emp.rol,
+            estado=emp.estado,
+            telefono=emp.telefono,
+            fecha_contratacion=emp.fecha_contratacion,
+            fecha_registro=emp.fecha_registro,
+            ultimo_acceso=emp.ultimo_acceso,
+            placa_vehiculo=placa,
+        )
+        for emp, placa in rows
+    ]
 
     return EmpleadoListResponse(
-        total=len(empleados),
-        empleados=empleados,
+        total=len(empleados_response),
+        empleados=empleados_response,
     )
 
 
