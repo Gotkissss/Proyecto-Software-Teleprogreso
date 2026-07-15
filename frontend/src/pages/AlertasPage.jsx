@@ -25,17 +25,6 @@ import { getMaterialesBajoStock } from '../api/materialService'
 import { calcularPorcentajeStock, clasificarStock } from '../api/materialService'
 import styles from './AlertasPage.module.css'
 
-/* 
-   FLAGS DE MOCK
- */
-const USE_MOCK_ALERTAS = false
-
-const USE_MOCK_STOCK = false
-
-/*  MOCK: Alertas operativas */
-/*  MOCK: Materiales para stock crítico  */
-// Simula lo que devolvería GET /activos/materiales/bajo-stock
-// Solo incluye materiales donde cantidad_disponible < stock_minimo
 /*  Helpers */
 const formatHora = (isoString) => {
   const fecha = new Date(isoString)
@@ -138,14 +127,9 @@ export default function AlertasPage() {
   useEffect(() => {
     const fetchAlertas = async () => {
       try {
-        if (USE_MOCK_ALERTAS) {
-          await new Promise((r) => setTimeout(r, 400))
-          setAlertas(MOCK_ALERTAS)
-        } else {
-          const { getAlertas } = await import('../api/alertaService')
-          const data = await getAlertas()
-          setAlertas(data)
-        }
+        const { getAlertas } = await import('../api/alertaService')
+        const data = await getAlertas()
+        setAlertas(data)
       } catch (err) {
         setErrorAl('No se pudieron cargar las alertas operativas.')
         console.error(err)
@@ -180,12 +164,8 @@ export default function AlertasPage() {
   const handleResolver = async (id) => {
     setResolviendo(id)
     try {
-      if (!USE_MOCK_ALERTAS) {
-        const { resolverAlerta } = await import('../api/alertaService')
-        await resolverAlerta(id)
-      } else {
-        await new Promise((r) => setTimeout(r, 400))
-      }
+      const { resolverAlerta } = await import('../api/alertaService')
+      await resolverAlerta(id)
       setAlertas((prev) => prev.filter((a) => a.id !== id))
     } catch (err) {
       console.error('Error al resolver alerta:', err)
@@ -299,12 +279,6 @@ export default function AlertasPage() {
           ) : errorSt ? (
             <div className={styles.stockErrorWrap}>
               <p className={styles.errorMsg}>{errorSt}</p>
-              {/* Indicamos claramente que el backend falta */}
-              <p className={styles.stockErrorHint}>
-                ⚙ El endpoint <code>/activos/materiales/bajo-stock</code> aún no está
-                implementado. Activa <code>USE_MOCK_STOCK = true</code> para previsualizar
-                con datos de prueba, o espera a que el compañero de backend lo implemente.
-              </p>
             </div>
           ) : materiales.length === 0 ? (
             <div className={styles.emptyState}>

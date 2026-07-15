@@ -18,7 +18,6 @@ import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import styles from './EmpleadosPage.module.css'
 
-const USE_MOCK = false
 
 const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
 
@@ -227,13 +226,8 @@ function PanelCrearEmpleado({ onCreado, onCerrar, empleadosExistentes }) {
         correo: form.correo.trim().toLowerCase(), telefono: form.telefono.trim() || null,
         rol: form.rol, contrasena: form.contrasena, fecha_contratacion: form.fecha_contratacion,
       }
-      if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, 800))
-        onCreado({ id_empleado: Date.now(), ...payload, estado: form.estado, fecha_registro: new Date().toISOString(), ultimo_acceso: null })
-      } else {
-        const { data } = await apiClient.post('/empleados', payload)
-        onCreado(data)
-      }
+      const { data } = await apiClient.post('/empleados', payload)
+      onCreado(data)
     } catch (err) {
       const status = err?.response?.status
       const detail = err?.response?.data?.detail
@@ -509,13 +503,8 @@ export default function EmpleadosPage() {
     const fetchEmpleados = async () => {
       setLoading(true); setError(null)
       try {
-        if (USE_MOCK) {
-          await new Promise(r => setTimeout(r, 500))
-          setEmpleados(MOCK_EMPLEADOS)
-        } else {
-          const { data } = await apiClient.get('/empleados')
-          setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
-        }
+        const { data } = await apiClient.get('/empleados')
+        setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
       } catch (err) {
         setError(err?.response?.data?.detail || 'No se pudieron cargar los empleados.')
       } finally { setLoading(false) }
@@ -532,13 +521,8 @@ export default function EmpleadosPage() {
   const handleGuardarEdicion = async (id, cambios) => {
     setEditCargando(true); setEditError(null)
     try {
-      if (!USE_MOCK) {
-        const { data } = await apiClient.patch(`/empleados/${id}`, cambios)
-        setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...data } : e))
-      } else {
-        await new Promise(r => setTimeout(r, 700))
-        setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...cambios } : e))
-      }
+      const { data } = await apiClient.patch(`/empleados/${id}`, cambios)
+      setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...data } : e))
       setEmpleadoEditar(null)
       mostrarExito('Empleado actualizado correctamente.')
     } catch (err) {
@@ -550,13 +534,8 @@ export default function EmpleadosPage() {
   const handleToggleEstado = async (id, nuevoEstado) => {
     setToggleCargando(true)
     try {
-      if (!USE_MOCK) {
-        const { data } = await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
-        setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: data.estado } : e))
-      } else {
-        await new Promise(r => setTimeout(r, 600))
-        setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: nuevoEstado } : e))
-      }
+      const { data } = await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
+      setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: data.estado } : e))
       mostrarExito(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} correctamente.`)
       setEmpleadoToggle(null)
     } catch (err) {

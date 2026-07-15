@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_empleado, require_admin
+from app.core.deps import get_current_empleado, require_admin
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoCarro

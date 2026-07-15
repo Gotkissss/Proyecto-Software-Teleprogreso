@@ -5,10 +5,7 @@ import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
 import styles from './RutaDiariaPage.module.css'
 
-const USE_MOCK = false
-
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-const IconClock    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 const IconRoute    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
 const IconNav      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
 const IconChevron  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -204,16 +201,10 @@ export default function RutaDiariaPage() {
     const fetchRuta = async () => {
       setLoading(true)
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 600))
-          setRuta(MOCK_RUTA)
-          // Ordena: urgentes primero, luego por prioridad, completadas al final
-          setServicios(ordenarServicios(MOCK_RUTA.servicios))
-        } else {
-          const data = await getMiRuta(user?.id_empleado)
-          setRuta(data)
-          setServicios(ordenarServicios(data.servicios))
-        }
+        const data = await getMiRuta(user?.id_empleado)
+        setRuta(data)
+        // Ordena: urgentes primero, luego por prioridad, completadas al final
+        setServicios(ordenarServicios(data.servicios))
       } catch (err) {
         setError(err?.response?.data?.detail || 'No se pudo cargar la ruta.')
       } finally {
@@ -242,12 +233,10 @@ export default function RutaDiariaPage() {
     setDetalleAbierto((prev) =>
       prev && prev.id_servicio === idServicio ? { ...prev, estado: 'en_progreso' } : prev
     )
-    if (!USE_MOCK) {
-      try {
-        await iniciarServicio(idServicio)
-      } catch (err) {
-        console.warn('No se pudo confirmar inicio en servidor:', err?.response?.data?.detail ?? err.message)
-      }
+    try {
+      await iniciarServicio(idServicio)
+    } catch (err) {
+      console.warn('No se pudo confirmar inicio en servidor:', err?.response?.data?.detail ?? err.message)
     }
   }
 

@@ -39,7 +39,6 @@ export async function getAlertas() {
   const { data: tareas } = await apiClient.get('/tareas')
 
   const alertas = []
-  let alertaId = 1  // IDs locales únicos para React keys
 
   for (const tarea of tareas) {
     const mins    = minutosDesde(tarea.fecha_asignacion)
@@ -64,7 +63,6 @@ export async function getAlertas() {
         resuelta:   false,
         _id_tarea:  tarea.id_tarea,
       })
-      alertaId++
       continue  // una sola alerta por tarea
     }
 
@@ -82,7 +80,6 @@ export async function getAlertas() {
           resuelta:   false,
           _id_tarea:  tarea.id_tarea,
         })
-        alertaId++
       }
     }
 
@@ -100,7 +97,6 @@ export async function getAlertas() {
           resuelta:   false,
           _id_tarea:  tarea.id_tarea,
         })
-        alertaId++
       }
     }
   }

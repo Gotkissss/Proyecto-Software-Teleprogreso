@@ -14,9 +14,6 @@ import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import styles from './DashboardPage.module.css'
 
-const USE_MOCK = false
-
-/* ── MOCK DATA (solo como fallback de desarrollo) ────────────────────────── */
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -58,14 +55,8 @@ export default function DashboardPage() {
       setLoading(true)
       setError(null)
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 600))
-          setMetricas(MOCK_METRICAS)
-          setTecnicosList(MOCK_TECNICOS)
-          setTareasList(MOCK_TAREAS)
-        } else {
-          // Llamadas paralelas para minimizar el tiempo de carga
-          const [metricas, tecnicos, tareas] = await Promise.all([
+        // Llamadas paralelas para minimizar el tiempo de carga
+        const [metricas, tecnicos, tareas] = await Promise.all([
             fetchMetricasReal(),
             fetchTecnicosReal(),
             getTareas(),
@@ -83,7 +74,6 @@ export default function DashboardPage() {
                 : null,
             }))
           )
-        }
       } catch (err) {
         console.error('Error al cargar el dashboard:', err)
         setError(

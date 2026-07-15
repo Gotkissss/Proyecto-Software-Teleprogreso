@@ -8,21 +8,26 @@ Token invalido = 401
 Token expirado = 401
 Control de roles = 403
 Token valido = acceso permitido
+Cuenta inactiva = 403
+
+Nota: para simular la base de datos se usa app.dependency_overrides
+(la forma correcta en FastAPI). unittest.mock.patch sobre get_db no
+funciona porque FastAPI captura la referencia original al declararla
+como Depends(...).
 """
 
-import pytest  #no se usa directamente, pero es necesario para que pytest reconozca los fixtures definidos en conftest.py
+from unittest.mock import AsyncMock, MagicMock
+
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock, MagicMock
 
 from app.main import app
 from app.core.security import create_access_token
+from app.db.session import get_db
 
 client = TestClient(app, raise_server_exceptions=False)
 
 
-
-# Helpers para generar tokens y mockear empleados
-
+# Helpers para generar tokens y simular empleados
 
 def make_token(rol="tecnico"):
     return create_access_token(subject=1, rol=rol)
@@ -37,15 +42,24 @@ def mock_empleado(rol="tecnico", estado="activo"):
     emp.id_empleado = 1
     emp.nombre = "Test"
     emp.apellido = "User"
+    emp.correo = "test@teleprogreso.com"
     emp.rol = rol
     emp.estado = estado
     return emp
 
 
+def override_db_con_empleado(empleado):
+    """Devuelve una dependencia get_db falsa cuyo execute() encuentra al empleado."""
+    async def _fake_db():
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = empleado
+        db.execute = AsyncMock(return_value=result)
+        yield db
+    return _fake_db
+
 
 # 1. SIN TOKEN = 401
-# Verifica que los endpoints protegidos no permitan acceso sin un token JWT válido en el header Authorization.
-
 
 def test_sin_token_asistencia():
     res = client.post("/asistencia/entrada")
@@ -57,9 +71,7 @@ def test_sin_token_tareas():
     assert res.status_code == 401
 
 
-
 # 2. TOKEN INVALIDO = 401
-# Verifica que un token mal formado o con firma inválida sea rechazado con 401 Unauthorized. Esto simula intentos de acceso con tokens falsificados o manipulados.
 
 def test_token_invalido():
     res = client.get(
@@ -70,104 +82,54 @@ def test_token_invalido():
 
 
 # 3. TOKEN EXPIRADO = 401
-# Verifica que un token JWT que ha expirado sea rechazado con 401 Unauthorized. Esto simula intentos de acceso con tokens antiguos o comprometidos.
-
 
 def test_token_expirado():
+    from unittest.mock import patch
     with patch("app.core.security.settings") as mock_settings:
         mock_settings.ACCESS_TOKEN_EXPIRE_MINUTES = -1
         mock_settings.SECRET_KEY = "test"
         mock_settings.ALGORITHM = "HS256"
-
-        from app.core.security import create_access_token as _make
-        expired_token = _make(subject=1, rol="tecnico")
+        expired_token = create_access_token(subject=1, rol="tecnico")
 
     res = client.get("/auth/me", headers=auth(expired_token))
     assert res.status_code == 401
 
 
-
 # 4. CONTROL DE ROL = 403
-# Verifica que un usuario autenticado pero con un rol que no tiene permisos para un endpoint específico reciba un 403 Forbidden. Esto simula intentos de acceso a recursos restringidos por parte de usuarios con roles inadecuados.
-
 
 def test_tecnico_no_puede_crear_tarea():
-    token = make_token("tecnico")
-    empleado = mock_empleado("tecnico")
-
-    with patch("app.api.deps.get_db") as mock_db, \
-         patch("app.api.deps.decode_access_token") as mock_decode:
-
-        mock_decode.return_value = {"sub": "1", "rol": "tecnico"}
-
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = empleado
-        db.execute = AsyncMock(return_value=result)
-
-        mock_db.return_value.__aenter__ = AsyncMock(return_value=db)
-        mock_db.return_value.__aexit__ = AsyncMock(return_value=False)
-
+    app.dependency_overrides[get_db] = override_db_con_empleado(mock_empleado("tecnico"))
+    try:
         res = client.post(
             "/tareas/",
-            headers=auth(token),
+            headers=auth(make_token("tecnico")),
             json={"nombre": "Test", "prioridad": "media"},
         )
-
-    assert res.status_code == 403
-
+        assert res.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
 
 
 # 5. TOKEN VALIDO = 200
-# Verifica que un usuario autenticado con un token JWT valido y con el rol adecuado pueda acceder a los endpoints protegidos sin problemas.
-# Esto confirma que la autenticacion y autorizacion funcionan correctamente.
-
 
 def test_token_valido_acceso():
-    token = make_token("tecnico")
-    empleado = mock_empleado("tecnico")
-
-    with patch("app.api.deps.get_db") as mock_db, \
-         patch("app.api.deps.decode_access_token") as mock_decode:
-
-        mock_decode.return_value = {"sub": "1", "rol": "tecnico"}
-
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = empleado
-        db.execute = AsyncMock(return_value=result)
-
-        mock_db.return_value.__aenter__ = AsyncMock(return_value=db)
-        mock_db.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        res = client.get("/auth/me", headers=auth(token))
-
-    assert res.status_code == 200
-
+    app.dependency_overrides[get_db] = override_db_con_empleado(mock_empleado("tecnico"))
+    try:
+        res = client.get("/auth/me", headers=auth(make_token("tecnico")))
+        assert res.status_code == 200
+        assert res.json()["rol"] == "tecnico"
+    finally:
+        app.dependency_overrides.clear()
 
 
 # 6. CUENTA INACTIVA = 403
-# Verifica que un usuario autenticado pero con estado de cuenta inactivo reciba un 403 Forbidden al intentar acceder a endpoints protegidos. 
-# Esto simula intentos de acceso por parte de empleados que han sido desactivados o suspendidos.
-
 
 def test_cuenta_inactiva():
-    token = make_token("tecnico")
-    empleado = mock_empleado("tecnico", estado="inactivo")
-
-    with patch("app.api.deps.get_db") as mock_db, \
-         patch("app.api.deps.decode_access_token") as mock_decode:
-
-        mock_decode.return_value = {"sub": "1", "rol": "tecnico"}
-
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = empleado
-        db.execute = AsyncMock(return_value=result)
-
-        mock_db.return_value.__aenter__ = AsyncMock(return_value=db)
-        mock_db.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        res = client.get("/auth/me", headers=auth(token))
-
-    assert res.status_code == 403
+    app.dependency_overrides[get_db] = override_db_con_empleado(
+        mock_empleado("tecnico", estado="inactivo")
+    )
+    try:
+        res = client.get("/auth/me", headers=auth(make_token("tecnico")))
+        assert res.status_code == 403
+    finally:
+        app.dependency_overrides.clear()

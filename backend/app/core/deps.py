@@ -32,22 +32,25 @@ from app.db.session import get_db
 from app.models.empleado import Empleado
 
 # Extrae el Bearer token del header Authorization
-bearer_scheme = HTTPBearer(auto_error=True)
+# auto_error=False para poder responder 401 (no 403) cuando falta el token
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_empleado(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Empleado:
     """
     Dependencia base: valida el JWT y devuelve el empleado autenticado.
-    Lanza 401 si el token es inválido/expirado/revocado.
+    Lanza 401 si el token falta o es inválido/expirado/revocado.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if credentials is None:
+        raise credentials_exception
     try:
         payload = decode_access_token(credentials.credentials)
         id_empleado: str | None = payload.get("sub")

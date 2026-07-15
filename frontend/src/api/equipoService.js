@@ -4,7 +4,7 @@
  * SCRUM-129: GET /empleados/mi-equipo
  *   Retorna el vehículo y herramientas asignadas al técnico autenticado.
  *
- * Mientras el endpoint no esté listo, usar USE_MOCK = true en EquipoPage.
+ * El endpoint está implementado en el backend.
  */
 
 import apiClient from './client'

@@ -10,7 +10,6 @@ import {
 import Spinner from '../components/ui/Spinner'
 import styles from './PausasPage.module.css'
 
-const USE_MOCK = false
 
 const IconClock   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 const IconPause   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -47,29 +46,6 @@ const formatDuracion = (seconds) => {
   const s = seconds % 60
   if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-}
-
-// Hook countdown genérico: cuenta hacia atrás desde `initialSeconds`
-function useCountdown(initialSeconds, running) {
-  const [seconds, setSeconds] = useState(initialSeconds)
-  const intervalRef = useRef(null)
-
-  useEffect(() => {
-    setSeconds(initialSeconds)
-  }, [initialSeconds])
-
-  useEffect(() => {
-    if (running && seconds > 0) {
-      intervalRef.current = setInterval(() => {
-        setSeconds((s) => (s > 0 ? s - 1 : 0))
-      }, 1000)
-    } else {
-      clearInterval(intervalRef.current)
-    }
-    return () => clearInterval(intervalRef.current)
-  }, [running, seconds > 0])
-
-  return seconds
 }
 
 function ModalPausa({ tipos, pausasUsadas, onSelect, onClose, loading }) {
@@ -192,26 +168,12 @@ export default function PausasPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 500))
-          // Sin hora_entrada al inicio: jornada no iniciada
-          setAsistencia({
-            id_asistencia: null,
-            fecha: new Date().toISOString().split('T')[0],
-            hora_entrada: null,
-            hora_salida: null,
-            tiempo_en_pausa_segundos: 0,
-            productividad_pct: 0,
-          })
-          setTiposPausa(MOCK_TIPOS_PAUSA)
-        } else {
-          const [asist, tipos] = await Promise.all([
-            getAsistenciaHoy(),
-            getTiposPausa(),
-          ])
-          setAsistencia(asist)
-          setTiposPausa(tipos)
-        }
+        const [asist, tipos] = await Promise.all([
+          getAsistenciaHoy(),
+          getTiposPausa(),
+        ])
+        setAsistencia(asist)
+        setTiposPausa(tipos)
       } catch (err) {
         setError(err?.response?.data?.detail || 'No se pudo cargar la asistencia.')
       } finally {
@@ -224,13 +186,8 @@ export default function PausasPage() {
   const handleRegistrarEntrada = async () => {
     setActionLoading(true)
     try {
-      if (!USE_MOCK) {
-        const updated = await registrarEntrada()
-        setAsistencia(updated)
-      } else {
-        await new Promise((r) => setTimeout(r, 600))
-        setAsistencia((prev) => ({ ...prev, hora_entrada: new Date().toISOString() }))
-      }
+      const updated = await registrarEntrada()
+      setAsistencia(updated)
       const horaLabel = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
       setHistorial([{ tipo: 'entrada', label: 'Inicio de Jornada', hora_inicio: horaLabel, hora_fin: null, duracion_segundos: null }])
       setTiempoTranscurrido(0)
@@ -247,11 +204,7 @@ export default function PausasPage() {
     setActionLoading(true)
     try {
       const tipo = tiposPausa.find((t) => t.id === tipoPausaId)
-      if (!USE_MOCK) {
-        await iniciarPausa(tipoPausaId)
-      } else {
-        await new Promise((r) => setTimeout(r, 300))
-      }
+      await iniciarPausa(tipoPausaId)
       const horaLabel = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
       setPausaActiva({
         id: tipoPausaId,
@@ -272,11 +225,7 @@ export default function PausasPage() {
   const handleReanudar = async () => {
     setActionLoading(true)
     try {
-      if (!USE_MOCK) {
-        await finalizarPausa()
-      } else {
-        await new Promise((r) => setTimeout(r, 300))
-      }
+      await finalizarPausa()
       const horaFin = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
       const duracionUsada = pausaActiva.duracionMaxSeg - pausaActiva.segundosRestantes
       setHistorial((prev) => [
@@ -301,11 +250,7 @@ export default function PausasPage() {
     if (!window.confirm('¿Confirmas que deseas finalizar la jornada de hoy?')) return
     setActionLoading(true)
     try {
-      if (!USE_MOCK) {
-        await finalizarJornada()
-      } else {
-        await new Promise((r) => setTimeout(r, 800))
-      }
+      await finalizarJornada()
       setSuccessMsg('¡Jornada finalizada! Tu estado ha sido actualizado.')
       setAsistencia((prev) => ({ ...prev, hora_salida: new Date().toISOString() }))
     } catch (err) {

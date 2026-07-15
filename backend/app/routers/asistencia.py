@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_empleado
+from app.core.deps import get_current_empleado
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado

@@ -13,7 +13,7 @@
  *   SCRUM-113: DELETE /activos/carros/{id}/herramientas/{id_h}
  *               -> Libera (desasigna) una herramienta del carro
  *
- * Mientras no estén listo entonces se hace USE_MOCK = true en los componentes.
+ * Todos los endpoints están implementados en el backend.
  * ---------------------------------------------------------------------------
  */
 

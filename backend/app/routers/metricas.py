@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.deps import require_admin_supervisor_gerente, require_supervisor
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado, EmpleadoTarea

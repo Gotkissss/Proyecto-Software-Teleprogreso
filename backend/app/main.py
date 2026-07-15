@@ -20,12 +20,14 @@ from app.core.exceptions import register_exception_handlers
 import app.models  # noqa: F401
 
 # ── Routers ──────────────────────────────────────────────────────────────────
-from app.api.routers.auth   import router as auth_router
+from app.routers.auth   import router as auth_router
 from app.routers.tareas     import router as tareas_router
 from app.routers.asistencia import router as asistencia_router
 from app.routers.descanso   import router as descanso_router
 from app.routers.empleados  import router as empleados_router
 from app.routers.metricas   import router as metricas_router
+from app.routers.inventario import router as inventario_router
+from app.routers.carros     import router as carros_router
 from app.routers.activos    import router as activos_router 
 
 app = FastAPI(
@@ -65,6 +67,9 @@ app.include_router(asistencia_router)  # POST /asistencia/entrada | salida | GET
 app.include_router(descanso_router)    # POST /descanso/iniciar | finalizar | GET /activo
 app.include_router(empleados_router)   # GET/POST/PATCH /empleados/*
 app.include_router(metricas_router)    # GET /metricas/supervisor | /empleados/tecnicos/disponibles
+# inventario y carros antes que activos: /activos/{id} debe evaluarse al final
+app.include_router(inventario_router)
+app.include_router(carros_router)
 app.include_router(activos_router)     # GET/POST/DELETE /activos/* (inventario, herramientas, asignaciones)
 
 

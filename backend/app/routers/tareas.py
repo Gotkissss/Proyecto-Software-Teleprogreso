@@ -23,7 +23,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import (
+from app.core.deps import (
     get_current_empleado,
     require_roles,
     require_supervisor,

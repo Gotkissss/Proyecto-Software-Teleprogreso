@@ -24,9 +24,6 @@ import {
   liberarHerramientaDeCarro,
 } from '../api/carroService'
 
-const USE_MOCK = false
-
-/*MOCK DATA */
 /*  Iconos  */
 const IconBack = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -176,19 +173,16 @@ export default function CarroDetallePage() {
 
   /*  Asignar herramientas (desde modal)  */
   const handleAsignar = async (idsSeleccionados) => {
-    try {
-        await Promise.all(
-          idsSeleccionados.map((idH) => asignarHerramientaACarro(id, idH))
-        )
-        const herrActualizadas = await getHerramientasDeCarro(id)
-        setHerramientas(herrActualizadas)
-      setModalAsignar(false)
-      mostrarExito(
-        `${idsSeleccionados.length} herramienta${idsSeleccionados.length !== 1 ? 's asignadas' : ' asignada'} correctamente.`
-      )
-    } catch (err) {
-      throw err // El modal captura y muestra el error internamente
-    }
+    // Si falla, el error sube al modal, que lo captura y muestra internamente
+    await Promise.all(
+      idsSeleccionados.map((idH) => asignarHerramientaACarro(id, idH))
+    )
+    const herrActualizadas = await getHerramientasDeCarro(id)
+    setHerramientas(herrActualizadas)
+    setModalAsignar(false)
+    mostrarExito(
+      `${idsSeleccionados.length} herramienta${idsSeleccionados.length !== 1 ? 's asignadas' : ' asignada'} correctamente.`
+    )
   }
 
   /*  Liberar herramienta  */

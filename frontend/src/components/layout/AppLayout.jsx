@@ -6,7 +6,7 @@
  * ---------------------------------------------------------------------------
  */
 
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import styles from './AppLayout.module.css'
 
@@ -31,7 +31,6 @@ const NAV_ITEMS = [
 
 export default function AppLayout() {
   const { user, logoutUser } = useAuth()
-  const navigate = useNavigate()
 
   // El backend /auth/me devuelve { nombre: "Nombre Apellido", ... }
   const displayName = user?.nombre || 'Usuario'

@@ -9,7 +9,6 @@ import Badge from '../components/ui/Badge'
 import apiClient from '../api/client'
 import styles from './ReasignacionPage.module.css'
 
-const USE_MOCK = false
 
 const LIMITE_TAREAS = 3
 
@@ -31,12 +30,7 @@ export default function ReasignacionPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (USE_MOCK) {
-          await new Promise((r) => setTimeout(r, 500))
-          setTareas(MOCK_TAREAS)
-          setTecnicos(MOCK_TECNICOS)
-        } else {
-          const { getTareas } = await import('../api/tareaService')
+        const { getTareas } = await import('../api/tareaService')
 
           const [tareasData, tecnicosResp, todasTareasData] = await Promise.all([
             getTareas(),
@@ -65,7 +59,6 @@ export default function ReasignacionPage() {
 
           setTareas(listaTareas)
           setTecnicos(tecnicosConConteo)
-        }
       } catch (err) {
         setError('No se pudieron cargar las tareas.')
         console.error(err)
@@ -98,16 +91,12 @@ export default function ReasignacionPage() {
     }
 
     try {
-      if (!USE_MOCK) {
-        const { reasignarTarea } = await import('../api/tareaService')
+      const { reasignarTarea } = await import('../api/tareaService')
 
-        await reasignarTarea(
-          tareaSeleccionada.id_tarea ?? tareaSeleccionada.id,
-          Number(tecnicoNuevo)
-        )
-      } else {
-        await new Promise((r) => setTimeout(r, 600))
-      }
+      await reasignarTarea(
+        tareaSeleccionada.id_tarea ?? tareaSeleccionada.id,
+        Number(tecnicoNuevo)
+      )
 
       // Actualizar conteo local del técnico
       setTecnicos((prev) =>

@@ -50,20 +50,6 @@ const IconFilter = () => (
   </svg>
 )
 
-/* MOCK: herramientas disponibles */
-// Simula GET /activos/herramientas  solo las que no están asignadas a ningún carro
-const MOCK_HERRAMIENTAS_DISPONIBLES = [
-  { id_activo: 1,  nombre_activo: 'Taladro percutor',        tipo_herramienta: 'Taladro',   marca: 'Bosch',    modelo: 'GSB 120', estado: 'disponible' },
-  { id_activo: 2,  nombre_activo: 'Escalera telescópica 6m', tipo_herramienta: 'Escalera',  marca: 'Werner',   modelo: 'MT-13',   estado: 'disponible' },
-  { id_activo: 3,  nombre_activo: 'Multímetro digital',      tipo_herramienta: 'Medición',  marca: 'Fluke',    modelo: '117',     estado: 'disponible' },
-  { id_activo: 4,  nombre_activo: 'Pelacables automático',   tipo_herramienta: 'Mano',      marca: 'Klein',    modelo: '11054',   estado: 'disponible' },
-  { id_activo: 5,  nombre_activo: 'Probador de cable coax',  tipo_herramienta: 'Medición',  marca: 'Ideal',    modelo: 'SealTest',estado: 'disponible' },
-  { id_activo: 6,  nombre_activo: 'Destornillador set 10pz', tipo_herramienta: 'Mano',      marca: 'Stanley',  modelo: 'STMT71651',estado: 'disponible'},
-  { id_activo: 7,  nombre_activo: 'Fusionadora de fibra',    tipo_herramienta: 'Empalme',   marca: 'Fujikura', modelo: 'FSM-80S', estado: 'disponible' },
-  { id_activo: 8,  nombre_activo: 'OTDR portátil',           tipo_herramienta: 'Medición',  marca: 'EXFO',     modelo: 'MAX-715B',estado: 'disponible' },
-  { id_activo: 9,  nombre_activo: 'Compresor de conectores', tipo_herramienta: 'Crimpado',  marca: 'Paladin',  modelo: 'PA1561',  estado: 'disponible' },
-  { id_activo: 10, nombre_activo: 'Nivel láser',             tipo_herramienta: 'Medición',  marca: 'Bosch',    modelo: 'GLL 3-15',estado: 'disponible' },
-]
 
 /* Componente  */
 export default function ModalAsignarHerramientas({

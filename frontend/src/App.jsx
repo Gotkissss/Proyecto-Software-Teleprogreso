@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider }    from './context/AuthContext'
+import { ToastProvider }   from './components/ui/Toast'
 import ProtectedRoute      from './components/layout/ProtectedRoute'
 import AppLayout           from './components/layout/AppLayout'
 import SupervisorLayout    from './components/layout/SupervisorLayout'
@@ -24,6 +25,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
         <Routes>
           {/* ── Pública ─────────────────────────────────── */}
           <Route path="/login" element={<LoginPage />} />
@@ -66,6 +68,7 @@ export default function App() {
           {/* ── 404 ──────────────────────────────────────── */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   )

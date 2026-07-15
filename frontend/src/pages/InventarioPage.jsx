@@ -5,7 +5,7 @@ import styles from './InventarioPage.module.css'
 import {
   getCarros, getHerramientas, getMateriales,
   crearActivo, editarActivo, eliminarActivo,
-  asignarTecnicoACarro, liberarTecnicoDeCarro,
+  asignarTecnicoACarro,
   asignarHerramientaACarro,
 } from '../api/inventarioService'
 import apiClient from '../api/client'
@@ -752,8 +752,8 @@ export default function InventarioPage() {
     setMateriales(p => p.filter(m => m.id_activo!==id))
     setModalEliminar(null)
   }
-  const handleAsignadaACarro = (idHerramienta, carro) => {
-    // Optionally update herramienta state to reflect assignment
+  const handleAsignadaACarro = () => {
+    // La asignación ya ocurrió en el modal; solo se cierra aquí
     setModalAsignarHerramienta(null)
   }
   const handleAsignado = (idActivo, tec) => {
