@@ -29,6 +29,7 @@ from app.routers.metricas   import router as metricas_router
 from app.routers.inventario import router as inventario_router
 from app.routers.carros     import router as carros_router
 from app.routers.activos    import router as activos_router 
+from app.routers.alertas    import router as alertas_router
 
 app = FastAPI(
     title="Teleprogreso S.A. — API",
@@ -71,6 +72,7 @@ app.include_router(metricas_router)    # GET /metricas/supervisor | /empleados/t
 app.include_router(inventario_router)
 app.include_router(carros_router)
 app.include_router(activos_router)     # GET/POST/DELETE /activos/* (inventario, herramientas, asignaciones)
+app.include_router(alertas_router)     # GET/PATCH /alertas/*
 
 
 # ── Health checks ─────────────────────────────────────────────────────────────
