@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.alerta import Alerta
 from app.models.empleado import Empleado
 from app.schemas.alerta import AlertaResponse, AlertaUpdate
+from app.services.alertas import generar_alertas
 
 router = APIRouter(prefix="/alertas", tags=["Alertas"])
 
@@ -28,7 +29,11 @@ async def get_alertas(
     severidad: Optional[str] = Query(None),
     estado: Optional[str] = Query(None),
 ):
-    """Lista alertas aplicando filtros opcionales y orden descendente por fecha."""
+    """Genera alertas nuevas y luego lista las persistidas."""
+    # La generación request-driven reemplaza temporalmente a un scheduler
+    # mientras el proyecto no tenga un worker de tareas programadas.
+    await generar_alertas(db)
+
     query = select(Alerta).order_by(Alerta.fecha.desc())
 
     if tipo:
