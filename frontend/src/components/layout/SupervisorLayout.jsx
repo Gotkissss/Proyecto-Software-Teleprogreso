@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useAlertasPendientesCount } from '../../hooks/useAlertasPendientesCount'
 import styles from './SupervisorLayout.module.css'
 
 const IconDashboard = () => (
@@ -70,6 +71,7 @@ export default function SupervisorLayout() {
   const { user, logoutUser } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const alertasPendientes = useAlertasPendientesCount()
 
   const displayName = user?.nombre || 'Supervisor'
   const displayRole = user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Supervisor'
@@ -92,12 +94,16 @@ export default function SupervisorLayout() {
         <div className={styles.topBarRight}>
           <button
             className={styles.iconBtn}
-            aria-label="Ver alertas"
+            aria-label={`Ver alertas${alertasPendientes > 0 ? ` (${alertasPendientes} pendientes)` : ''}`}
             title="Ver alertas"
             onClick={() => navigate('/supervisor/alertas')}
           >
             <IconBell />
-            <span className={styles.badge}>3</span>
+            {alertasPendientes > 0 && (
+              <span className={styles.badge}>
+                {alertasPendientes > 99 ? '99+' : alertasPendientes}
+              </span>
+            )}
           </button>
 
           {user && (
