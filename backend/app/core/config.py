@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Hora local a partir de la cual un técnico sin asistencia genera alerta.
+    # Se deja configurable para adaptar la regla a la jornada de Teleprogreso
+    # sin modificar el código cuando cambie el horario operativo.
+    ALERTA_HORA_LIMITE: str = "08:00"
+
     # CORS — acepta JSON list o string separado por comas
     BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
