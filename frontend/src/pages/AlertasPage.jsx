@@ -3,26 +3,32 @@
  * ---------------------------------------------------------------------------
  * Gestión de alertas operativas del supervisor.
  * Muestra:
- *   1. Alertas operativas (retrasos, técnicos sin asignar, incidencias, etc.)
+ *   1. Alertas persistentes generadas por el backend (GET/PATCH /alertas):
+ *      tareas vencidas, técnicos sin marcar entrada, stock crítico.
  *   2. Sección "Stock crítico" con materiales bajo el mínimo definido
+ *      (GET /activos/materiales/bajo-stock)
  *
- * Para las alertas operativas se  usa datos mock mientras no exista /alertas.
- *
- * Para el stock crítico:
- *   - Consume GET /activos/materiales/bajo-stock (implementado por Gualim en backend)
- *     el frontend a partir de datos de muestra.
- *
- * Cuando gualim termine el backend:
- *   2. Descomentar la llamada real a getMaterialesBajoStock()
+ * Ambas secciones consumen endpoints reales del backend. No hay datos mock
+ * ni flags de features pendientes: las alertas se generan y persisten en el
+ * servidor (app/services/alertas.py), el frontend solo las lista y permite
+ * atenderlas/descartarlas.
  * ---------------------------------------------------------------------------
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import StockBadge from '../components/ui/StockBadge'
-import { getMaterialesBajoStock } from '../api/materialService'
-import { calcularPorcentajeStock, clasificarStock } from '../api/materialService'
+import {
+  ESTADO_ALERTA,
+  actualizarEstadoAlerta,
+  getAlertasPendientes,
+} from '../api/alertaService'
+import {
+  getMaterialesBajoStock,
+  calcularPorcentajeStock,
+  clasificarStock,
+} from '../api/materialService'
 import styles from './AlertasPage.module.css'
 
 /*  Helpers */
@@ -35,6 +41,39 @@ const formatHora = (isoString) => {
   const diffH = Math.floor(diffMin / 60)
   if (diffH < 24)   return `Hace ${diffH} h`
   return fecha.toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })
+}
+
+/**
+ * Metadatos para traducir el `tipo` persistido por el backend en un mensaje
+ * legible. El backend solo entrega { tipo, severidad, estado, referencia,
+ * fecha } — la referencia tiene forma "entidad:id" (ver services/alertas.py).
+ */
+const TIPO_ALERTA_INFO = {
+  tarea_vencida: {
+    label: 'Tarea vencida',
+    describir: (id) => `La tarea #${id} venció su fecha de finalización y sigue activa.`,
+  },
+  tecnico_sin_entrada: {
+    label: 'Técnico sin entrada',
+    describir: (id) => `El empleado #${id} no ha marcado su entrada el día de hoy.`,
+  },
+  stock_critico: {
+    label: 'Stock crítico',
+    describir: (id) => `El material #${id} está por debajo del stock mínimo.`,
+  },
+}
+
+function parseReferencia(referencia) {
+  if (!referencia) return { entidad: null, id: null }
+  const [entidad, id] = referencia.split(':')
+  return { entidad, id }
+}
+
+function describirAlerta(alerta) {
+  const info = TIPO_ALERTA_INFO[alerta.tipo]
+  const { id } = parseReferencia(alerta.referencia)
+  if (!info) return `Alerta: ${alerta.tipo}`
+  return id ? info.describir(id) : info.label
 }
 
 /*
@@ -109,11 +148,11 @@ function MaterialStockCard({ material }) {
    COMPONENTE PRINCIPAL
   */
 export default function AlertasPage() {
-  /* Alertas operativas */
+  /* Alertas operativas (persistentes, backend real) */
   const [alertas,      setAlertas]      = useState([])
   const [loadingAl,    setLoadingAl]    = useState(true)
   const [errorAl,      setErrorAl]      = useState(null)
-  const [resolviendo,  setResolviendo]  = useState(null)
+  const [actualizando, setActualizando] = useState(null)
 
   /*  Stock crítico */
   const [materiales,   setMateriales]   = useState([])
@@ -123,22 +162,27 @@ export default function AlertasPage() {
   /*  Tab activa  */
   const [tabActiva, setTabActiva] = useState('operativas') // 'operativas' | 'stock'
 
-  /*  Fetch alertas operativas  */
-  useEffect(() => {
-    const fetchAlertas = async () => {
-      try {
-        const { getAlertas } = await import('../api/alertaService')
-        const data = await getAlertas()
-        setAlertas(data)
-      } catch (err) {
-        setErrorAl('No se pudieron cargar las alertas operativas.')
-        console.error(err)
-      } finally {
-        setLoadingAl(false)
-      }
+  /*  Fetch alertas operativas pendientes desde GET /alertas  */
+  const fetchAlertas = useCallback(async () => {
+    try {
+      setErrorAl(null)
+      const data = await getAlertasPendientes()
+      setAlertas(data)
+    } catch (err) {
+      setErrorAl(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'No se pudieron cargar las alertas operativas.'
+      )
+      console.error(err)
+    } finally {
+      setLoadingAl(false)
     }
-    fetchAlertas()
   }, [])
+
+  useEffect(() => {
+    fetchAlertas()
+  }, [fetchAlertas])
 
   /*  Fetch materiales bajo stock */
   useEffect(() => {
@@ -160,22 +204,21 @@ export default function AlertasPage() {
     fetchStock()
   }, [])
 
-  /* Resolver alerta */
-  const handleResolver = async (id) => {
-    setResolviendo(id)
+  /* Atender o descartar una alerta persistida */
+  const handleActualizarEstado = async (id, estado) => {
+    setActualizando(id)
     try {
-      const { resolverAlerta } = await import('../api/alertaService')
-      await resolverAlerta(id)
-      setAlertas((prev) => prev.filter((a) => a.id !== id))
+      await actualizarEstadoAlerta(id, estado)
+      setAlertas((prev) => prev.filter((a) => a.id_alerta !== id))
     } catch (err) {
-      console.error('Error al resolver alerta:', err)
+      console.error('Error al actualizar la alerta:', err)
     } finally {
-      setResolviendo(null)
+      setActualizando(null)
     }
   }
 
   /*  Contadores para los tabs  */
-  const alertasActivas = alertas.filter((a) => !a.resuelta)
+  const alertasActivas = alertas // ya vienen filtradas por estado=pendiente desde el backend
   const criticos       = materiales.filter((m) => m.cantidad_disponible === 0).length
   const stockBadge     = materiales.length  // total materiales bajo mínimo
 
@@ -226,44 +269,51 @@ export default function AlertasPage() {
             </div>
           ) : (
             <ul className={styles.alertasList}>
-              {alertasActivas.map((alerta) => (
-                <li
-                  key={alerta.id}
-                  className={`${styles.alertaItem} ${styles[alerta.nivel]}`}
-                >
-                  <div className={styles.alertaHeader}>
-                    <Badge
-                      label={alerta.nivel === 'critico' ? 'Crítico' : 'Advertencia'}
-                      variant={alerta.nivel === 'critico' ? 'danger' : 'warning'}
-                    />
-                    <span className={styles.alertaHora}>
-                      {formatHora(alerta.fecha_hora)}
-                    </span>
-                  </div>
+              {alertasActivas.map((alerta) => {
+                const esCritica = alerta.severidad === 'critica'
+                const nivelClase = esCritica ? 'critico' : 'advertencia'
+                const info = TIPO_ALERTA_INFO[alerta.tipo]
+                const enProceso = actualizando === alerta.id_alerta
 
-                  <p className={styles.alertaMensaje}>{alerta.mensaje}</p>
-
-                  {alerta.tecnico && (
-                    <p className={styles.alertaTecnico}>
-                      Técnico: <strong>{alerta.tecnico.nombre_completo}</strong>
-                    </p>
-                  )}
-
-                  {alerta.tarea && (
-                    <p className={styles.alertaTarea}>
-                      Tarea: {alerta.tarea.titulo}
-                    </p>
-                  )}
-
-                  <button
-                    className={styles.resolverBtn}
-                    onClick={() => handleResolver(alerta.id)}
-                    disabled={resolviendo === alerta.id}
+                return (
+                  <li
+                    key={alerta.id_alerta}
+                    className={`${styles.alertaItem} ${styles[nivelClase] ?? ''}`}
                   >
-                    {resolviendo === alerta.id ? 'Resolviendo...' : 'Marcar como resuelta'}
-                  </button>
-                </li>
-              ))}
+                    <div className={styles.alertaHeader}>
+                      <Badge
+                        label={esCritica ? 'Crítico' : 'Advertencia'}
+                        variant={esCritica ? 'danger' : 'warning'}
+                      />
+                      {info && (
+                        <span className={styles.alertaTarea}>{info.label}</span>
+                      )}
+                      <span className={styles.alertaHora}>
+                        {formatHora(alerta.fecha)}
+                      </span>
+                    </div>
+
+                    <p className={styles.alertaMensaje}>{describirAlerta(alerta)}</p>
+
+                    <div className={styles.alertaHeader}>
+                      <button
+                        className={styles.resolverBtn}
+                        onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
+                        disabled={enProceso}
+                      >
+                        {enProceso ? 'Guardando...' : 'Marcar como atendida'}
+                      </button>
+                      <button
+                        className={styles.resolverBtn}
+                        onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
+                        disabled={enProceso}
+                      >
+                        Descartar
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
