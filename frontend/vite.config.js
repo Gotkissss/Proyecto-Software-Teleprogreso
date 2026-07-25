@@ -21,6 +21,13 @@ export default defineConfig({
       }
     })
   ],
+  // Configuración de Vitest (pruebas unitarias)
+  test: {
+    environment: 'jsdom',       // simula el DOM del navegador
+    globals: true,              // describe/it/expect sin imports
+    setupFiles: './src/tests/setup.js',
+    css: false,                 // no procesar CSS modules en tests
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
