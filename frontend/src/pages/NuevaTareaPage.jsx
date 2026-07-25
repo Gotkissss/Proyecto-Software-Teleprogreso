@@ -10,8 +10,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import apiClient from '../api/client'
-import { crearTarea, getTareas } from '../api/tareaService'
+import { crearTarea, getTecnicosDisponibles } from '../api/tareaService'
 import Spinner from '../components/ui/Spinner'
 import styles from './NuevaTareaPage.module.css'
 
@@ -25,11 +24,13 @@ const PRIORIDADES = [
 const LIMITE_TAREAS = 3
 
 const FORM_INICIAL = {
-  titulo:      '',
-  descripcion: '',
-  direccion:   '',
-  prioridad:   'media',
-  id_tecnico:  '',
+  titulo:             '',
+  descripcion:        '',
+  direccion:          '',
+  prioridad:          'media',
+  id_tecnico:         '',
+  fecha_inicio:       '',
+  fecha_finalizacion: '',
 }
 
 function validar(form) {
@@ -40,6 +41,14 @@ function validar(form) {
     errores.titulo = 'El título debe tener al menos 5 caracteres.'
   if (!form.prioridad)
     errores.prioridad = 'Selecciona una prioridad.'
+  if (
+    form.fecha_inicio &&
+    form.fecha_finalizacion &&
+    form.fecha_inicio > form.fecha_finalizacion
+  ) {
+    errores.fecha_finalizacion =
+      'La fecha límite no puede ser anterior a la de inicio.'
+  }
   return errores
 }
 
@@ -55,35 +64,21 @@ export default function NuevaTareaPage() {
   const [errorServidor, setErrorServidor] = useState(null)
   const [exito,         setExito]         = useState(false)
 
-  // Cargar técnicos con conteo de tareas activas
+  // Cargar técnicos con su conteo de tareas activas.
+  // Se usa GET /empleados/tecnicos/disponibles (admin + supervisor) en vez de
+  // GET /empleados?rol=tecnico, que es solo-admin y dejaba el selector vacío
+  // cuando entraba un supervisor.
   useEffect(() => {
     const fetchTecnicos = async () => {
       setLoadingTec(true)
       try {
-        const [tecnicosResp, tareasData] = await Promise.all([
-          apiClient.get('/empleados?rol=tecnico'),
-          getTareas(),
-        ])
-
-        const listaTecnicos = tecnicosResp.data?.empleados ?? tecnicosResp.data ?? []
-        const todasTareas   = Array.isArray(tareasData) ? tareasData : []
-
-        const tecnicosConConteo = listaTecnicos.map((tec) => {
-          const activas = todasTareas.filter((t) =>
-            t.tecnico?.id_empleado === tec.id_empleado &&
-            ['pendiente', 'en_progreso'].includes(t.estado_tarea)
-          ).length
-          return {
-            ...tec,
-            id: tec.id_empleado,
-            nombre_completo: `${tec.nombre} ${tec.apellido}`,
-            tareas_activas: activas,
-          }
-        })
-
-        setTecnicos(tecnicosConConteo)
+        setTecnicos(await getTecnicosDisponibles())
       } catch (err) {
         console.error('Error al cargar técnicos:', err)
+        setErrorServidor(
+          err?.response?.data?.detail ||
+          'No se pudo cargar la lista de técnicos.'
+        )
       } finally {
         setLoadingTec(false)
       }
@@ -136,11 +131,13 @@ export default function NuevaTareaPage() {
 
     try {
       await crearTarea({
-        titulo:      form.titulo.trim(),
-        descripcion: form.descripcion.trim() || null,
-        direccion:   form.direccion.trim()   || null,
-        prioridad:   form.prioridad,
-        id_tecnico:  form.id_tecnico ? Number(form.id_tecnico) : null,
+        titulo:             form.titulo.trim(),
+        descripcion:        form.descripcion.trim() || null,
+        direccion:          form.direccion.trim()   || null,
+        prioridad:          form.prioridad,
+        id_tecnico:         form.id_tecnico ? Number(form.id_tecnico) : null,
+        fecha_inicio:       form.fecha_inicio       || null,
+        fecha_finalizacion: form.fecha_finalizacion || null,
       })
 
       setExito(true)
@@ -274,6 +271,41 @@ export default function NuevaTareaPage() {
               onChange={(e) => handleChange('direccion', e.target.value)}
               disabled={cargando}
             />
+          </div>
+
+          {/* ── Fechas ──
+              La fecha límite es la que usa el sistema de alertas para marcar
+              una tarea como vencida; sin ella nunca se genera esa alerta. */}
+          <div className={styles.fieldRow}>
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Fecha de inicio <span className={styles.optional}>(opcional)</span>
+              </label>
+              <input
+                type="date"
+                className={styles.input}
+                value={form.fecha_inicio}
+                onChange={(e) => handleChange('fecha_inicio', e.target.value)}
+                disabled={cargando}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>
+                Fecha límite <span className={styles.optional}>(opcional)</span>
+              </label>
+              <input
+                type="date"
+                className={`${styles.input} ${campoError('fecha_finalizacion') ? styles.inputError : ''}`}
+                value={form.fecha_finalizacion}
+                onChange={(e) => handleChange('fecha_finalizacion', e.target.value)}
+                onBlur={() => handleBlur('fecha_finalizacion')}
+                disabled={cargando}
+              />
+              {campoError('fecha_finalizacion') && (
+                <p className={styles.fieldError}>{errores.fecha_finalizacion}</p>
+              )}
+            </div>
           </div>
 
           {/* ── Prioridad ── */}

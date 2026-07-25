@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, time
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -29,11 +29,17 @@ async def generar_alertas(db: AsyncSession) -> int:
 
     La combinación ``tipo + referencia`` funciona como clave lógica para
     evitar duplicados cuando el supervisor consulta varias veces la pantalla.
-    Se revisan también alertas atendidas o descartadas para no recrear la
-    misma alerta en cada consulta mientras la condición siga vigente.
+
+    Se consideran "ya existentes" únicamente las alertas pendientes y las que
+    fueron atendidas o descartadas **hoy**. Antes se miraban todas sin importar
+    la fecha, así que en cuanto el supervisor descartaba una alerta esa
+    condición no volvía a avisar nunca más y la pantalla quedaba vacía para
+    siempre. Con esta regla la alerta se vuelve a levantar al día siguiente si
+    el problema sigue vigente, pero no reaparece a los 30 segundos de haberla
+    atendido.
     """
     hoy = date.today()
-    referencias_existentes = await _obtener_referencias_existentes(db)
+    referencias_existentes = await _obtener_referencias_existentes(db, hoy)
     nuevas_alertas: list[Alerta] = []
 
     # Una tarea se considera vencida solamente si sigue activa. Las tareas
@@ -113,8 +119,22 @@ async def generar_alertas(db: AsyncSession) -> int:
     return len(nuevas_alertas)
 
 
-async def _obtener_referencias_existentes(db: AsyncSession) -> set[tuple[str, str]]:
-    result = await db.execute(select(Alerta.tipo, Alerta.referencia))
+async def _obtener_referencias_existentes(
+    db: AsyncSession,
+    hoy: date,
+) -> set[tuple[str, str]]:
+    """
+    Claves (tipo, referencia) que no deben volver a crearse en esta ejecución:
+    las alertas todavía pendientes y las que ya se resolvieron hoy.
+    """
+    result = await db.execute(
+        select(Alerta.tipo, Alerta.referencia).where(
+            or_(
+                Alerta.estado == "pendiente",
+                func.date(Alerta.fecha) == hoy,
+            )
+        )
+    )
     return {
         (tipo, referencia)
         for tipo, referencia in result.all()

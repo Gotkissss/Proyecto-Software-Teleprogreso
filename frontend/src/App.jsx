@@ -20,6 +20,7 @@ import EmpleadosPage    from './pages/EmpleadosPage'
 import NuevaTareaPage from './pages/NuevaTareaPage'
 import InventarioPage from './pages/InventarioPage'
 import CarroDetallePage from './pages/CarroDetallePage'
+import HistorialAsistenciaPage from './pages/HistorialAsistenciaPage'
 
 export default function App() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="empleados"    element={<EmpleadosPage />} />
             <Route path="nueva-tarea" element={<NuevaTareaPage />} />
             <Route path="inventario"   element={<InventarioPage />} />
+            <Route path="asistencia"   element={<HistorialAsistenciaPage />} />
             
           </Route>
 

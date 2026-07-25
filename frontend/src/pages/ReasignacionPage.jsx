@@ -2,11 +2,12 @@
  * pages/ReasignacionPage.jsx
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
-import apiClient from '../api/client'
+import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
+import { getTareas, getTecnicosDisponibles, reasignarTarea } from '../api/tareaService'
 import styles from './ReasignacionPage.module.css'
 
 
@@ -22,53 +23,40 @@ export default function ReasignacionPage() {
   const [error, setError] = useState(null)
 
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null)
+  const [tareaEditando, setTareaEditando] = useState(null)
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [exito, setExito] = useState(null)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { getTareas } = await import('../api/tareaService')
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null)
 
-          const [tareasData, tecnicosResp, todasTareasData] = await Promise.all([
-            getTareas(),
-            apiClient.get('/empleados?rol=tecnico'),
-            getTareas(),
-          ])
+      // Una sola llamada a /tareas (antes se pedía dos veces en el mismo
+      // Promise.all) y el conteo de carga viene del endpoint dedicado, que
+      // sí admite rol supervisor. /empleados?rol=tecnico es solo-admin y
+      // devolvía 403 al supervisor, dejando el selector vacío.
+      const [listaTareas, listaTecnicos] = await Promise.all([
+        getTareas(),
+        getTecnicosDisponibles(),
+      ])
 
-          const listaTareas = Array.isArray(tareasData) ? tareasData : []
-          const listaTecnicos = tecnicosResp.data?.empleados ?? tecnicosResp.data ?? []
-          const todasTareas = Array.isArray(todasTareasData) ? todasTareasData : []
-
-          // Calcular cuántas tareas activas tiene cada técnico
-          const tecnicosConConteo = listaTecnicos.map((tec) => {
-            const activas = todasTareas.filter((t) =>
-              t.tecnico?.id_empleado === tec.id_empleado &&
-              ['pendiente', 'en_progreso'].includes(t.estado_tarea)
-            ).length
-
-            return {
-              ...tec,
-              id: tec.id_empleado,
-              nombre_completo: `${tec.nombre} ${tec.apellido}`,
-              tareas_activas: activas,
-            }
-          })
-
-          setTareas(listaTareas)
-          setTecnicos(tecnicosConConteo)
-      } catch (err) {
-        setError('No se pudieron cargar las tareas.')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
+      setTareas(Array.isArray(listaTareas) ? listaTareas : [])
+      setTecnicos(listaTecnicos)
+    } catch (err) {
+      setError(
+        err?.response?.data?.detail || 'No se pudieron cargar las tareas.'
+      )
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-
-    fetchData()
   }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleReasignar = async () => {
     if (!tareaSeleccionada || !tecnicoNuevo) return
@@ -91,8 +79,6 @@ export default function ReasignacionPage() {
     }
 
     try {
-      const { reasignarTarea } = await import('../api/tareaService')
-
       await reasignarTarea(
         tareaSeleccionada.id_tarea ?? tareaSeleccionada.id,
         Number(tecnicoNuevo)
@@ -112,8 +98,16 @@ export default function ReasignacionPage() {
           const id = t.id_tarea ?? t.id
           const selId = tareaSeleccionada.id_tarea ?? tareaSeleccionada.id
 
+          // El backend devuelve el técnico como { id_empleado, nombre };
+          // se guarda con esa misma forma para que la lista lo muestre bien.
           return id === selId
-            ? { ...t, tecnico: tecnicoSeleccionado }
+            ? {
+                ...t,
+                tecnico: {
+                  id_empleado: tecnicoSeleccionado.id,
+                  nombre: tecnicoSeleccionado.nombre_completo,
+                },
+              }
             : t
         })
       )
@@ -160,6 +154,19 @@ export default function ReasignacionPage() {
     setErrorReasignacion(null)
   }
 
+  /** Refleja en la lista la tarea que devolvió PATCH /tareas/{id}. */
+  const handleTareaEditada = (actualizada) => {
+    setTareas((prev) =>
+      prev.map((t) =>
+        (t.id_tarea ?? t.id) === actualizada.id_tarea ? { ...t, ...actualizada } : t
+      )
+    )
+    setExito('Tarea actualizada correctamente.')
+    setTimeout(() => setExito(null), 3000)
+    // El conteo de carga de los técnicos pudo cambiar con la edición.
+    getTecnicosDisponibles().then(setTecnicos).catch(() => {})
+  }
+
   if (loading) {
     return (
       <div className={styles.center}>
@@ -174,6 +181,15 @@ export default function ReasignacionPage() {
 
   return (
     <div className={styles.page}>
+
+      {/* Modal de edición de una tarea existente */}
+      <ModalEditarTarea
+        open={Boolean(tareaEditando)}
+        tarea={tareaEditando}
+        tecnicos={tecnicos}
+        onClose={() => setTareaEditando(null)}
+        onGuardado={handleTareaEditada}
+      />
 
       {/* HEADER NUEVO */}
       <div className={styles.pageHeader}>
@@ -212,12 +228,10 @@ export default function ReasignacionPage() {
                   </span>
 
                   <span className={styles.tareaTecnico}>
-                    {tarea.tecnico?.nombre_completo
-                      ?? (
-                        tarea.empleados?.length > 0
-                          ? tarea.empleados[0].id_empleado
-                          : 'Sin asignar'
-                      )}
+                    {/* El backend devuelve tecnico.nombre (nombre completo).
+                        Antes se leía `nombre_completo`, que no existe, y todas
+                        las tareas aparecían como "Sin asignar". */}
+                    {tarea.tecnico?.nombre ?? 'Sin asignar'}
                   </span>
                 </div>
 
@@ -232,6 +246,13 @@ export default function ReasignacionPage() {
                           : 'warning'
                     }
                   />
+
+                  <button
+                    className={styles.editarBtn}
+                    onClick={() => setTareaEditando(tarea)}
+                  >
+                    Editar
+                  </button>
 
                   <button
                     className={styles.reasignarBtn}

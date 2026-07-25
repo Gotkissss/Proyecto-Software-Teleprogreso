@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { getAlertasPendientes } from '../api/alertaService'
+import { ESTADO_ALERTA, getAlertas } from '../api/alertaService'
 
 const DEFAULT_INTERVAL_MS = 30000 // 30s
 
@@ -21,7 +21,13 @@ export function useAlertasPendientesCount(intervalMs = DEFAULT_INTERVAL_MS) {
 
     const fetchCount = async () => {
       try {
-        const data = await getAlertasPendientes()
+        // generar=false: el badge solo cuenta. La detección la dispara la
+        // pantalla de Alertas, así evitamos que el polling y la página
+        // escriban alertas a la vez y se dupliquen.
+        const data = await getAlertas({
+          estado: ESTADO_ALERTA.PENDIENTE,
+          generar: false,
+        })
         if (activo) setCount(data.length)
       } catch (err) {
         // Si falla la consulta (ej. sesión vencida) no rompemos el layout,

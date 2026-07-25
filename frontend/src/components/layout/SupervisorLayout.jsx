@@ -59,10 +59,18 @@ const IconInventario = () => (
   </svg>
 )
 
+const IconAsistencia = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 7 12 12 15 14" />
+  </svg>
+)
+
 const NAV_ITEMS = [
   { to: '/supervisor/dashboard',    label: 'Panel',      Icon: IconDashboard },
   { to: '/supervisor/alertas',      label: 'Alertas',    Icon: IconAlertas },
   { to: '/supervisor/reasignacion', label: 'Reasignar',  Icon: IconReasignar },
+  { to: '/supervisor/asistencia',   label: 'Asistencia', Icon: IconAsistencia },
   { to: '/supervisor/empleados',    label: 'Empleados',  Icon: IconEmpleados },
   { to: '/supervisor/inventario',   label: 'Inventario', Icon: IconInventario },
 ]

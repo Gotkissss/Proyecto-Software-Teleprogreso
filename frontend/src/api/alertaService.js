@@ -26,11 +26,12 @@ export const TIPO_ALERTA = {
 
 /**
  * Lista alertas persistentes desde el backend.
- * @param {Object} filtros - { tipo?, severidad?, estado? } (query params soportados por GET /alertas)
+ * @param {Object} filtros - { tipo?, severidad?, estado?, generar? }
+ *   (query params soportados por GET /alertas)
  */
 export async function getAlertas(filtros = {}) {
   const { data } = await apiClient.get('/alertas', { params: filtros })
-  return data
+  return Array.isArray(data) ? data : []
 }
 
 /**
@@ -38,6 +39,28 @@ export async function getAlertas(filtros = {}) {
  */
 export async function getAlertasPendientes() {
   return getAlertas({ estado: ESTADO_ALERTA.PENDIENTE })
+}
+
+/**
+ * Convierte un error de axios en un mensaje legible para el usuario.
+ * Distingue 403 (rol sin permiso), 500 y errores de red, porque antes todos
+ * se mostraban como "No se pudieron cargar las alertas" y no había forma de
+ * saber qué estaba fallando realmente.
+ */
+export function describirErrorAlertas(err) {
+  const status = err?.response?.status
+  const detail = err?.response?.data?.detail
+
+  if (!err?.response) {
+    return 'No se pudo contactar al servidor. Revisa tu conexión e inténtalo de nuevo.'
+  }
+  if (status === 403) {
+    return detail || 'Tu rol no tiene permiso para ver las alertas del sistema.'
+  }
+  if (status === 500) {
+    return detail || 'El servidor falló al generar las alertas. Inténtalo de nuevo.'
+  }
+  return detail || `No se pudieron cargar las alertas (error ${status}).`
 }
 
 /**

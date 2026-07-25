@@ -627,3 +627,75 @@
     align-items: flex-start;
   }
 }
+/* ============================================================
+   Filtros de estado + manejo de error de las alertas operativas
+   ============================================================ */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.filtroBtn {
+  padding: 7px 14px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.filtroBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.filtroBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.filtroActivo {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: #fff;
+}
+
+.errorWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.reintentarBtn {
+  padding: 9px 18px;
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.reintentarBtn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.alertaEstado {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}

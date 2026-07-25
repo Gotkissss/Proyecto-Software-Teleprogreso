@@ -96,3 +96,48 @@ export const finalizarJornada = async () => {
   const { data } = await apiClient.post('/asistencia/salida')
   return data
 }
+
+/**
+ * Historial de jornadas con horas trabajadas y tiempo en pausas.
+ * Endpoint: GET /asistencia/historial
+ *
+ * @param {Object} filtros
+ * @param {number} [filtros.empleado]      - ID del empleado (solo admin/supervisor/gerente)
+ * @param {string} [filtros.fecha_inicio]  - YYYY-MM-DD, inclusive
+ * @param {string} [filtros.fecha_fin]     - YYYY-MM-DD, inclusive
+ * @param {number} [filtros.page]          - página (empieza en 1)
+ * @param {number} [filtros.page_size]     - jornadas por página (1-100)
+ *
+ * @returns {Promise<{total:number,page:number,page_size:number,total_pages:number,
+ *                    totales:Object,items:Array}>}
+ */
+export const getHistorialAsistencia = async (filtros = {}) => {
+  // Se omiten los filtros vacíos para no mandar `?empleado=` y provocar un 422.
+  const params = Object.fromEntries(
+    Object.entries(filtros).filter(
+      ([, v]) => v !== '' && v !== null && v !== undefined
+    )
+  )
+  const { data } = await apiClient.get('/asistencia/historial', { params })
+  return data
+}
+
+/**
+ * Lista de empleados para el filtro del historial.
+ * Devuelve [] si el rol no tiene permiso (el endpoint es solo-admin), para que
+ * el supervisor siga viendo el historial completo aunque sin el selector.
+ */
+export const getEmpleadosParaFiltro = async () => {
+  try {
+    const { data } = await apiClient.get('/empleados')
+    const lista = data?.empleados ?? data ?? []
+    return (Array.isArray(lista) ? lista : []).map((e) => ({
+      id_empleado: e.id_empleado,
+      nombre_completo: `${e.nombre} ${e.apellido}`,
+      rol: e.rol,
+    }))
+  } catch (err) {
+    if (err?.response?.status === 403) return []
+    throw err
+  }
+}

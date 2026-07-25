@@ -22,7 +22,8 @@ import StockBadge from '../components/ui/StockBadge'
 import {
   ESTADO_ALERTA,
   actualizarEstadoAlerta,
-  getAlertasPendientes,
+  describirErrorAlertas,
+  getAlertas,
 } from '../api/alertaService'
 import {
   getMaterialesBajoStock,
@@ -62,6 +63,14 @@ const TIPO_ALERTA_INFO = {
     describir: (id) => `El material #${id} está por debajo del stock mínimo.`,
   },
 }
+
+/** Filtros de estado disponibles en la pestaña de alertas operativas. */
+const FILTROS_ESTADO = [
+  { value: ESTADO_ALERTA.PENDIENTE,  label: 'Pendientes' },
+  { value: ESTADO_ALERTA.ATENDIDA,   label: 'Atendidas' },
+  { value: ESTADO_ALERTA.DESCARTADA, label: 'Descartadas' },
+  { value: 'todas',                  label: 'Todas' },
+]
 
 function parseReferencia(referencia) {
   if (!referencia) return { entidad: null, id: null }
@@ -162,23 +171,24 @@ export default function AlertasPage() {
   /*  Tab activa  */
   const [tabActiva, setTabActiva] = useState('operativas') // 'operativas' | 'stock'
 
-  /*  Fetch alertas operativas pendientes desde GET /alertas  */
+  /*  Filtro de estado (pendiente | atendida | descartada | todas) */
+  const [filtroEstado, setFiltroEstado] = useState(ESTADO_ALERTA.PENDIENTE)
+
+  /*  Fetch alertas operativas desde GET /alertas  */
   const fetchAlertas = useCallback(async () => {
+    setLoadingAl(true)
     try {
       setErrorAl(null)
-      const data = await getAlertasPendientes()
+      const params = filtroEstado === 'todas' ? {} : { estado: filtroEstado }
+      const data = await getAlertas(params)
       setAlertas(data)
     } catch (err) {
-      setErrorAl(
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No se pudieron cargar las alertas operativas.'
-      )
-      console.error(err)
+      setErrorAl(describirErrorAlertas(err))
+      console.error('Error al cargar las alertas:', err)
     } finally {
       setLoadingAl(false)
     }
-  }, [])
+  }, [filtroEstado])
 
   useEffect(() => {
     fetchAlertas()
@@ -208,9 +218,15 @@ export default function AlertasPage() {
   const handleActualizarEstado = async (id, estado) => {
     setActualizando(id)
     try {
-      await actualizarEstadoAlerta(id, estado)
-      setAlertas((prev) => prev.filter((a) => a.id_alerta !== id))
+      const actualizada = await actualizarEstadoAlerta(id, estado)
+      setAlertas((prev) =>
+        filtroEstado === 'todas'
+          // En "Todas" la alerta sigue visible, solo cambia su estado.
+          ? prev.map((a) => (a.id_alerta === id ? { ...a, ...actualizada } : a))
+          : prev.filter((a) => a.id_alerta !== id)
+      )
     } catch (err) {
+      setErrorAl(describirErrorAlertas(err))
       console.error('Error al actualizar la alerta:', err)
     } finally {
       setActualizando(null)
@@ -218,7 +234,7 @@ export default function AlertasPage() {
   }
 
   /*  Contadores para los tabs  */
-  const alertasActivas = alertas // ya vienen filtradas por estado=pendiente desde el backend
+  const alertasActivas = alertas // filtradas en el backend por el estado elegido
   const criticos       = materiales.filter((m) => m.cantidad_disponible === 0).length
   const stockBadge     = materiales.length  // total materiales bajo mínimo
 
@@ -258,14 +274,45 @@ export default function AlertasPage() {
           */}
       {tabActiva === 'operativas' && (
         <section className={styles.tabPanel}>
+          {/* Filtro por estado: permite revisar también las ya atendidas
+              o descartadas, en vez de ver siempre una lista vacía. */}
+          <div className={styles.filtros}>
+            {FILTROS_ESTADO.map(({ value, label }) => (
+              <button
+                key={value}
+                className={`${styles.filtroBtn} ${filtroEstado === value ? styles.filtroActivo : ''}`}
+                onClick={() => setFiltroEstado(value)}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              className={styles.filtroBtn}
+              onClick={fetchAlertas}
+              disabled={loadingAl}
+              title="Volver a consultar las alertas"
+            >
+              ↻ Actualizar
+            </button>
+          </div>
+
           {loadingAl ? (
             <div className={styles.center}><Spinner size="lg" /></div>
           ) : errorAl ? (
-            <p className={styles.errorMsg}>{errorAl}</p>
+            <div className={styles.errorWrap}>
+              <p className={styles.errorMsg}>{errorAl}</p>
+              <button className={styles.reintentarBtn} onClick={fetchAlertas}>
+                Reintentar
+              </button>
+            </div>
           ) : alertasActivas.length === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>✓</div>
-              <p className={styles.emptyMsg}>No hay alertas operativas activas.</p>
+              <p className={styles.emptyMsg}>
+                {filtroEstado === ESTADO_ALERTA.PENDIENTE
+                  ? 'No hay alertas operativas pendientes.'
+                  : 'No hay alertas con este estado.'}
+              </p>
             </div>
           ) : (
             <ul className={styles.alertasList}>
@@ -295,22 +342,28 @@ export default function AlertasPage() {
 
                     <p className={styles.alertaMensaje}>{describirAlerta(alerta)}</p>
 
-                    <div className={styles.alertaHeader}>
-                      <button
-                        className={styles.resolverBtn}
-                        onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
-                        disabled={enProceso}
-                      >
-                        {enProceso ? 'Guardando...' : 'Marcar como atendida'}
-                      </button>
-                      <button
-                        className={styles.resolverBtn}
-                        onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
-                        disabled={enProceso}
-                      >
-                        Descartar
-                      </button>
-                    </div>
+                    {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
+                      <div className={styles.alertaHeader}>
+                        <button
+                          className={styles.resolverBtn}
+                          onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
+                          disabled={enProceso}
+                        >
+                          {enProceso ? 'Guardando...' : 'Marcar como atendida'}
+                        </button>
+                        <button
+                          className={styles.resolverBtn}
+                          onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
+                          disabled={enProceso}
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    ) : (
+                      <span className={styles.alertaEstado}>
+                        {alerta.estado === ESTADO_ALERTA.ATENDIDA ? '✓ Atendida' : '✕ Descartada'}
+                      </span>
+                    )}
                   </li>
                 )
               })}

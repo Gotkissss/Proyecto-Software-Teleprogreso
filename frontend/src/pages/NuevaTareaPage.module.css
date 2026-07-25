@@ -457,3 +457,21 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Fila de dos campos (fechas) ───────────────────────────── */
+.fieldRow {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.fieldRow > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .fieldRow {
+    flex-direction: column;
+    gap: 0;
+  }
+}
