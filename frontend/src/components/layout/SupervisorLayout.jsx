@@ -168,7 +168,7 @@ export default function SupervisorLayout() {
             className={({ isActive }) =>
               `${styles.navItem} ${isActive ? styles.active : ''}`
             }
-          >
+           >
             <span className={styles.navIcon}><Icon /></span>
             <span className={styles.navLabel}>{label}</span>
           </NavLink>
