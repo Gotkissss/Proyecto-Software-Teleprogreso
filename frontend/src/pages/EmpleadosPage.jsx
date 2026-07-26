@@ -13,9 +13,11 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import apiClient from '../api/client'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import HistorialAsistenciaTable from '../components/asistencia/HistorialAsistenciaTable'
 import styles from './EmpleadosPage.module.css'
 
 
@@ -471,6 +473,16 @@ function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
    COMPONENTE PRINCIPAL
    ══════════════════════════════════════════════════════════════ */
 export default function EmpleadosPage() {
+  // SCRUM-137: tab "Historial" con la tabla filtrable por fechas
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tabActiva, setTabActiva] = useState(
+    searchParams.get('tab') === 'historial' ? 'historial' : 'empleados'
+  )
+  const cambiarTab = (tab) => {
+    setTabActiva(tab)
+    setSearchParams(tab === 'historial' ? { tab: 'historial' } : {}, { replace: true })
+  }
+
   const [empleados,      setEmpleados]      = useState([])
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState(null)
@@ -595,7 +607,7 @@ export default function EmpleadosPage() {
   const totalActivos   = empleados.filter(e => e.estado === 'activo').length
   const totalInactivos = empleados.filter(e => e.estado === 'inactivo').length
 
-  if (loading) {
+  if (loading && tabActiva === 'empleados') {
     return (
       <div className={styles.center}>
         <Spinner size="lg" />
@@ -604,7 +616,7 @@ export default function EmpleadosPage() {
     )
   }
 
-  if (error && empleados.length === 0) {
+  if (error && empleados.length === 0 && tabActiva === 'empleados') {
     return <div className={styles.center}><p className={styles.errorText}>{error}</p></div>
   }
 
@@ -621,10 +633,36 @@ export default function EmpleadosPage() {
             )}
           </p>
         </div>
-        <button className={styles.btnNuevoEmpleado} onClick={() => setMostrarCrear(true)}>
-          <IconPlus /><span>Nuevo empleado</span>
+        {tabActiva === 'empleados' && (
+          <button className={styles.btnNuevoEmpleado} onClick={() => setMostrarCrear(true)}>
+            <IconPlus /><span>Nuevo empleado</span>
+          </button>
+        )}
+      </div>
+
+      {/* SCRUM-137: Tabs Empleados / Historial de asistencia */}
+      <div className={styles.tabs} role="tablist">
+        <button
+          role="tab"
+          aria-selected={tabActiva === 'empleados'}
+          className={`${styles.tabBtn} ${tabActiva === 'empleados' ? styles.tabBtnActive : ''}`}
+          onClick={() => cambiarTab('empleados')}
+        >
+          Empleados
+        </button>
+        <button
+          role="tab"
+          aria-selected={tabActiva === 'historial'}
+          className={`${styles.tabBtn} ${tabActiva === 'historial' ? styles.tabBtnActive : ''}`}
+          onClick={() => cambiarTab('historial')}
+        >
+          Historial de asistencia
         </button>
       </div>
+
+      {tabActiva === 'historial' && <HistorialAsistenciaTable showHeader={false} />}
+
+      {tabActiva === 'empleados' && (<>
 
       {successMsg && (
         <div className={styles.toast} role="status" aria-live="polite">
@@ -784,6 +822,8 @@ export default function EmpleadosPage() {
           </p>
         </div>
       )}
+
+      </>)}
 
       {mostrarCrear && (
         <PanelCrearEmpleado onCreado={handleEmpleadoCreado} onCerrar={() => setMostrarCrear(false)} empleadosExistentes={empleados} />
