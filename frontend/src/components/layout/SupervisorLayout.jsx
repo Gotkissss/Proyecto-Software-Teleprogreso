@@ -2,14 +2,17 @@
  * components/layout/SupervisorLayout.jsx
  * ---------------------------------------------------------------------------
  * Layout para las rutas del supervisor — diseño desktop a ancho completo.
- * Top bar corporativa con logo real + bottom nav moderna.
+ * Usa los componentes compartidos LayoutHeader / LayoutBottomNav (misma
+ * estructura que AppLayout) con variant="supervisor".
  * ---------------------------------------------------------------------------
  */
 
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useAlertasPendientesCount } from '../../hooks/useAlertasPendientesCount'
+import LayoutHeader from './shared/LayoutHeader'
+import LayoutBottomNav from './shared/LayoutBottomNav'
 import styles from './SupervisorLayout.module.css'
 
 const IconDashboard = () => (
@@ -86,94 +89,75 @@ export default function SupervisorLayout() {
 
   return (
     <div className={styles.wrapper}>
-      <header className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <img
-            src="/teleprogreso-logo.png"
-            alt="Teleprogreso"
-            className={styles.logo}
-          />
-          <div className={styles.brandText}>
-            <span className={styles.brandName}>Teleprogreso</span>
-            <span className={styles.brandRole}>Panel · {displayRole}</span>
-          </div>
-        </div>
-
-        <div className={styles.topBarRight}>
-          <button
-            className={styles.iconBtn}
-            aria-label={`Ver alertas${alertasPendientes > 0 ? ` (${alertasPendientes} pendientes)` : ''}`}
-            title="Ver alertas"
-            onClick={() => navigate('/supervisor/alertas')}
-          >
-            <IconBell />
-            {alertasPendientes > 0 && (
-              <span className={styles.badge}>
-                {alertasPendientes > 99 ? '99+' : alertasPendientes}
-              </span>
-            )}
-          </button>
-
-          {user && (
-            <div className={styles.userMenu}>
-              <button
-                className={styles.avatarBtn}
-                onClick={() => setMenuOpen((v) => !v)}
-                title={displayName}
-              >
-                <span className={styles.avatarInitial}>
-                  {displayName[0]?.toUpperCase() ?? 'S'}
+      <LayoutHeader
+        variant="supervisor"
+        logo={<img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />}
+        title="Teleprogreso"
+        subtitle={`Panel · ${displayRole}`}
+        right={
+          <>
+            <button
+              className={styles.iconBtn}
+              aria-label={`Ver alertas${alertasPendientes > 0 ? ` (${alertasPendientes} pendientes)` : ''}`}
+              title="Ver alertas"
+              onClick={() => navigate('/supervisor/alertas')}
+            >
+              <IconBell />
+              {alertasPendientes > 0 && (
+                <span className={styles.badge}>
+                  {alertasPendientes > 99 ? '99+' : alertasPendientes}
                 </span>
-                <span className={styles.userInfo}>
-                  <span className={styles.userName}>{displayName}</span>
-                  <span className={styles.userRole}>{displayRole}</span>
-                </span>
-              </button>
-
-              {menuOpen && (
-                <>
-                  <div
-                    className={styles.menuBackdrop}
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div className={styles.dropdown}>
-                    <div className={styles.dropdownHeader}>
-                      <strong>{displayName}</strong>
-                      <span>{user.correo}</span>
-                    </div>
-                    <button
-                      className={styles.dropdownItem}
-                      onClick={() => { setMenuOpen(false); logoutUser() }}
-                    >
-                      <IconLogout />
-                      Cerrar sesión
-                    </button>
-                  </div>
-                </>
               )}
-            </div>
-          )}
-        </div>
-      </header>
+            </button>
+
+            {user && (
+              <div className={styles.userMenu}>
+                <button
+                  className={styles.avatarBtn}
+                  onClick={() => setMenuOpen((v) => !v)}
+                  title={displayName}
+                >
+                  <span className={styles.avatarInitial}>
+                    {displayName[0]?.toUpperCase() ?? 'S'}
+                  </span>
+                  <span className={styles.userInfo}>
+                    <span className={styles.userName}>{displayName}</span>
+                    <span className={styles.userRole}>{displayRole}</span>
+                  </span>
+                </button>
+
+                {menuOpen && (
+                  <>
+                    <div
+                      className={styles.menuBackdrop}
+                      onClick={() => setMenuOpen(false)}
+                    />
+                    <div className={styles.dropdown}>
+                      <div className={styles.dropdownHeader}>
+                        <strong>{displayName}</strong>
+                        <span>{user.correo}</span>
+                      </div>
+                      <button
+                        className={styles.dropdownItem}
+                        onClick={() => { setMenuOpen(false); logoutUser() }}
+                      >
+                        <IconLogout />
+                        Cerrar sesión
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        }
+      />
 
       <main className={styles.main}>
         <Outlet />
       </main>
 
-      <nav className={styles.bottomNav}>
-        {NAV_ITEMS.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-           >
-            <span className={styles.navIcon}><Icon /></span>
-            <span className={styles.navLabel}>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      <LayoutBottomNav variant="supervisor" items={NAV_ITEMS} />
     </div>
   )
 }

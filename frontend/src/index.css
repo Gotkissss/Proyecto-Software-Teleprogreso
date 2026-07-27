@@ -108,6 +108,20 @@
   --bottom-nav-height: 70px;
 }
 
+/* ── Escala tipográfica (tamaños de texto) ────────── */
+  --text-xs:   0.6875rem;
+  --text-sm:   0.75rem;
+  --text-base: 0.8125rem;
+  --text-md:   0.875rem;
+  --text-lg:   0.9375rem;
+  --text-xl:   1rem;
+
+  /* ── Z-index (capas compartidas header/nav) ───────── */
+  --z-header:       50;
+  --z-bottom-nav:   40;
+  --z-dropdown-backdrop: 40;
+  --z-dropdown:     60;
+
 /* Reset */
 *, *::before, *::after {
   box-sizing: border-box;

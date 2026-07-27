@@ -1,0 +1,65 @@
+/* ===================================================
+   LayoutHeader — estructura compartida (técnico/supervisor)
+   =================================================== */
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-height);
+  padding: 0 var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.brandName {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brandSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ── Variante supervisor: header desktop con blur y sombra ── */
+.topBar.supervisor {
+  padding: 0 var(--space-6);
+  box-shadow: var(--shadow-xs);
+  backdrop-filter: saturate(180%) blur(8px);
+}
+
+@media (max-width: 768px) {
+  .topBar.supervisor { padding: 0 var(--space-4); }
+  .topBar.supervisor .brandText { display: none; }
+}

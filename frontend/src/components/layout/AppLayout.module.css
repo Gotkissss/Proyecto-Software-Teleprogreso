@@ -1,35 +1,20 @@
+/* ===================================================
+   AppLayout — solo lo específico del técnico
+   (header/nav compartidos viven en ./shared)
+   =================================================== */
+
 .wrapper {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 480px;       /* ancho máximo móvil / PWA */
+  max-width: 480px;
   margin: 0 auto;
   background: var(--color-surface);
   position: relative;
-  box-shadow: 0 0 40px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-lg);
 }
 
-/* ── Top Bar ─────────────────────────────────── */
-.topBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--nav-height);
-  padding: 0 var(--space-4);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.topBarLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.logo {
+.logoBox {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -39,24 +24,12 @@
   border-radius: var(--radius-sm);
   color: white;
 }
-.logo svg { width: 18px; height: 18px; }
-
-.appName {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--color-text);
-}
-
-.topBarRight {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
+.logoBox svg { width: 18px; height: 18px; }
 
 .avatarBtn {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-primary);
   border: none;
   cursor: pointer;
@@ -68,7 +41,7 @@
 
 .avatarInitial {
   color: white;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 700;
 }
 
@@ -86,47 +59,9 @@
 .menuBtn:hover { background: var(--color-bg); }
 .menuBtn svg { width: 20px; height: 20px; }
 
-/* ── Main content ────────────────────────────── */
 .main {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: var(--bottom-nav-height);
-}
-
-/* ── Bottom Nav ──────────────────────────────── */
-.bottomNav {
-  display: flex;
-  height: var(--bottom-nav-height);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  position: sticky;
-  bottom: 0;
-  z-index: 100;
-}
-
-.navItem {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  text-decoration: none;
-  color: var(--color-text-muted);
-  transition: color var(--transition);
-  -webkit-tap-highlight-color: transparent;
-}
-.navItem:hover { color: var(--color-text-secondary); }
-
-.navItem.active { color: var(--color-primary); }
-
-.navIcon { display: flex; }
-.navIcon svg { width: 22px; height: 22px; }
-
-.navLabel {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
 }
