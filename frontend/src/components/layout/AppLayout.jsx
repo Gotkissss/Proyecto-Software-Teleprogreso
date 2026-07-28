@@ -2,12 +2,15 @@
  * components/layout/AppLayout.jsx
  * ---------------------------------------------------------------------------
  * Layout principal que envuelve todas las páginas protegidas del técnico.
- * Incluye la barra de navegación superior y la inferior (tab bar).
+ * Usa los componentes compartidos LayoutHeader / LayoutBottomNav (misma
+ * estructura que SupervisorLayout).
  * ---------------------------------------------------------------------------
  */
 
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import LayoutHeader from './shared/LayoutHeader'
+import LayoutBottomNav from './shared/LayoutBottomNav'
 import styles from './AppLayout.module.css'
 
 /* ── Iconos SVG inline ───────────────────────────────────────────────────── */
@@ -37,53 +40,41 @@ export default function AppLayout() {
 
   return (
     <div className={styles.wrapper}>
-      {/* ── Barra superior ─────────────────────────────── */}
-      <header className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <span className={styles.logo}><IconLogo /></span>
-          <span className={styles.appName}>Teleprogreso</span>
-        </div>
-        <div className={styles.topBarRight}>
-          {user && (
+      {/* ── Barra superior (compartida) ────────────────── */}
+      <LayoutHeader
+        variant="app"
+        logo={<span className={styles.logoBox}><IconLogo /></span>}
+        title="Teleprogreso"
+        right={
+          <>
+            {user && (
+              <button
+                className={styles.avatarBtn}
+                title={displayName}
+              >
+                <span className={styles.avatarInitial}>
+                  {displayName[0]?.toUpperCase() ?? 'U'}
+                </span>
+              </button>
+            )}
             <button
-              className={styles.avatarBtn}
-              title={displayName}
+              className={styles.menuBtn}
+              onClick={logoutUser}
+              title="Cerrar sesión"
             >
-              <span className={styles.avatarInitial}>
-                {displayName[0]?.toUpperCase() ?? 'U'}
-              </span>
+              <IconMenu />
             </button>
-          )}
-          <button
-            className={styles.menuBtn}
-            onClick={logoutUser}
-            title="Cerrar sesión"
-          >
-            <IconMenu />
-          </button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* ── Contenido de la página ─────────────────────── */}
       <main className={styles.main}>
         <Outlet />
       </main>
 
-      {/* ── Barra de navegación inferior ──────────────── */}
-      <nav className={styles.bottomNav}>
-        {NAV_ITEMS.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `${styles.navItem} ${isActive ? styles.active : ''}`
-            }
-          >
-            <span className={styles.navIcon}><Icon /></span>
-            <span className={styles.navLabel}>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      {/* ── Barra de navegación inferior (compartida) ──── */}
+      <LayoutBottomNav variant="app" items={NAV_ITEMS} />
     </div>
   )
 }
