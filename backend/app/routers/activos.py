@@ -308,14 +308,16 @@ async def eliminar_activo(
 # T1.4 — UPLOAD DE IMAGEN  POST /activos/{id}/imagen
 # ══════════════════════════════════════════════════════════════════════
 
-import os, uuid, shutil
 from fastapi import UploadFile, File
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "activos")
-os.makedirs(STATIC_DIR, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-MAX_FILE_SIZE_MB = 5
+# Validación y escritura en disco compartidas con el upload de fotos de
+# evidencia (app/services/uploads.py), para que ambos apliquen exactamente
+# las mismas reglas de extensión y tamaño.
+from app.services.uploads import (
+    ALLOWED_EXTENSIONS,
+    MAX_FILE_SIZE_MB,
+    guardar_imagen,
+)
 
 
 @router.post(
@@ -345,39 +347,12 @@ async def upload_imagen_activo(
     if not activo:
         raise HTTPException(status_code=404, detail=f"Activo id={id} no encontrado.")
 
-    # Validar extensión
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Extensión '{ext}' no permitida. Usa: {', '.join(ALLOWED_EXTENSIONS)}.",
-        )
-
-    # Leer contenido y validar tamaño
-    contenido = await file.read()
-    if len(contenido) > MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail=f"El archivo supera el límite de {MAX_FILE_SIZE_MB} MB.",
-        )
-
-    # Eliminar imagen anterior si existe
-    if activo.foto_url:
-        old_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", activo.foto_url.lstrip("/")
-        )
-        if os.path.isfile(old_path):
-            os.remove(old_path)
-
-    # Guardar la nueva imagen
-    nombre_archivo = f"activo_{id}_{uuid.uuid4().hex[:8]}{ext}"
-    ruta_disco = os.path.join(STATIC_DIR, nombre_archivo)
-
-    with open(ruta_disco, "wb") as f_out:
-        f_out.write(contenido)
-
-    # Actualizar la URL en la BD (relativa al servidor)
-    activo.foto_url = f"/static/activos/{nombre_archivo}"
+    activo.foto_url = await guardar_imagen(
+        file,
+        subcarpeta="activos",
+        prefijo=f"activo_{id}",
+        url_anterior=activo.foto_url,
+    )
     await db.flush()
 
     return {"detail": "Imagen subida correctamente.", "foto_url": activo.foto_url}

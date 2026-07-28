@@ -18,7 +18,11 @@ frontend/dist/
 .vscode/
 .idea/
 
-# OS 
+# Archivos subidos en tiempo de ejecución (imágenes de activos y
+# fotos de evidencia). Se sirven desde /static pero no se versionan.
+backend/static/
+
+# OS
 .DS_Store
 Thumbs.db
 

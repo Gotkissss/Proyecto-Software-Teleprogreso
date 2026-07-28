@@ -31,7 +31,7 @@ from app.core.deps import (
 )
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoTarea
-from app.models.tarea import Tarea
+from app.models.tarea import Incidencia, Tarea
 from app.schemas.tarea import (
     TareaCreate,
     TareaReasignar,
@@ -95,6 +95,16 @@ async def _obtener_tecnico_de_tarea(db: AsyncSession, id_tarea: int) -> Optional
     }
 
 
+async def _contar_incidencias(db: AsyncSession, id_tarea: int) -> int:
+    """Número de evidencias registradas en la tarea."""
+    result = await db.execute(
+        select(func.count())
+        .select_from(Incidencia)
+        .where(Incidencia.id_tarea == id_tarea)
+    )
+    return result.scalar() or 0
+
+
 async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
     """
     Construye la respuesta de una tarea incluyendo su técnico asignado.
@@ -103,6 +113,7 @@ async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
     `tecnico` siempre llegaba en null al frontend.
     """
     return TareaResponse(
+        total_incidencias=await _contar_incidencias(db, tarea.id_tarea),
         id_tarea=tarea.id_tarea,
         titulo=tarea.titulo,
         descripcion=tarea.descripcion,
@@ -142,6 +153,14 @@ async def get_tareas(
     result = await db.execute(query)
     tareas = result.scalars().all()
 
+    # Conteo de evidencias de todas las tareas en una sola consulta agrupada,
+    # para no lanzar un COUNT por tarea (N+1) al construir la respuesta.
+    result_incidencias = await db.execute(
+        select(Incidencia.id_tarea, func.count(Incidencia.id_incidencia))
+        .group_by(Incidencia.id_tarea)
+    )
+    incidencias_por_tarea = dict(result_incidencias.all())
+
     tareas_response = []
 
     for tarea in tareas:
@@ -169,6 +188,7 @@ async def get_tareas(
                 fecha_finalizacion=tarea.fecha_finalizacion,
                 fecha_asignacion=tarea.fecha_asignacion,
                 tecnico=tecnico,
+                total_incidencias=incidencias_por_tarea.get(tarea.id_tarea, 0),
             )
         )
 

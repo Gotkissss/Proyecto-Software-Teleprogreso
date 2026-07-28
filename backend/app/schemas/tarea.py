@@ -77,6 +77,10 @@ class TareaResponse(BaseModel):
     fecha_finalizacion: Optional[date]            = None
     fecha_asignacion:   Optional[date]            = None
     tecnico:            Optional[TecnicoResponse] = None
+    # Cuántas evidencias (incidencias) tiene registradas la tarea. Permite al
+    # dashboard del supervisor mostrar el acceso a "ver evidencias" sin pedir
+    # el detalle de cada tarea por separado.
+    total_incidencias:  int                       = 0
 
     class Config:
         from_attributes = True
