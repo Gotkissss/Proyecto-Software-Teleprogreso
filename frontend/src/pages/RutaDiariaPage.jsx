@@ -288,16 +288,17 @@ export default function RutaDiariaPage() {
     ? servicios.find((s) => s.id_servicio === detalleAbierto.id_servicio) ?? detalleAbierto
     : null
 
-  const estadoPagina = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando tu ruta del día..."
-      error={error}
-      onRetry={fetchRuta}
-      errorTitle="No se pudo cargar tu ruta"
-    />
-  )
-  if (estadoPagina) return estadoPagina
+  if (loading || error) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando tu ruta del día..."
+        error={error}
+        onRetry={fetchRuta}
+        errorTitle="No se pudo cargar tu ruta"
+      />
+    )
+  }
 
   const nombre      = ruta?.tecnico?.nombre_completo ?? user?.nombre ?? 'Técnico'
   const primerNombre = nombre.split(' ')[0]

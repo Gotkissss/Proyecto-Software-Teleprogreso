@@ -203,16 +203,17 @@ export default function CarroDetallePage() {
   const estadoActual = estadoConfig[carro?.estado_vehiculo] ?? estadoConfig.disponible
 
   /*  Render  */
-  const estadoPagina = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando vehículo..."
-      error={error}
-      onRetry={fetchData}
-      errorTitle="No se pudo cargar el vehículo"
-    />
-  )
-  if (estadoPagina) return estadoPagina
+  if (loading || error) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando vehículo..."
+        error={error}
+        onRetry={fetchData}
+        errorTitle="No se pudo cargar el vehículo"
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>

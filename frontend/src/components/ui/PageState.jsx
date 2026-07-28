@@ -6,22 +6,27 @@
  * <p> rojo aquí, un div con emoji allá), así que el mismo error se veía
  * distinto según dónde ocurriera.
  *
- * Uso típico:
+ * Uso como early return (cuando el estado reemplaza a toda la página):
  *
- *   const estado = (
- *     <PageState
- *       loading={loading}
- *       error={error}
- *       onRetry={fetchDatos}
- *       empty={items.length === 0}
- *       emptyTitle="No hay tareas"
- *       emptyDescription="Cuando se asignen tareas aparecerán aquí."
- *     />
- *   )
- *   if (estado) return estado
+ *   if (loading || error) {
+ *     return <PageState loading={loading} error={error} onRetry={fetchDatos} />
+ *   }
  *
- * Devuelve `null` cuando hay datos que mostrar, para que la página siga
- * con su render normal.
+ * Uso inline (cuando solo reemplaza una sección):
+ *
+ *   {loading || error || items.length === 0 ? (
+ *     <PageState loading={loading} error={error} onRetry={fetchDatos} empty
+ *                emptyTitle="No hay tareas" />
+ *   ) : (
+ *     <Lista items={items} />
+ *   )}
+ *
+ * ⚠️ NO hacer `const estado = <PageState ... />; if (estado) return estado`.
+ * Un elemento JSX es siempre truthy, así que ese `if` se cumple siempre y la
+ * página devuelve el PageState — que internamente renderiza `null` cuando no
+ * hay nada que mostrar. Resultado: pantalla en blanco. La condición tiene que
+ * estar sobre los datos (`loading`, `error`, `items.length`), no sobre el
+ * elemento.
  * ---------------------------------------------------------------------------
  */
 

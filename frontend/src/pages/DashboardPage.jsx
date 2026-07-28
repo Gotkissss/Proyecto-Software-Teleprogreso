@@ -90,16 +90,17 @@ export default function DashboardPage() {
     fetchData()
   }, [fetchData])
 
-  const estado = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando el panel..."
-      error={error}
-      onRetry={fetchData}
-      errorTitle="No se pudo cargar el panel"
-    />
-  )
-  if (estado) return estado
+  if (loading || error) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando el panel..."
+        error={error}
+        onRetry={fetchData}
+        errorTitle="No se pudo cargar el panel"
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>

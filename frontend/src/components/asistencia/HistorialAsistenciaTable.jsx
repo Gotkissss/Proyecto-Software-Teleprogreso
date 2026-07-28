@@ -19,6 +19,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import Badge from '../ui/Badge'
 import PageState from '../ui/PageState'
+import {
+  getEmpleadosParaFiltro,
+  getHistorialAsistencia,
+} from '../../api/asistenciaService'
+import styles from './HistorialAsistenciaTable.module.css'
 
 const IconCalendario = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -28,11 +33,6 @@ const IconCalendario = () => (
     <line x1="3" y1="10" x2="21" y2="10" />
   </svg>
 )
-import {
-  getEmpleadosParaFiltro,
-  getHistorialAsistencia,
-} from '../../api/asistenciaService'
-import styles from './HistorialAsistenciaTable.module.css'
 
 const PAGE_SIZE = 15
 

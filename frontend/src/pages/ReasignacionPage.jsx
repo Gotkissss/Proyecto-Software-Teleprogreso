@@ -168,16 +168,17 @@ export default function ReasignacionPage() {
     getTecnicosDisponibles().then(setTecnicos).catch(() => {})
   }
 
-  const estado = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando tareas..."
-      error={error}
-      onRetry={fetchData}
-      errorTitle="No se pudieron cargar las tareas"
-    />
-  )
-  if (estado) return estado
+  if (loading || error) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando tareas..."
+        error={error}
+        onRetry={fetchData}
+        errorTitle="No se pudieron cargar las tareas"
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>

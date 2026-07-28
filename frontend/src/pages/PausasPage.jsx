@@ -262,16 +262,17 @@ export default function PausasPage() {
     return                          { label: 'Activo',             color: '#16a34a' }
   }
 
-  const estadoPagina = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando asistencia..."
-      error={!asistencia ? error : null}
-      onRetry={fetchData}
-      errorTitle="No se pudo cargar tu asistencia"
-    />
-  )
-  if (estadoPagina) return estadoPagina
+  if (loading || (error && !asistencia)) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando asistencia..."
+        error={!asistencia ? error : null}
+        onRetry={fetchData}
+        errorTitle="No se pudo cargar tu asistencia"
+      />
+    )
+  }
 
   const estadoJornada = getEstadoJornada()
   // Tiempo restante de jornada (8h - transcurrido)

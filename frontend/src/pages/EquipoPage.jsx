@@ -102,16 +102,17 @@ export default function EquipoPage() {
     fetchEquipo()
   }, [fetchEquipo])
 
-  const estado = (
-    <PageState
-      loading={loading}
-      loadingLabel="Cargando tu equipo..."
-      error={error}
-      onRetry={fetchEquipo}
-      errorTitle="No se pudo cargar tu equipo"
-    />
-  )
-  if (estado) return estado
+  if (loading || error) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando tu equipo..."
+        error={error}
+        onRetry={fetchEquipo}
+        errorTitle="No se pudo cargar tu equipo"
+      />
+    )
+  }
 
   const estadoVeh = ESTADO_VEHICULO[vehiculo?.estado_vehiculo] ?? ESTADO_VEHICULO.disponible
 

@@ -580,18 +580,20 @@ export default function EmpleadosPage() {
   const totalActivos   = empleados.filter(e => e.estado === 'activo').length
   const totalInactivos = empleados.filter(e => e.estado === 'inactivo').length
 
-  const estadoPagina = tabActiva === 'empleados'
-    ? (
-        <PageState
-          loading={loading}
-          loadingLabel="Cargando empleados..."
-          error={empleados.length === 0 ? error : null}
-          onRetry={fetchEmpleados}
-          errorTitle="No se pudieron cargar los empleados"
-        />
-      )
-    : null
-  if (estadoPagina) return estadoPagina
+  const mostrarEstadoPagina =
+    tabActiva === 'empleados' && (loading || (error && empleados.length === 0))
+
+  if (mostrarEstadoPagina) {
+    return (
+      <PageState
+        loading={loading}
+        loadingLabel="Cargando empleados..."
+        error={empleados.length === 0 ? error : null}
+        onRetry={fetchEmpleados}
+        errorTitle="No se pudieron cargar los empleados"
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>
