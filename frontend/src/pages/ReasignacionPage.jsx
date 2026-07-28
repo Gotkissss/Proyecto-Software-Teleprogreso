@@ -9,6 +9,7 @@ import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
+import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { getTareas, getTecnicosDisponibles, reasignarTarea } from '../api/tareaService'
 import styles from './ReasignacionPage.module.css'
 
@@ -27,6 +28,7 @@ export default function ReasignacionPage() {
 
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null)
   const [tareaEditando, setTareaEditando] = useState(null)
+  const [tareaEvidencias, setTareaEvidencias] = useState(null)
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
@@ -192,6 +194,15 @@ export default function ReasignacionPage() {
         onGuardado={handleTareaEditada}
       />
 
+      {/* SCRUM-141/142: evidencias que dejó el técnico al cerrar la tarea */}
+      <ModalEvidencias
+        open={Boolean(tareaEvidencias)}
+        tarea={tareaEvidencias}
+        onClose={() => setTareaEvidencias(null)}
+        puedeEliminar
+        onCambio={fetchData}
+      />
+
       {/* HEADER NUEVO */}
       <div className={styles.pageHeader}>
         <h1 className={styles.title}>
@@ -251,6 +262,16 @@ export default function ReasignacionPage() {
                           : 'warning'
                     }
                   />
+
+                  {tarea.total_incidencias > 0 && (
+                    <button
+                      className={styles.evidenciasBtn}
+                      onClick={() => setTareaEvidencias(tarea)}
+                      title="Ver las evidencias que dejó el técnico"
+                    >
+                      Evidencias ({tarea.total_incidencias})
+                    </button>
+                  )}
 
                   <button
                     className={styles.editarBtn}

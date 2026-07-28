@@ -266,7 +266,6 @@
   background: var(--color-bg);
   border: 1px solid transparent;
   border-left: 3px solid var(--color-primary);
-  cursor: pointer;
   transition: var(--transition);
 }
 .tareaItem:hover {
@@ -278,6 +277,7 @@
 }
 
 .tareaInfo {
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -297,4 +297,56 @@
 .tareaTecnico {
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
+}
+
+/* ── Acciones de la fila de tarea (SCRUM-141) ─────────────── */
+.tareaAcciones {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.evidenciasBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.evidenciasBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.evidenciasBtn svg { width: 14px; height: 14px; }
+
+.evidenciasCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+@media (max-width: 560px) {
+  .tareaItem { flex-wrap: wrap; }
+  .tareaAcciones { width: 100%; justify-content: space-between; }
 }

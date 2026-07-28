@@ -13,7 +13,16 @@ import { getTareas } from '../api/tareaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
+import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import styles from './DashboardPage.module.css'
+
+const IconFoto = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+)
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -49,6 +58,8 @@ export default function DashboardPage() {
   const [tareasList,    setTareasList]    = useState([])
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState(null)
+  // Tarea cuyas evidencias está revisando el supervisor (SCRUM-141/142)
+  const [tareaEvidencias, setTareaEvidencias] = useState(null)
 
 
   const fetchData = useCallback(async () => {
@@ -66,9 +77,14 @@ export default function DashboardPage() {
           // Adaptar tareas al formato que usa la tabla del dashboard
           setTareasList(
             (Array.isArray(tareas) ? tareas : []).map((t) => ({
-              id:     t.id_tarea,
-              titulo: t.titulo,
-              estado: t.estado_tarea,
+              id:       t.id_tarea,
+              id_tarea: t.id_tarea,
+              titulo:   t.titulo,
+              estado:   t.estado_tarea,
+              // SCRUM-141: el backend ya dice cuántas evidencias tiene cada
+              // tarea, así no hay que pedir el detalle de todas para saber
+              // cuáles muestran el botón de "ver evidencias".
+              total_incidencias: t.total_incidencias ?? 0,
               tecnico: t.tecnico
                 ? { nombre_completo: t.tecnico.nombre }
                 : null,
@@ -184,30 +200,57 @@ export default function DashboardPage() {
         ) : (
           <ul className={styles.tareasList}>
             {tareasList.slice(0, 5).map((tarea) => (
-              <li
-                key={tarea.id}
-                className={styles.tareaItem}
-                onClick={() => navigate('/supervisor/reasignacion')}
-              >
-                <div className={styles.tareaInfo}>
+              <li key={tarea.id} className={styles.tareaItem}>
+                <div
+                  className={styles.tareaInfo}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate('/supervisor/reasignacion')}
+                  onKeyDown={(e) => e.key === 'Enter' && navigate('/supervisor/reasignacion')}
+                >
                   <span className={styles.tareaTitulo}>{tarea.titulo}</span>
                   <span className={styles.tareaTecnico}>
                     {tarea.tecnico?.nombre_completo ?? 'Sin asignar'}
                   </span>
                 </div>
-                <Badge
-                  label={tarea.estado}
-                  variant={
-                    tarea.estado === 'completado'  ? 'success' :
-                    tarea.estado === 'en_progreso' ? 'info'    :
-                    tarea.estado === 'retrasado'   ? 'danger'  : 'warning'
-                  }
-                />
+
+                <div className={styles.tareaAcciones}>
+                  {tarea.total_incidencias > 0 && (
+                    <button
+                      className={styles.evidenciasBtn}
+                      onClick={() => setTareaEvidencias(tarea)}
+                      title="Ver las evidencias que dejó el técnico"
+                    >
+                      <IconFoto />
+                      Evidencias
+                      <span className={styles.evidenciasCount}>
+                        {tarea.total_incidencias}
+                      </span>
+                    </button>
+                  )}
+                  <Badge
+                    label={tarea.estado}
+                    variant={
+                      tarea.estado === 'completado'  ? 'success' :
+                      tarea.estado === 'en_progreso' ? 'info'    :
+                      tarea.estado === 'retrasado'   ? 'danger'  : 'warning'
+                    }
+                  />
+                </div>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* SCRUM-141/142: evidencias de la tarea seleccionada */}
+      <ModalEvidencias
+        open={Boolean(tareaEvidencias)}
+        tarea={tareaEvidencias}
+        onClose={() => setTareaEvidencias(null)}
+        puedeEliminar
+        onCambio={fetchData}
+      />
     </div>
   )
 }

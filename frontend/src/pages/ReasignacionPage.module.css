@@ -479,3 +479,24 @@
   border-color: var(--color-primary);
   transform: translateY(-1px);
 }
+
+/* ── Botón "Evidencias" (SCRUM-141) ────────────────────────── */
+.evidenciasBtn {
+  padding: 9px 16px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  letter-spacing: 0.02em;
+}
+
+.evidenciasBtn:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}

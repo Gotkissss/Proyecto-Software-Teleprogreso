@@ -1,11 +1,12 @@
 import { useCallback, useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getMiRuta, iniciarServicio, terminarServicio } from '../api/rutaService'
+import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
+import ModalFinalizarTarea from '../components/tareas/ModalFinalizarTarea'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -183,6 +184,8 @@ export default function RutaDiariaPage() {
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState(null)
   const [detalleAbierto, setDetalleAbierto] = useState(null)
+  // Tarea que el técnico está cerrando desde el modal de evidencia (SCRUM-139)
+  const [tareaFinalizando, setTareaFinalizando] = useState(null)
 
   // Los contadores se derivan de los datos, no de estado local: antes
   // arrancaban en 0 en cada montaje, así que al recargar la pantalla decían
@@ -243,38 +246,28 @@ export default function RutaDiariaPage() {
     }
   }
 
-  const handleTerminar = async (idServicio) => {
+  /**
+   * Una tarea ya no se cierra directamente: primero se pide la evidencia.
+   * El estado local solo cambia cuando el backend confirmó que la guardó,
+   * así no se marca como completada una tarea cuya foto no llegó a subirse.
+   */
+  const handleTerminar = (idServicio) => {
     const servicio = servicios.find((s) => s.id_servicio === idServicio)
     if (!servicio) return
-
-    const estadoPrevio = servicio.estado
-
-    setServicios((prev) => {
-      const actualizada = prev.map((s) =>
-        s.id_servicio === idServicio ? { ...s, estado: 'completado' } : s
-      )
-      return ordenarServicios(actualizada)
-    })
     setDetalleAbierto(null)
+    setTareaFinalizando(servicio)
+  }
 
-    // Antes esto solo cambiaba el estado en memoria: al recargar la pantalla
-    // la tarea volvía a aparecer sin completar porque nunca se avisaba al
-    // backend. (El modal de evidencia de SCRUM-139 se montará sobre esto.)
-    try {
-      await terminarServicio(idServicio)
-      toast.success('Tarea marcada como completada.')
-    } catch (err) {
-      const detalle = err?.response?.data?.detail ?? err.message
-      console.error('No se pudo completar la tarea:', detalle)
-      setServicios((prev) =>
-        ordenarServicios(
-          prev.map((s) =>
-            s.id_servicio === idServicio ? { ...s, estado: estadoPrevio } : s
-          )
+  const handleFinalizada = (idServicio) => {
+    setServicios((prev) =>
+      ordenarServicios(
+        prev.map((s) =>
+          s.id_servicio === idServicio
+            ? { ...s, estado: 'completado', total_incidencias: (s.total_incidencias ?? 0) + 1 }
+            : s
         )
       )
-      toast.error(detalle || 'No se pudo completar la tarea.')
-    }
+    )
   }
 
   const handleVerDetalle = (servicio) => {
@@ -389,6 +382,14 @@ export default function RutaDiariaPage() {
           onTerminar={handleTerminar}
         />
       )}
+
+      {/* SCRUM-139/140: evidencia obligatoria al cerrar la tarea */}
+      <ModalFinalizarTarea
+        open={Boolean(tareaFinalizando)}
+        servicio={tareaFinalizando}
+        onClose={() => setTareaFinalizando(null)}
+        onFinalizada={handleFinalizada}
+      />
     </div>
   )
 }

@@ -1,0 +1,224 @@
+/* ============================================================
+   ModalFinalizarTarea — evidencia de cierre del técnico
+   ============================================================ */
+
+.tarea {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.label {
+  display: block;
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.label:first-of-type { margin-top: 0; }
+
+.required { color: var(--color-danger); }
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 92px;
+  transition: var(--transition);
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.campoError {
+  border-color: var(--color-danger);
+}
+
+.errorCampo {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-danger-dark);
+}
+
+.errorGeneral {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-light);
+  border-radius: var(--radius-md);
+  color: var(--color-danger-dark);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ── Selector de foto ─────────────────────────────────────── */
+.inputOculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  background: var(--color-bg);
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: center;
+  transition: var(--transition);
+}
+
+.dropzone:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-50);
+}
+
+.dropzoneIcono {
+  display: flex;
+  color: var(--color-primary);
+}
+.dropzoneIcono svg { width: 32px; height: 32px; }
+
+.dropzoneTexto {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dropzoneHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Preview ──────────────────────────────────────────────── */
+.previewWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.preview {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-alt);
+}
+
+.previewInfo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.previewNombre {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewPeso {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.quitarBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  color: var(--color-danger-dark);
+  border: 1px solid var(--color-danger-light);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.quitarBtn:hover:not(:disabled) {
+  background: var(--color-danger-bg);
+}
+
+.quitarBtn svg { width: 14px; height: 14px; }
+
+/* ── Acciones ─────────────────────────────────────────────── */
+.cancelBtn,
+.guardarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 11px 20px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cancelBtn {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.cancelBtn:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-text-secondary);
+}
+
+.guardarBtn {
+  background: var(--gradient-success, var(--gradient-primary));
+  color: #fff;
+  border: none;
+}
+
+.guardarBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.cancelBtn:disabled,
+.guardarBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}

@@ -17,11 +17,24 @@ const isLocalhost =
   (window.location.hostname === 'localhost' ||
    window.location.hostname === '127.0.0.1')
 
-const BASE_URL =
+export const BASE_URL =
   import.meta.env.VITE_API_URL ||
   (isLocalhost
     ? 'http://localhost:8000'
     : 'https://backend-production-6d60.up.railway.app')
+
+/**
+ * Convierte una ruta de archivo del backend (`/static/...`) en URL absoluta.
+ * El backend guarda las fotos de activos y de evidencias como rutas relativas;
+ * sin esto las imágenes apuntarían al dominio del frontend y saldrían rotas.
+ *
+ * @param {string|null|undefined} ruta
+ * @returns {string|null}
+ */
+export function urlArchivo(ruta) {
+  if (!ruta) return null
+  return ruta.startsWith('http') ? ruta : BASE_URL + ruta
+}
 
 const apiClient = axios.create({
   baseURL: BASE_URL,

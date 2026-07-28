@@ -99,7 +99,22 @@ vi.mock('../api/tareaService', () => ({
   actualizarEstado: vi.fn(async () => ({})),
 }))
 
+vi.mock('../api/incidenciaService', () => ({
+  getIncidencias: vi.fn(async () => []),
+  crearIncidencia: vi.fn(async () => ({ id_incidencia: 1 })),
+  subirFotoEvidencia: vi.fn(async () => ({ foto_evidencia: '/static/x.jpg' })),
+  eliminarIncidencia: vi.fn(async () => ({})),
+  finalizarTareaConEvidencia: vi.fn(async () => ({ id_incidencia: 1 })),
+  validarFoto: () => null,
+  EXTENSIONES_FOTO: ['.jpg', '.png'],
+  ACCEPT_FOTO: '.jpg,.png',
+  MAX_FOTO_MB: 5,
+  MIN_DESCRIPCION: 5,
+}))
+
 vi.mock('../api/client', () => ({
+  urlArchivo: (ruta) => (ruta ? `http://backend.test${ruta}` : null),
+  BASE_URL: 'http://backend.test',
   default: {
     get: vi.fn(async (url) => {
       if (url.startsWith('/metricas/supervisor')) {
