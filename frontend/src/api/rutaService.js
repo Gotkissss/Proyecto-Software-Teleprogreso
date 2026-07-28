@@ -40,7 +40,6 @@ export const getMiRuta = async (idTecnico) => {
     nombre:      t.titulo,
     direccion:   t.direccion_servicio ?? 'Dirección no especificada',
     tipo:        _inferirTipo(t.titulo, t.descripcion),
-    km:          null,  // no disponible en el backend actual
   }))
 
   // Calcular alerta si hay urgentes pendientes
@@ -70,6 +69,19 @@ export const getMiRuta = async (idTecnico) => {
  */
 export const iniciarServicio = async (idTarea) => {
   const { data } = await apiClient.patch(`/tareas/${idTarea}/iniciar`)
+  return data
+}
+
+/**
+ * Marca una tarea como completada en el backend.
+ * Corresponde a PATCH /tareas/{id}/estado con estado='completado'.
+ *
+ * @param {number} idTarea
+ */
+export const terminarServicio = async (idTarea) => {
+  const { data } = await apiClient.patch(`/tareas/${idTarea}/estado`, {
+    estado: 'completado',
+  })
   return data
 }
 

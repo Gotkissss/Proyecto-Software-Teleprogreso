@@ -12,7 +12,7 @@
  * ---------------------------------------------------------------------------
  */
 
-import { useCallback, useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import apiClient from '../api/client'
 import Spinner from '../components/ui/Spinner'

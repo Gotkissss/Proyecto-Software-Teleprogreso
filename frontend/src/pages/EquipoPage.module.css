@@ -7,7 +7,9 @@
 .page {
   font-family: var(--font-sans);
   background: var(--color-bg);
-  min-height: 100vh;
+  /* 100% del contenedor scrolleable, no 100vh: dentro de <main> el 100vh
+     provocaba scroll de más aunque hubiera poco contenido. */
+  min-height: 100%;
   padding: var(--space-5) var(--space-4) var(--space-12);
   color: var(--color-text);
   box-sizing: border-box;

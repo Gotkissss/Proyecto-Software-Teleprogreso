@@ -61,7 +61,11 @@
 
 .main {
   flex: 1;
+  min-height: 0;          /* permite que el scroll viva aquí y no en el body */
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: var(--bottom-nav-height);
+  /* La barra inferior es un hermano en el flujo (no fixed), así que no hace
+     falta reservarle alto: solo se deja aire para el gesto de scroll en móvil. */
+  padding-bottom: var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
 }

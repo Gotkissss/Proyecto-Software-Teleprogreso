@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getMiRuta, iniciarServicio } from '../api/rutaService'
+import { getMiRuta, iniciarServicio, terminarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
@@ -77,10 +77,6 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar }) {
               <span className={styles.panelDetailVal} style={{ textTransform: 'capitalize' }}>
                 {servicio.prioridad}
               </span>
-            </div>
-            <div className={styles.panelDetailRow}>
-              <span className={styles.panelDetailKey}>Distancia aprox.</span>
-              <span className={styles.panelDetailVal}>{servicio.km} km</span>
             </div>
           </div>
 
@@ -188,9 +184,9 @@ export default function RutaDiariaPage() {
   const [error,          setError]          = useState(null)
   const [detalleAbierto, setDetalleAbierto] = useState(null)
 
-  // Contadores acumulados
-  const [paradasCompletadas, setParadasCompletadas] = useState(0)
-  const [kmAcumulados,       setKmAcumulados]       = useState(0)
+  // Los contadores se derivan de los datos, no de estado local: antes
+  // arrancaban en 0 en cada montaje, así que al recargar la pantalla decían
+  // "0 paradas" aunque el técnico ya hubiera cerrado tareas ese día.
 
   const fetchRuta = useCallback(async () => {
     setLoading(true)
@@ -247,12 +243,11 @@ export default function RutaDiariaPage() {
     }
   }
 
-  const handleTerminar = (idServicio) => {
+  const handleTerminar = async (idServicio) => {
     const servicio = servicios.find((s) => s.id_servicio === idServicio)
     if (!servicio) return
 
-    setParadasCompletadas((prev) => prev + 1)
-    setKmAcumulados((prev) => prev + (servicio.km ?? 0))
+    const estadoPrevio = servicio.estado
 
     setServicios((prev) => {
       const actualizada = prev.map((s) =>
@@ -260,8 +255,26 @@ export default function RutaDiariaPage() {
       )
       return ordenarServicios(actualizada)
     })
-
     setDetalleAbierto(null)
+
+    // Antes esto solo cambiaba el estado en memoria: al recargar la pantalla
+    // la tarea volvía a aparecer sin completar porque nunca se avisaba al
+    // backend. (El modal de evidencia de SCRUM-139 se montará sobre esto.)
+    try {
+      await terminarServicio(idServicio)
+      toast.success('Tarea marcada como completada.')
+    } catch (err) {
+      const detalle = err?.response?.data?.detail ?? err.message
+      console.error('No se pudo completar la tarea:', detalle)
+      setServicios((prev) =>
+        ordenarServicios(
+          prev.map((s) =>
+            s.id_servicio === idServicio ? { ...s, estado: estadoPrevio } : s
+          )
+        )
+      )
+      toast.error(detalle || 'No se pudo completar la tarea.')
+    }
   }
 
   const handleVerDetalle = (servicio) => {
@@ -289,6 +302,10 @@ export default function RutaDiariaPage() {
   const nombre      = ruta?.tecnico?.nombre_completo ?? user?.nombre ?? 'Técnico'
   const primerNombre = nombre.split(' ')[0]
   const totalServicios = servicios.length
+  const paradasCompletadas = servicios.filter((s) => s.estado === 'completado').length
+  const paradasPendientes = servicios.filter(
+    (s) => s.estado === 'pendiente' || s.estado === 'en_progreso'
+  ).length
 
   return (
     <div className={styles.page}>
@@ -306,20 +323,20 @@ export default function RutaDiariaPage() {
         <h2 className={styles.greeting}>Hola, {primerNombre}</h2>
       </header>
 
-      {/* Contadores */}
+      {/* Contadores — derivados de las tareas reales del día */}
       <section className={styles.resumen}>
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconPin /></span>
           <span className={styles.resumenValue}>
             {paradasCompletadas}/{totalServicios}
           </span>
-          <span className={styles.resumenLabel}>PARADAS</span>
+          <span className={styles.resumenLabel}>COMPLETADAS</span>
         </div>
         <div className={styles.resumenDivider} />
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconRoute /></span>
-          <span className={styles.resumenValue}>{kmAcumulados} km</span>
-          <span className={styles.resumenLabel}>RECORRIDOS</span>
+          <span className={styles.resumenValue}>{paradasPendientes}</span>
+          <span className={styles.resumenLabel}>PENDIENTES</span>
         </div>
       </section>
 

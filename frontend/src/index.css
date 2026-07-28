@@ -152,6 +152,34 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
 }
 
+/* ── Red de seguridad para los íconos SVG ──────────────────────────────────
+   Todos los íconos de la app son <svg> inline con solo viewBox, sin width ni
+   height. Si nadie los dimensiona por CSS, el navegador los estira hasta
+   llenar el contenedor y la pantalla se vuelve inusable (le pasó al layout
+   del técnico cuando su hoja de estilos dejó de coincidir con el JSX).
+
+   Este default los acota a un tamaño razonable. Cualquier regla existente del
+   tipo `.claseDelWrapper svg { ... }` tiene más especificidad y lo sobrescribe,
+   así que no cambia ningún ícono ya estilizado.
+
+   El `:where()` cumple dos funciones: excluye los <svg> que ya traen width y
+   height como atributos (el CSS le gana a los atributos de presentación, y sin
+   esto la ilustración de EquipoPage se encogería a 20px), y aporta cero
+   especificidad para que la regla siga siendo la más débil de todas.
+   ------------------------------------------------------------------------ */
+svg:where(:not([width]):not([height])) {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Los enlaces de navegación nunca deben quedar con el subrayado azul/morado
+   por defecto si su clase no llegara a aplicarse. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* Selección */
 ::selection {
   background: var(--color-primary-light);
