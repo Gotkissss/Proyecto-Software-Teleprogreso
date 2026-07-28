@@ -7,12 +7,13 @@
  *   onAsignar       {fn}       - Callback(idsSeleccionados[]) llamado al confirmar
  *   onCerrar        {fn}       - Callback para cerrar el modal
  *
- * importnate mencionar que  los endpoints de backend están comentados en carroService.js.
- * Entonces el  modal funciona en modo MOCK mientras se implementa.
+ * Consume los endpoints reales de carroService.js
+ * (GET /activos/herramientas y POST /activos/carros/{id}/herramientas).
  * ---------------------------------------------------------------------------
  */
 
 import { useState, useEffect, useMemo } from 'react'
+import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import styles from './ModalAsignarHerramientas.module.css'
 import { getHerramientas } from '../../api/carroService'
@@ -139,27 +140,16 @@ export default function ModalAsignarHerramientas({
     filtradas.length > 0 && filtradas.every((h) => seleccionados.includes(h.id_activo))
 
   return (
-    <div className={styles.overlay} onClick={onCerrar}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-
-        {/* ── Encabezado ── */}
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <div className={styles.headerIcon}>
-              <IconWrench />
-            </div>
-            <div>
-              <h2 className={styles.headerTitle}>Asignar herramientas</h2>
-              <p className={styles.headerSubtitle}>
-                <IconCar />
-                {carro.placa} — {carro.marca ?? ''} {carro.modelo ?? ''}
-              </p>
-            </div>
-          </div>
-          <button className={styles.closeBtn} onClick={onCerrar} aria-label="Cerrar">
-            <IconX />
-          </button>
-        </div>
+    <Modal
+      open={Boolean(carro)}
+      onClose={onCerrar}
+      title="Asignar herramientas"
+      width={640}
+    >
+        <p className={styles.headerSubtitle}>
+          <IconCar />
+          {carro.placa} — {carro.marca ?? ''} {carro.modelo ?? ''}
+        </p>
 
         {/* Barra de búsqueda y filtro  */}
         <div className={styles.toolbar}>
@@ -303,7 +293,7 @@ export default function ModalAsignarHerramientas({
         )}
 
         {/*  Pie con botones */}
-        <div className={styles.footer}>
+        <ModalActions>
           <button className={styles.cancelBtn} onClick={onCerrar} disabled={guardando}>
             Cancelar
           </button>
@@ -321,8 +311,7 @@ export default function ModalAsignarHerramientas({
               </>
             )}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalActions>
+    </Modal>
   )
 }

@@ -501,3 +501,8 @@
   text-align: center;
   padding: var(--space-5) 0;
 }
+/* Tipo de pausa ya utilizada en esta jornada (antes con estilos inline) */
+.tipoPausaUsada {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

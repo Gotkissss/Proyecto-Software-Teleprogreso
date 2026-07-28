@@ -16,9 +16,10 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import PageState from '../components/ui/PageState'
 import StockBadge from '../components/ui/StockBadge'
+import { useToast } from '../components/ui/Toast'
 import {
   ESTADO_ALERTA,
   actualizarEstadoAlerta,
@@ -63,6 +64,21 @@ const TIPO_ALERTA_INFO = {
     describir: (id) => `El material #${id} está por debajo del stock mínimo.`,
   },
 }
+
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+)
+
+const IconStock = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+)
 
 /** Filtros de estado disponibles en la pestaña de alertas operativas. */
 const FILTROS_ESTADO = [
@@ -157,6 +173,8 @@ function MaterialStockCard({ material }) {
    COMPONENTE PRINCIPAL
   */
 export default function AlertasPage() {
+  const toast = useToast()
+
   /* Alertas operativas (persistentes, backend real) */
   const [alertas,      setAlertas]      = useState([])
   const [loadingAl,    setLoadingAl]    = useState(true)
@@ -195,24 +213,26 @@ export default function AlertasPage() {
   }, [fetchAlertas])
 
   /*  Fetch materiales bajo stock */
-  useEffect(() => {
-    const fetchStock = async () => {
-      try {
-        const data = await getMaterialesBajoStock()
-          setMateriales(data)
-      } catch (err) {
-        setErrorSt(
-          err?.response?.data?.detail ||
-          err?.message ||
-          'No se pudo cargar el inventario de stock crítico.'
-        )
-        console.error(err)
-      } finally {
-        setLoadingSt(false)
-      }
+  const fetchStock = useCallback(async () => {
+    setLoadingSt(true)
+    try {
+      setErrorSt(null)
+      setMateriales(await getMaterialesBajoStock())
+    } catch (err) {
+      setErrorSt(
+        err?.response?.data?.detail ||
+        err?.message ||
+        'No se pudo cargar el inventario de stock crítico.'
+      )
+      console.error(err)
+    } finally {
+      setLoadingSt(false)
     }
-    fetchStock()
   }, [])
+
+  useEffect(() => {
+    fetchStock()
+  }, [fetchStock])
 
   /* Atender o descartar una alerta persistida */
   const handleActualizarEstado = async (id, estado) => {
@@ -225,8 +245,13 @@ export default function AlertasPage() {
           ? prev.map((a) => (a.id_alerta === id ? { ...a, ...actualizada } : a))
           : prev.filter((a) => a.id_alerta !== id)
       )
+      toast.success(
+        estado === ESTADO_ALERTA.ATENDIDA
+          ? 'Alerta marcada como atendida.'
+          : 'Alerta descartada.'
+      )
     } catch (err) {
-      setErrorAl(describirErrorAlertas(err))
+      toast.error(describirErrorAlertas(err))
       console.error('Error al actualizar la alerta:', err)
     } finally {
       setActualizando(null)
@@ -296,24 +321,26 @@ export default function AlertasPage() {
             </button>
           </div>
 
-          {loadingAl ? (
-            <div className={styles.center}><Spinner size="lg" /></div>
-          ) : errorAl ? (
-            <div className={styles.errorWrap}>
-              <p className={styles.errorMsg}>{errorAl}</p>
-              <button className={styles.reintentarBtn} onClick={fetchAlertas}>
-                Reintentar
-              </button>
-            </div>
-          ) : alertasActivas.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>✓</div>
-              <p className={styles.emptyMsg}>
-                {filtroEstado === ESTADO_ALERTA.PENDIENTE
-                  ? 'No hay alertas operativas pendientes.'
-                  : 'No hay alertas con este estado.'}
-              </p>
-            </div>
+          {loadingAl || errorAl || alertasActivas.length === 0 ? (
+            <PageState
+              loading={loadingAl}
+              loadingLabel="Buscando alertas..."
+              error={errorAl}
+              onRetry={fetchAlertas}
+              errorTitle="No se pudieron cargar las alertas"
+              empty
+              emptyIcon={<IconCheck />}
+              emptyTitle={
+                filtroEstado === ESTADO_ALERTA.PENDIENTE
+                  ? 'Todo en orden'
+                  : 'No hay alertas con este estado'
+              }
+              emptyDescription={
+                filtroEstado === ESTADO_ALERTA.PENDIENTE
+                  ? 'No hay alertas operativas pendientes en este momento.'
+                  : 'Prueba con otro filtro para ver el historial de alertas.'
+              }
+            />
           ) : (
             <ul className={styles.alertasList}>
               {alertasActivas.map((alerta) => {
@@ -377,19 +404,18 @@ export default function AlertasPage() {
          */}
       {tabActiva === 'stock' && (
         <section className={styles.tabPanel}>
-          {loadingSt ? (
-            <div className={styles.center}><Spinner size="lg" /></div>
-          ) : errorSt ? (
-            <div className={styles.stockErrorWrap}>
-              <p className={styles.errorMsg}>{errorSt}</p>
-            </div>
-          ) : materiales.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>✓</div>
-              <p className={styles.emptyMsg}>
-                Todos los materiales tienen stock suficiente.
-              </p>
-            </div>
+          {loadingSt || errorSt || materiales.length === 0 ? (
+            <PageState
+              loading={loadingSt}
+              loadingLabel="Revisando el inventario..."
+              error={errorSt}
+              onRetry={fetchStock}
+              errorTitle="No se pudo cargar el stock crítico"
+              empty
+              emptyIcon={<IconStock />}
+              emptyTitle="Inventario en buen estado"
+              emptyDescription="Todos los materiales están por encima de su stock mínimo."
+            />
           ) : (
             <>
               {/* Resumen rápido */}

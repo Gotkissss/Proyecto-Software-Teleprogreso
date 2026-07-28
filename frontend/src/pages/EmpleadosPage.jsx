@@ -12,11 +12,14 @@
  * ---------------------------------------------------------------------------
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import apiClient from '../api/client'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import Modal, { ModalActions } from '../components/ui/Modal'
+import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import HistorialAsistenciaTable from '../components/asistencia/HistorialAsistenciaTable'
 import styles from './EmpleadosPage.module.css'
 
@@ -254,20 +257,8 @@ function PanelCrearEmpleado({ onCreado, onCerrar, empleadosExistentes }) {
   const campoTieneError = (campo) => tocados[campo] && errores[campo]
 
   return (
-    <div className={styles.panelOverlay} onClick={onCerrar}>
-      <div className={styles.editPanel} onClick={e => e.stopPropagation()}>
-        <div className={styles.editPanelHeader}>
-          <div className={styles.editPanelHeaderLeft}>
-            <div className={styles.editAvatar} style={{ background: '#dbeafe', color: '#2563eb' }}>
-              <IconUserPlus />
-            </div>
-            <div>
-              <h2 className={styles.editPanelTitle}>Nuevo empleado</h2>
-              <p className={styles.editPanelSubtitle}>Completa todos los campos obligatorios</p>
-            </div>
-          </div>
-          <button className={styles.panelCloseBtn} onClick={onCerrar} aria-label="Cerrar panel"><IconX /></button>
-        </div>
+    <Modal open onClose={onCerrar} title="Nuevo empleado" width={620}>
+        <p className={styles.editPanelSubtitle}>Completa todos los campos obligatorios</p>
         {errorServidor && (
           <div className={styles.editErrorBanner}><IconAlert /><span>{errorServidor}</span></div>
         )}
@@ -349,15 +340,14 @@ function PanelCrearEmpleado({ onCreado, onCerrar, empleadosExistentes }) {
             </div>
             {campoTieneError('confirmar_contrasena') && <p className={styles.editFieldError}>{errores.confirmar_contrasena}</p>}
           </div>
-          <div className={styles.editFormBtns}>
+          <ModalActions>
             <button type="button" className={styles.editCancelBtn} onClick={onCerrar} disabled={cargando}>Cancelar</button>
             <button type="submit" className={styles.editSaveBtn} disabled={cargando}>
               {cargando ? <><Spinner size="sm" color="white" /> Creando...</> : <><IconUserPlus /> Crear empleado</>}
             </button>
-          </div>
+          </ModalActions>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -365,26 +355,28 @@ function ModalConfirmacion({ empleado, onConfirmar, onCancelar, cargando }) {
   const esActivo    = empleado.estado === 'activo'
   const nuevoEstado = esActivo ? 'inactivo' : 'activo'
   return (
-    <div className={styles.modalOverlay} onClick={onCancelar}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+    <Modal
+      open
+      onClose={onCancelar}
+      title={esActivo ? 'Desactivar empleado' : 'Activar empleado'}
+      width={420}
+    >
         <div className={`${styles.modalIconWrap} ${esActivo ? styles.modalIconDanger : styles.modalIconSuccess}`}>
           {esActivo ? <IconAlert /> : <IconCheck />}
         </div>
-        <h3 className={styles.modalTitle}>{esActivo ? 'Desactivar empleado' : 'Activar empleado'}</h3>
         <p className={styles.modalDesc}>
           {esActivo
             ? <><strong>{empleado.nombre} {empleado.apellido}</strong> no podrá iniciar sesión mientras esté inactivo.</>
             : <>¿Deseas activar nuevamente a <strong>{empleado.nombre} {empleado.apellido}</strong>?</>
           }
         </p>
-        <div className={styles.modalBtns}>
+        <ModalActions>
           <button className={styles.modalCancelBtn} onClick={onCancelar} disabled={cargando}>Cancelar</button>
           <button className={`${styles.modalConfirmBtn} ${esActivo ? styles.modalConfirmDanger : styles.modalConfirmSuccess}`} onClick={() => onConfirmar(empleado.id_empleado, nuevoEstado)} disabled={cargando}>
             {cargando ? <><Spinner size="sm" color="white" /> Procesando...</> : esActivo ? 'Sí, desactivar' : 'Sí, activar'}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalActions>
+    </Modal>
   )
 }
 
@@ -415,18 +407,8 @@ function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
     onGuardar(empleado.id_empleado, cambios)
   }
   return (
-    <div className={styles.panelOverlay} onClick={onCerrar}>
-      <div className={styles.editPanel} onClick={e => e.stopPropagation()}>
-        <div className={styles.editPanelHeader}>
-          <div className={styles.editPanelHeaderLeft}>
-            <div className={styles.editAvatar}>{empleado.nombre[0]?.toUpperCase()}{empleado.apellido[0]?.toUpperCase()}</div>
-            <div>
-              <h2 className={styles.editPanelTitle}>Editar empleado</h2>
-              <p className={styles.editPanelSubtitle}>ID #{empleado.id_empleado} — {empleado.correo}</p>
-            </div>
-          </div>
-          <button className={styles.panelCloseBtn} onClick={onCerrar} aria-label="Cerrar panel"><IconX /></button>
-        </div>
+    <Modal open onClose={onCerrar} title="Editar empleado" width={620}>
+        <p className={styles.editPanelSubtitle}>ID #{empleado.id_empleado} — {empleado.correo}</p>
         {errorMsg && <div className={styles.editErrorBanner}><IconAlert /><span>{errorMsg}</span></div>}
         <form className={styles.editForm} onSubmit={handleSubmit} noValidate>
           <div className={styles.editFormGrid}>
@@ -457,15 +439,14 @@ function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
               {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
             </select>
           </div>
-          <div className={styles.editFormBtns}>
+          <ModalActions>
             <button type="button" className={styles.editCancelBtn} onClick={onCerrar} disabled={cargando}>Cancelar</button>
             <button type="submit" className={styles.editSaveBtn} disabled={cargando}>
               {cargando ? <><Spinner size="sm" color="white" /> Guardando...</> : 'Guardar cambios'}
             </button>
-          </div>
+          </ModalActions>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -473,6 +454,8 @@ function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
    COMPONENTE PRINCIPAL
    ══════════════════════════════════════════════════════════════ */
 export default function EmpleadosPage() {
+  const toast = useToast()
+
   // SCRUM-137: tab "Historial" con la tabla filtrable por fechas
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabActiva, setTabActiva] = useState(
@@ -500,34 +483,24 @@ export default function EmpleadosPage() {
 
   const [mostrarCrear,   setMostrarCrear]   = useState(false)
 
-  const [successMsg,     setSuccessMsg]     = useState(null)
-  const successTimer = useRef(null)
-
-  const mostrarExito = (msg) => {
-    setSuccessMsg(msg)
-    clearTimeout(successTimer.current)
-    successTimer.current = setTimeout(() => setSuccessMsg(null), 4000)
-  }
-
-  useEffect(() => () => clearTimeout(successTimer.current), [])
+  const fetchEmpleados = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { data } = await apiClient.get('/empleados')
+      setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'No se pudieron cargar los empleados.')
+    } finally { setLoading(false) }
+  }, [])
 
   useEffect(() => {
-    const fetchEmpleados = async () => {
-      setLoading(true); setError(null)
-      try {
-        const { data } = await apiClient.get('/empleados')
-        setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
-      } catch (err) {
-        setError(err?.response?.data?.detail || 'No se pudieron cargar los empleados.')
-      } finally { setLoading(false) }
-    }
     fetchEmpleados()
-  }, [])
+  }, [fetchEmpleados])
 
   const handleEmpleadoCreado = (nuevoEmpleado) => {
     setEmpleados(prev => [nuevoEmpleado, ...prev])
     setMostrarCrear(false)
-    mostrarExito(`Empleado ${nuevoEmpleado.nombre} ${nuevoEmpleado.apellido} creado correctamente.`)
+    toast.success(`Empleado ${nuevoEmpleado.nombre} ${nuevoEmpleado.apellido} creado correctamente.`)
   }
 
   const handleGuardarEdicion = async (id, cambios) => {
@@ -536,7 +509,7 @@ export default function EmpleadosPage() {
       const { data } = await apiClient.patch(`/empleados/${id}`, cambios)
       setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...data } : e))
       setEmpleadoEditar(null)
-      mostrarExito('Empleado actualizado correctamente.')
+      toast.success('Empleado actualizado correctamente.')
     } catch (err) {
       const detail = err?.response?.data?.detail
       setEditError(Array.isArray(detail) ? detail.map(d => d.message || d.msg).join(', ') : detail || 'Error al guardar los cambios.')
@@ -548,10 +521,10 @@ export default function EmpleadosPage() {
     try {
       const { data } = await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
       setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: data.estado } : e))
-      mostrarExito(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} correctamente.`)
+      toast.success(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} correctamente.`)
       setEmpleadoToggle(null)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Error al cambiar el estado.')
+      toast.error(err?.response?.data?.detail || 'No se pudo cambiar el estado del empleado.')
       setEmpleadoToggle(null)
     } finally { setToggleCargando(false) }
   }
@@ -607,18 +580,18 @@ export default function EmpleadosPage() {
   const totalActivos   = empleados.filter(e => e.estado === 'activo').length
   const totalInactivos = empleados.filter(e => e.estado === 'inactivo').length
 
-  if (loading && tabActiva === 'empleados') {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Cargando empleados...</p>
-      </div>
-    )
-  }
-
-  if (error && empleados.length === 0 && tabActiva === 'empleados') {
-    return <div className={styles.center}><p className={styles.errorText}>{error}</p></div>
-  }
+  const estadoPagina = tabActiva === 'empleados'
+    ? (
+        <PageState
+          loading={loading}
+          loadingLabel="Cargando empleados..."
+          error={empleados.length === 0 ? error : null}
+          onRetry={fetchEmpleados}
+          errorTitle="No se pudieron cargar los empleados"
+        />
+      )
+    : null
+  if (estadoPagina) return estadoPagina
 
   return (
     <div className={styles.page}>
@@ -664,24 +637,7 @@ export default function EmpleadosPage() {
 
       {tabActiva === 'empleados' && (<>
 
-      {successMsg && (
-        <div className={styles.toast} role="status" aria-live="polite">
-          <span className={styles.toastIcon}><IconCheck /></span>
-          <div className={styles.toastBody}>
-            <span className={styles.toastTitle}>¡Listo!</span>
-            <span className={styles.toastMsg}>{successMsg}</span>
-          </div>
-          <button
-            type="button"
-            className={styles.toastClose}
-            onClick={() => setSuccessMsg(null)}
-            aria-label="Cerrar notificación"
-          >
-            <IconX />
-          </button>
-          <span className={styles.toastBar} />
-        </div>
-      )}
+      {/* El aviso de éxito sale por el toast global (components/ui/Toast). */}
       {error && empleados.length > 0 && (
         <div className={styles.errorBanner}>{error}</div>
       )}

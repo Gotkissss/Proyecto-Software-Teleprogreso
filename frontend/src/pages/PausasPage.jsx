@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import {
   getAsistenciaHoy,
   registrarEntrada,
@@ -7,7 +7,10 @@ import {
   finalizarJornada,
   getTiposPausa,
 } from '../api/asistenciaService'
+import Modal from '../components/ui/Modal'
 import Spinner from '../components/ui/Spinner'
+import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import styles from './PausasPage.module.css'
 
 
@@ -18,7 +21,6 @@ const IconCheck   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const IconBolt    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
 const IconTimer   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13"/><line x1="12" y1="3" x2="12" y2="5"/></svg>
 const IconHistory = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.01"/></svg>
-const IconX       = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 const IconCoffee  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
 const IconLogin   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
 
@@ -48,44 +50,36 @@ const formatDuracion = (seconds) => {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
-function ModalPausa({ tipos, pausasUsadas, onSelect, onClose, loading }) {
+function ModalPausa({ open, tipos, pausasUsadas, onSelect, onClose, loading }) {
+  // Antes era un overlay propio de esta página; ahora usa el Modal compartido.
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h3 className={styles.modalTitle}>Seleccionar tipo de pausa</h3>
-          <button className={styles.modalClose} onClick={onClose} aria-label="Cerrar">
-            <IconX />
-          </button>
-        </div>
-        <p className={styles.modalSubtitle}>
-          Registra tus pausas para cumplir con la normativa operativa.
-        </p>
-        <div className={styles.modalList}>
-          {tipos.map((t) => {
-            const usada = pausasUsadas.includes(t.id)
-            return (
-              <button
-                key={t.id}
-                className={styles.tipoPausaBtn}
-                onClick={() => !usada && onSelect(t.id)}
-                disabled={loading || usada}
-                style={usada ? { opacity: 0.45, cursor: 'not-allowed' } : {}}
-              >
-                <span className={styles.tipoPausaIcon}><IconCoffee /></span>
-                <div className={styles.tipoPausaInfo}>
-                  <span className={styles.tipoPausaLabel}>
-                    {t.label} {usada ? '(ya usada)' : ''}
-                  </span>
-                  <span className={styles.tipoPausaMax}>Máx. {t.duracion_max_min} min</span>
-                </div>
-                {loading && <Spinner size="sm" />}
-              </button>
-            )
-          })}
-        </div>
+    <Modal open={open} onClose={onClose} title="Seleccionar tipo de pausa">
+      <p className={styles.modalSubtitle}>
+        Registra tus pausas para cumplir con la normativa operativa.
+      </p>
+      <div className={styles.modalList}>
+        {tipos.map((t) => {
+          const usada = pausasUsadas.includes(t.id)
+          return (
+            <button
+              key={t.id}
+              className={`${styles.tipoPausaBtn} ${usada ? styles.tipoPausaUsada : ''}`}
+              onClick={() => !usada && onSelect(t.id)}
+              disabled={loading || usada}
+            >
+              <span className={styles.tipoPausaIcon}><IconCoffee /></span>
+              <div className={styles.tipoPausaInfo}>
+                <span className={styles.tipoPausaLabel}>
+                  {t.label} {usada ? '(ya usada)' : ''}
+                </span>
+                <span className={styles.tipoPausaMax}>Máx. {t.duracion_max_min} min</span>
+              </div>
+              {loading && <Spinner size="sm" />}
+            </button>
+          )
+        })}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -113,13 +107,13 @@ function HistorialRow({ item }) {
 }
 
 export default function PausasPage() {
+  const toast = useToast()
   const [asistencia, setAsistencia] = useState(null)
   const [tiposPausa, setTiposPausa] = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [showModal,  setShowModal]  = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-  const [successMsg, setSuccessMsg] = useState(null)
   // segundos transcurridos desde que entró (para el countdown de jornada)
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0)
   // pausa activa: { id, label, duracionMaxSeg, segundosRestantes }
@@ -164,24 +158,26 @@ export default function PausasPage() {
     return () => clearInterval(pausaRef.current)
   }, [enPausa])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [asist, tipos] = await Promise.all([
-          getAsistenciaHoy(),
-          getTiposPausa(),
-        ])
-        setAsistencia(asist)
-        setTiposPausa(tipos)
-      } catch (err) {
-        setError(err?.response?.data?.detail || 'No se pudo cargar la asistencia.')
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      setError(null)
+      const [asist, tipos] = await Promise.all([
+        getAsistenciaHoy(),
+        getTiposPausa(),
+      ])
+      setAsistencia(asist)
+      setTiposPausa(tipos)
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'No se pudo cargar la asistencia.')
+    } finally {
+      setLoading(false)
     }
-    fetchData()
   }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleRegistrarEntrada = async () => {
     setActionLoading(true)
@@ -191,10 +187,9 @@ export default function PausasPage() {
       const horaLabel = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
       setHistorial([{ tipo: 'entrada', label: 'Inicio de Jornada', hora_inicio: horaLabel, hora_fin: null, duracion_segundos: null }])
       setTiempoTranscurrido(0)
-      setSuccessMsg('¡Entrada registrada correctamente!')
-      setTimeout(() => setSuccessMsg(null), 3000)
+      toast.success('¡Entrada registrada correctamente!')
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Error al registrar entrada.')
+      toast.error(err?.response?.data?.detail || 'No se pudo registrar la entrada.')
     } finally {
       setActionLoading(false)
     }
@@ -216,7 +211,7 @@ export default function PausasPage() {
       setPausasUsadas((prev) => [...prev, tipoPausaId])
       setShowModal(false)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Error al iniciar pausa.')
+      toast.error(err?.response?.data?.detail || 'No se pudo iniciar la pausa.')
     } finally {
       setActionLoading(false)
     }
@@ -240,7 +235,7 @@ export default function PausasPage() {
       ])
       setPausaActiva(null)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Error al reanudar.')
+      toast.error(err?.response?.data?.detail || 'No se pudo reanudar la jornada.')
     } finally {
       setActionLoading(false)
     }
@@ -251,10 +246,10 @@ export default function PausasPage() {
     setActionLoading(true)
     try {
       await finalizarJornada()
-      setSuccessMsg('¡Jornada finalizada! Tu estado ha sido actualizado.')
+      toast.success('¡Jornada finalizada! Tu estado se actualizó.')
       setAsistencia((prev) => ({ ...prev, hora_salida: new Date().toISOString() }))
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Error al finalizar jornada.')
+      toast.error(err?.response?.data?.detail || 'No se pudo finalizar la jornada.')
     } finally {
       setActionLoading(false)
     }
@@ -267,22 +262,16 @@ export default function PausasPage() {
     return                          { label: 'Activo',             color: '#16a34a' }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Cargando asistencia...</p>
-      </div>
-    )
-  }
-
-  if (error && !asistencia) {
-    return (
-      <div className={styles.center}>
-        <p className={styles.errorText}>{error}</p>
-      </div>
-    )
-  }
+  const estadoPagina = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando asistencia..."
+      error={!asistencia ? error : null}
+      onRetry={fetchData}
+      errorTitle="No se pudo cargar tu asistencia"
+    />
+  )
+  if (estadoPagina) return estadoPagina
 
   const estadoJornada = getEstadoJornada()
   // Tiempo restante de jornada (8h - transcurrido)
@@ -402,16 +391,8 @@ export default function PausasPage() {
         </div>
       </section>
 
-      {successMsg && (
-        <div className={styles.successBanner}>
-          <IconCheck />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {error && asistencia && (
-        <div className={styles.errorBanner}>{error}</div>
-      )}
+      {/* El feedback de éxito/error ahora sale por el toast global
+          (components/ui/Toast), igual que en el resto de la app. */}
 
       {jornadaIniciada && !jornadaFinalizada && (
         <div className={styles.finalizarWrap}>
@@ -436,15 +417,14 @@ export default function PausasPage() {
         </div>
       )}
 
-      {showModal && (
-        <ModalPausa
-          tipos={tiposPausa}
-          pausasUsadas={pausasUsadas}
-          onSelect={handleIniciarPausa}
-          onClose={() => setShowModal(false)}
-          loading={actionLoading}
-        />
-      )}
+      <ModalPausa
+        open={showModal}
+        tipos={tiposPausa}
+        pausasUsadas={pausasUsadas}
+        onSelect={handleIniciarPausa}
+        onClose={() => setShowModal(false)}
+        loading={actionLoading}
+      />
     </div>
   )
 }

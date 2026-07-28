@@ -6,12 +6,13 @@
  * ---------------------------------------------------------------------------
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getTareas } from '../api/tareaService'
-import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import EmptyState from '../components/ui/EmptyState'
+import PageState from '../components/ui/PageState'
 import styles from './DashboardPage.module.css'
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -50,8 +51,7 @@ export default function DashboardPage() {
   const [error,         setError]         = useState(null)
 
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
       setLoading(true)
       setError(null)
       try {
@@ -83,22 +83,23 @@ export default function DashboardPage() {
       } finally {
         setLoading(false)
       }
-    }
+  }, [])
 
+  // Se re-ejecuta en cada montaje (navegación entre páginas)
+  useEffect(() => {
     fetchData()
-  }, []) // Sin dependencias: se re-ejecuta en cada montaje (navegación entre páginas)
+  }, [fetchData])
 
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return <p className={styles.errorMsg}>{error}</p>
-  }
+  const estado = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando el panel..."
+      error={error}
+      onRetry={fetchData}
+      errorTitle="No se pudo cargar el panel"
+    />
+  )
+  if (estado) return estado
 
   return (
     <div className={styles.page}>
@@ -144,7 +145,10 @@ export default function DashboardPage() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Técnicos hoy</h2>
         {tecnicosList.length === 0 ? (
-          <p className={styles.emptyMsg}>No hay técnicos registrados.</p>
+          <EmptyState
+            title="No hay técnicos registrados"
+            description="Da de alta técnicos desde la pantalla de Empleados para verlos aquí."
+          />
         ) : (
           <ul className={styles.tecnicosList}>
             {tecnicosList.map((tec) => (
@@ -172,7 +176,10 @@ export default function DashboardPage() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Tareas recientes</h2>
         {tareasList.length === 0 ? (
-          <p className={styles.emptyMsg}>No hay tareas registradas.</p>
+          <EmptyState
+            title="No hay tareas registradas"
+            description="Crea una tarea desde Reasignación para empezar a operar."
+          />
         ) : (
           <ul className={styles.tareasList}>
             {tareasList.slice(0, 5).map((tarea) => (

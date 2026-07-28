@@ -1,0 +1,128 @@
+/* ===================================================
+   UserMenu — avatar + dropdown compartido
+   (antes duplicado dentro de SupervisorLayout)
+   =================================================== */
+
+.userMenu { position: relative; }
+
+.avatarBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  background: var(--color-bg);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.avatarBtn:hover { background: var(--color-primary-light); }
+
+/* Variante con nombre y rol visibles (supervisor en desktop) */
+.conInfo { padding: 4px var(--space-3) 4px 4px; }
+
+.avatarInitial {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-primary);
+  color: white;
+  font-weight: 700;
+  font-size: var(--text-lg);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-primary-sm);
+  flex-shrink: 0;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+.userName {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.userRole {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Dropdown ─────────────────────────────────────── */
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dropdown-backdrop);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-dropdown);
+  min-width: 240px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: fadeIn 150ms ease-out;
+}
+
+.dropdownHeader {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.dropdownHeader strong {
+  font-size: var(--text-lg);
+  color: var(--color-text);
+}
+.dropdownHeader span {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.dropdownRol {
+  margin-top: var(--space-2) !important;
+  font-size: var(--text-xs) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary) !important;
+}
+
+.dropdownItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.dropdownItem:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+}
+.dropdownItem svg { width: 16px; height: 16px; }
+
+@media (max-width: 768px) {
+  .userInfo { display: none; }
+  .conInfo { padding: 0; }
+}

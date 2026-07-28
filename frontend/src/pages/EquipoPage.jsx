@@ -10,8 +10,8 @@
 
  */
 
-import { useState, useEffect } from 'react'
-import Spinner from '../components/ui/Spinner'
+import { useCallback, useState, useEffect } from 'react'
+import PageState from '../components/ui/PageState'
 import styles from './EquipoPage.module.css'
 
 const API_BASE = import.meta.env.VITE_API_URL ||
@@ -84,41 +84,34 @@ export default function EquipoPage() {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
 
-  useEffect(() => {
-    const fetchEquipo = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const { vehiculo: v, herramientas: h } = await getMiEquipo()
-          setVehiculo(v)
-          setHerramientas(h)
-      } catch (err) {
-        setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar tu equipo.')
-      } finally {
-        setLoading(false)
-      }
+  const fetchEquipo = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { vehiculo: v, herramientas: h } = await getMiEquipo()
+      setVehiculo(v)
+      setHerramientas(h)
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar tu equipo.')
+    } finally {
+      setLoading(false)
     }
-    fetchEquipo()
   }, [])
 
-  /* ── Loading ── */
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Cargando tu equipo...</p>
-      </div>
-    )
-  }
+  useEffect(() => {
+    fetchEquipo()
+  }, [fetchEquipo])
 
-  /* ── Error ── */
-  if (error) {
-    return (
-      <div className={styles.center}>
-        <p className={styles.errorText}>{error}</p>
-      </div>
-    )
-  }
+  const estado = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando tu equipo..."
+      error={error}
+      onRetry={fetchEquipo}
+      errorTitle="No se pudo cargar tu equipo"
+    />
+  )
+  if (estado) return estado
 
   const estadoVeh = ESTADO_VEHICULO[vehiculo?.estado_vehiculo] ?? ESTADO_VEHICULO.disponible
 

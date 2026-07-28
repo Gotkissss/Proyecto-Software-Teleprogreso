@@ -4,8 +4,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import Modal, { ModalActions } from '../components/ui/Modal'
+import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import { getTareas, getTecnicosDisponibles, reasignarTarea } from '../api/tareaService'
 import styles from './ReasignacionPage.module.css'
@@ -16,6 +18,7 @@ const LIMITE_TAREAS = 3
 export default function ReasignacionPage() {
 
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [tareas, setTareas] = useState([])
   const [tecnicos, setTecnicos] = useState([])
@@ -26,7 +29,6 @@ export default function ReasignacionPage() {
   const [tareaEditando, setTareaEditando] = useState(null)
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
-  const [exito, setExito] = useState(null)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
 
   const fetchData = useCallback(async () => {
@@ -112,11 +114,11 @@ export default function ReasignacionPage() {
         })
       )
 
-      setExito('Tarea reasignada correctamente.')
+      toast.success(
+        `Tarea reasignada a ${tecnicoSeleccionado.nombre_completo}.`
+      )
       setTareaSeleccionada(null)
       setTecnicoNuevo('')
-
-      setTimeout(() => setExito(null), 3000)
 
     } catch (err) {
       const status = err?.response?.status
@@ -161,23 +163,21 @@ export default function ReasignacionPage() {
         (t.id_tarea ?? t.id) === actualizada.id_tarea ? { ...t, ...actualizada } : t
       )
     )
-    setExito('Tarea actualizada correctamente.')
-    setTimeout(() => setExito(null), 3000)
+    toast.success('Tarea actualizada correctamente.')
     // El conteo de carga de los técnicos pudo cambiar con la edición.
     getTecnicosDisponibles().then(setTecnicos).catch(() => {})
   }
 
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return <p className={styles.errorMsg}>{error}</p>
-  }
+  const estado = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando tareas..."
+      error={error}
+      onRetry={fetchData}
+      errorTitle="No se pudieron cargar las tareas"
+    />
+  )
+  if (estado) return estado
 
   return (
     <div className={styles.page}>
@@ -205,16 +205,20 @@ export default function ReasignacionPage() {
         </button>
       </div>
 
-      {exito && (
-        <div className={styles.exitoBanner}>
-          {exito}
-        </div>
-      )}
-
       {tareas.length === 0 ? (
-        <p className={styles.emptyMsg}>
-          No hay tareas activas para reasignar.
-        </p>
+        <PageState
+          empty
+          emptyTitle="No hay tareas para reasignar"
+          emptyDescription="Crea una tarea nueva para asignarla a un técnico."
+          emptyAction={
+            <button
+              className={styles.nuevaTareaBtn}
+              onClick={() => navigate('/supervisor/nueva-tarea')}
+            >
+              + Nueva tarea
+            </button>
+          }
+        />
       ) : (
         <ul className={styles.tareasList}>
           {tareas.map((tarea) => {
@@ -267,123 +271,103 @@ export default function ReasignacionPage() {
         </ul>
       )}
 
-      {tareaSeleccionada && (
-        <div
-          className={styles.overlay}
-          onClick={() => setTareaSeleccionada(null)}
-        >
-          <div
-            className={styles.panel}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className={styles.panelTitle}>
-              Reasignar tarea
-            </h2>
+      {/* Antes era un overlay propio de esta página; ahora usa el Modal
+          compartido, igual que la edición de tareas y el inventario. */}
+      <Modal
+        open={Boolean(tareaSeleccionada)}
+        onClose={() => setTareaSeleccionada(null)}
+        title="Reasignar tarea"
+      >
+        <p className={styles.panelSubtitle}>
+          {tareaSeleccionada?.titulo}
+        </p>
 
-            <p className={styles.panelSubtitle}>
-              {tareaSeleccionada.titulo}
-            </p>
-
-            {errorReasignacion && (
-              <div className={styles.errorPanel}>
-                <span className={styles.errorPanelIcon}>⚠</span>
-                <span>{errorReasignacion}</span>
-              </div>
-            )}
-
-            <label className={styles.label}>
-              Asignar a:
-            </label>
-
-            <select
-              className={styles.select}
-              value={tecnicoNuevo}
-              onChange={(e) => {
-                setTecnicoNuevo(e.target.value)
-                setErrorReasignacion(null)
-              }}
-            >
-              <option value="">
-                Selecciona un técnico
-              </option>
-
-              {tecnicos.map((tec) => {
-                const alLimite =
-                  (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
-
-                return (
-                  <option
-                    key={tec.id}
-                    value={tec.id}
-                    disabled={alLimite}
-                  >
-                    {tec.nombre_completo}
-                    {' — '}
-                    {tec.tareas_activas ?? 0} tarea
-                    {tec.tareas_activas !== 1 ? 's' : ''}
-                    {' '}activa
-                    {tec.tareas_activas !== 1 ? 's' : ''}
-                    {alLimite ? ' (límite alcanzado)' : ''}
-                  </option>
-                )
-              })}
-            </select>
-
-            {tecnicoNuevo && (() => {
-              const tec = tecnicos.find(
-                (t) => t.id === Number(tecnicoNuevo)
-              )
-
-              if (!tec) return null
-
-              const activas = tec.tareas_activas ?? 0
-
-              if (activas >= LIMITE_TAREAS) {
-                return (
-                  <p className={styles.limiteMsg}>
-                    ⚠ Este técnico ya alcanzó el límite de {LIMITE_TAREAS} tareas activas.
-                  </p>
-                )
-              }
-
-              if (activas === LIMITE_TAREAS - 1) {
-                return (
-                  <p className={styles.advertenciaMsg}>
-                    ℹ Este técnico tendrá {activas + 1} tareas activas tras la reasignación.
-                  </p>
-                )
-              }
-
-              return null
-            })()}
-
-            <div className={styles.panelBtns}>
-              <button
-                className={styles.cancelBtn}
-                onClick={() => setTareaSeleccionada(null)}
-              >
-                Cancelar
-              </button>
-
-              <button
-                className={styles.confirmBtn}
-                onClick={handleReasignar}
-                disabled={
-                  !tecnicoNuevo ||
-                  guardando ||
-                  (
-                    tecnicos.find(
-                      (t) => t.id === Number(tecnicoNuevo)
-                    )?.tareas_activas ?? 0
-                  ) >= LIMITE_TAREAS
-                }
-              >
-                {guardando ? 'Guardando...' : 'Confirmar'}
-              </button>
-            </div>
+        {errorReasignacion && (
+          <div className={styles.errorPanel}>
+            <span className={styles.errorPanelIcon}>⚠</span>
+            <span>{errorReasignacion}</span>
           </div>
-        </div>
-      )}
+        )}
+
+        <label className={styles.label} htmlFor="reasignar-tecnico">
+          Asignar a:
+        </label>
+
+        <select
+          id="reasignar-tecnico"
+          className={styles.select}
+          value={tecnicoNuevo}
+          onChange={(e) => {
+            setTecnicoNuevo(e.target.value)
+            setErrorReasignacion(null)
+          }}
+        >
+          <option value="">Selecciona un técnico</option>
+
+          {tecnicos.map((tec) => {
+            const alLimite = (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
+
+            return (
+              <option key={tec.id} value={tec.id} disabled={alLimite}>
+                {tec.nombre_completo}
+                {' — '}
+                {tec.tareas_activas ?? 0} tarea
+                {tec.tareas_activas !== 1 ? 's' : ''}
+                {' '}activa
+                {tec.tareas_activas !== 1 ? 's' : ''}
+                {alLimite ? ' (límite alcanzado)' : ''}
+              </option>
+            )
+          })}
+        </select>
+
+        {tecnicoNuevo && (() => {
+          const tec = tecnicos.find((t) => t.id === Number(tecnicoNuevo))
+          if (!tec) return null
+
+          const activas = tec.tareas_activas ?? 0
+
+          if (activas >= LIMITE_TAREAS) {
+            return (
+              <p className={styles.limiteMsg}>
+                ⚠ Este técnico ya alcanzó el límite de {LIMITE_TAREAS} tareas activas.
+              </p>
+            )
+          }
+
+          if (activas === LIMITE_TAREAS - 1) {
+            return (
+              <p className={styles.advertenciaMsg}>
+                ℹ Este técnico tendrá {activas + 1} tareas activas tras la reasignación.
+              </p>
+            )
+          }
+
+          return null
+        })()}
+
+        <ModalActions>
+          <button
+            className={styles.cancelBtn}
+            onClick={() => setTareaSeleccionada(null)}
+          >
+            Cancelar
+          </button>
+
+          <button
+            className={styles.confirmBtn}
+            onClick={handleReasignar}
+            disabled={
+              !tecnicoNuevo ||
+              guardando ||
+              (tecnicos.find((t) => t.id === Number(tecnicoNuevo))?.tareas_activas ?? 0)
+                >= LIMITE_TAREAS
+            }
+          >
+            {guardando ? 'Guardando...' : 'Confirmar'}
+          </button>
+        </ModalActions>
+      </Modal>
     </div>
   )
 }

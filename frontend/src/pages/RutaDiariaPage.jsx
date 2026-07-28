@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
-import Spinner from '../components/ui/Spinner'
+import EmptyState from '../components/ui/EmptyState'
+import Modal from '../components/ui/Modal'
+import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -13,7 +16,6 @@ const IconCalendar = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconAlert    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 const IconPlay     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-const IconX        = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 
 const ESTADO_LABEL = {
   completado:  'Completado',
@@ -37,16 +39,9 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar }) {
 
   const estadoLabel = ESTADO_LABEL[servicio.estado] ?? servicio.estado
 
+  // Usa el Modal compartido en lugar del panel propio de esta pantalla.
   return (
-    <div className={styles.panelOverlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.panelHeader}>
-          <h2 className={styles.panelTitle}>{servicio.nombre}</h2>
-          <button className={styles.panelClose} onClick={onClose} aria-label="Cerrar">
-            <IconX />
-          </button>
-        </div>
-
+    <Modal open={Boolean(servicio)} onClose={onClose} title={servicio.nombre}>
         <div className={styles.panelBody}>
           {/* Estado actual */}
           <div className={styles.panelEstadoRow}>
@@ -119,8 +114,7 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -187,6 +181,7 @@ function ServicioCard({ servicio, onVerDetalle }) {
 
 export default function RutaDiariaPage() {
   const { user } = useAuth()
+  const toast = useToast()
   const [ruta,           setRuta]           = useState(null)
   const [servicios,      setServicios]      = useState([])
   const [loading,        setLoading]        = useState(true)
@@ -197,22 +192,24 @@ export default function RutaDiariaPage() {
   const [paradasCompletadas, setParadasCompletadas] = useState(0)
   const [kmAcumulados,       setKmAcumulados]       = useState(0)
 
-  useEffect(() => {
-    const fetchRuta = async () => {
-      setLoading(true)
-      try {
-        const data = await getMiRuta(user?.id_empleado)
-        setRuta(data)
-        // Ordena: urgentes primero, luego por prioridad, completadas al final
-        setServicios(ordenarServicios(data.servicios))
-      } catch (err) {
-        setError(err?.response?.data?.detail || 'No se pudo cargar la ruta.')
-      } finally {
-        setLoading(false)
-      }
+  const fetchRuta = useCallback(async () => {
+    setLoading(true)
+    try {
+      setError(null)
+      const data = await getMiRuta(user?.id_empleado)
+      setRuta(data)
+      // Ordena: urgentes primero, luego por prioridad, completadas al final
+      setServicios(ordenarServicios(data.servicios))
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'No se pudo cargar la ruta.')
+    } finally {
+      setLoading(false)
     }
+  }, [user?.id_empleado])
+
+  useEffect(() => {
     fetchRuta()
-  }, [])
+  }, [fetchRuta])
 
   const ordenarServicios = (lista) => {
     const prioridadOrden = { urgente: 0, alta: 1, media: 2, baja: 3 }
@@ -235,8 +232,18 @@ export default function RutaDiariaPage() {
     )
     try {
       await iniciarServicio(idServicio)
+      toast.success('Servicio iniciado.')
     } catch (err) {
-      console.warn('No se pudo confirmar inicio en servidor:', err?.response?.data?.detail ?? err.message)
+      const detalle = err?.response?.data?.detail ?? err.message
+      console.warn('No se pudo confirmar inicio en servidor:', detalle)
+      // Se revierte el optimistic update: si el backend no lo aceptó, la
+      // tarjeta no debe quedarse en "en progreso" engañando al técnico.
+      setServicios((prev) =>
+        prev.map((s) =>
+          s.id_servicio === idServicio ? { ...s, estado: 'pendiente' } : s
+        )
+      )
+      toast.error(detalle || 'No se pudo iniciar el servicio.')
     }
   }
 
@@ -268,22 +275,16 @@ export default function RutaDiariaPage() {
     ? servicios.find((s) => s.id_servicio === detalleAbierto.id_servicio) ?? detalleAbierto
     : null
 
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Cargando tu ruta del día...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={styles.center}>
-        <p className={styles.errorText}>{error}</p>
-      </div>
-    )
-  }
+  const estadoPagina = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando tu ruta del día..."
+      error={error}
+      onRetry={fetchRuta}
+      errorTitle="No se pudo cargar tu ruta"
+    />
+  )
+  if (estadoPagina) return estadoPagina
 
   const nombre      = ruta?.tecnico?.nombre_completo ?? user?.nombre ?? 'Técnico'
   const primerNombre = nombre.split(' ')[0]
@@ -350,10 +351,15 @@ export default function RutaDiariaPage() {
             ))}
           </div>
         ) : (
-          <p className={styles.empty}>No hay paradas programadas para hoy.</p>
+          <EmptyState
+            title="Sin paradas para hoy"
+            description="Cuando tu supervisor te asigne tareas aparecerán en esta lista."
+          />
         )}
 
-        <p className={styles.listEnd}>No hay más paradas programadas</p>
+        {servicios.length > 0 && (
+          <p className={styles.listEnd}>No hay más paradas programadas</p>
+        )}
       </section>
 
       {/* Panel de detalle */}

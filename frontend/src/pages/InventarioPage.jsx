@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
+import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import styles from './InventarioPage.module.css'
 import {
   getCarros, getHerramientas, getMateriales,
@@ -460,8 +462,16 @@ function SortIcon({ col, sortConfig }) {
 }
 
 function TablaVehiculos({ datos, loading, sortConfig, onSort, onAsignarTecnico, onEditar, onEliminar }) {
-  if (loading) return <div className={styles.loadingState}><Spinner size="lg"/><p>Cargando vehículos...</p></div>
-  if (datos.length === 0) return <div className={styles.emptyState}><div className={styles.emptyIcon}><IconCar/></div><p className={styles.emptyMsg}>No se encontraron vehículos con esos criterios.</p></div>
+  if (loading || datos.length === 0) return (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando vehículos..."
+      empty
+      emptyIcon={<IconCar/>}
+      emptyTitle="Sin vehículos"
+      emptyDescription="No se encontraron vehículos con esos criterios de búsqueda."
+    />
+  )
   return (
     <div className={styles.tableWrapper}>
       <table className={styles.table}>
@@ -505,8 +515,16 @@ function TablaVehiculos({ datos, loading, sortConfig, onSort, onAsignarTecnico, 
 }
 
 function TablaHerramientas({ datos, loading, sortConfig, onSort, onAsignarCarro, onEditar, onEliminar }) {
-  if (loading) return <div className={styles.loadingState}><Spinner size="lg"/><p>Cargando herramientas...</p></div>
-  if (datos.length === 0) return <div className={styles.emptyState}><div className={styles.emptyIcon}><IconTool/></div><p className={styles.emptyMsg}>No se encontraron herramientas con esos criterios.</p></div>
+  if (loading || datos.length === 0) return (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando herramientas..."
+      empty
+      emptyIcon={<IconTool/>}
+      emptyTitle="Sin herramientas"
+      emptyDescription="No se encontraron herramientas con esos criterios de búsqueda."
+    />
+  )
   return (
     <div className={styles.tableWrapper}>
       <table className={styles.table}>
@@ -543,8 +561,16 @@ function TablaHerramientas({ datos, loading, sortConfig, onSort, onAsignarCarro,
 }
 
 function TablaMateriales({ datos, loading, sortConfig, onSort, onEditar, onEliminar }) {
-  if (loading) return <div className={styles.loadingState}><Spinner size="lg"/><p>Cargando materiales...</p></div>
-  if (datos.length === 0) return <div className={styles.emptyState}><div className={styles.emptyIcon}><IconBox/></div><p className={styles.emptyMsg}>No se encontraron materiales con esos criterios.</p></div>
+  if (loading || datos.length === 0) return (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando materiales..."
+      empty
+      emptyIcon={<IconBox/>}
+      emptyTitle="Sin materiales"
+      emptyDescription="No se encontraron materiales con esos criterios de búsqueda."
+    />
+  )
   return (
     <div className={styles.tableWrapper}>
       <table className={styles.table}>
@@ -688,6 +714,7 @@ function ModalAsignarHerramientaACarro({ herramienta, carros, onCerrar, onAsigna
 }
 
 export default function InventarioPage() {
+  const toast = useToast()
   const [tabActiva, setTabActiva] = useState('vehiculos')
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
@@ -739,26 +766,33 @@ export default function InventarioPage() {
     else if (nuevo.tipo === 'herramienta') setHerramientas(p => [nuevo, ...p])
     else setMateriales(p => [nuevo, ...p])
     setModalNuevo(null)
+    toast.success(`${nuevo.nombre_activo} se agregó al inventario.`)
   }
   const handleEditado = (actualizado) => {
     if (actualizado.tipo === 'carro') setVehiculos(p => p.map(v => v.id_activo===actualizado.id_activo ? {...v,...actualizado} : v))
     else if (actualizado.tipo === 'herramienta') setHerramientas(p => p.map(h => h.id_activo===actualizado.id_activo ? {...h,...actualizado} : h))
     else setMateriales(p => p.map(m => m.id_activo===actualizado.id_activo ? {...m,...actualizado} : m))
     setModalEditar(null)
+    toast.success(`${actualizado.nombre_activo} se actualizó correctamente.`)
   }
   const handleEliminado = (id) => {
     setVehiculos(p => p.filter(v => v.id_activo!==id))
     setHerramientas(p => p.filter(h => h.id_activo!==id))
     setMateriales(p => p.filter(m => m.id_activo!==id))
     setModalEliminar(null)
+    toast.success('Activo eliminado del inventario.')
   }
   const handleAsignadaACarro = () => {
     // La asignación ya ocurrió en el modal; solo se cierra aquí
     setModalAsignarHerramienta(null)
+    toast.success('Herramientas asignadas al vehículo.')
   }
   const handleAsignado = (idActivo, tec) => {
     setVehiculos(p => p.map(v => v.id_activo===idActivo ? {...v, nombre_empleado_asignado: tec?`${tec.nombre} ${tec.apellido}`:null, estado_vehiculo:'en_uso'} : v))
     setModalAsignarTecnico(null)
+    toast.success(
+      tec ? `Vehículo asignado a ${tec.nombre} ${tec.apellido}.` : 'Vehículo liberado.'
+    )
   }
 
   return (
@@ -781,10 +815,11 @@ export default function InventarioPage() {
       </div>
 
       {errorCarga && (
-        <div style={{background:'var(--color-danger-bg)',border:'1px solid var(--color-danger-light)',color:'var(--color-danger-dark)',borderRadius:'var(--radius-md)',padding:'12px 16px',marginBottom:'16px',fontSize:'0.875rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span>{errorCarga}</span>
-          <button onClick={cargarDatos} style={{background:'none',border:'none',cursor:'pointer',color:'var(--color-danger-dark)',fontWeight:600,fontSize:'0.875rem'}}>Reintentar</button>
-        </div>
+        <PageState
+          error={errorCarga}
+          onRetry={cargarDatos}
+          errorTitle="No se pudo cargar el inventario"
+        />
       )}
 
       {/* Tabs */}

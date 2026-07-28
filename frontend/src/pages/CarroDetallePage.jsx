@@ -11,9 +11,12 @@
  * ---------------------------------------------------------------------------
  */
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import Modal, { ModalActions } from '../components/ui/Modal'
+import PageState from '../components/ui/PageState'
 import Spinner from '../components/ui/Spinner'
+import { useToast } from '../components/ui/Toast'
 import ModalAsignarHerramientas from '../components/carros/ModalAsignarHerramientas'
 import styles from './CarroDetallePage.module.css'
 
@@ -67,16 +70,6 @@ const IconTag = () => (
     <line x1="7" y1="7" x2="7.01" y2="7"/>
   </svg>
 )
-const IconCheck = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-)
-const IconX = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-)
 const IconInfo = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <circle cx="12" cy="12" r="10"/>
@@ -95,33 +88,37 @@ const formatFecha = (isoString) => {
 
 /*  Sub-componente: modal de confirmación liberar*/
 function ModalConfirmarLiberar({ herramienta, onConfirmar, onCancelar, cargando }) {
+  // Usa el Modal compartido en vez de un overlay propio, para que el diálogo
+  // de confirmación se vea igual que el resto de modales de la app.
   return (
-    <div className={styles.confirmOverlay} onClick={onCancelar}>
-      <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.confirmIconWrap}>
-          <IconTrash />
-        </div>
-        <h3 className={styles.confirmTitle}>Liberar herramienta</h3>
-        <p className={styles.confirmDesc}>
-          ¿Deseas retirar <strong>{herramienta.nombre_activo}</strong> de este vehículo?
-          La herramienta quedará disponible para reasignar.
-        </p>
-        <div className={styles.confirmBtns}>
-          <button className={styles.confirmCancelBtn} onClick={onCancelar} disabled={cargando}>
-            Cancelar
-          </button>
-          <button
-            className={styles.confirmDeleteBtn}
-            onClick={() => onConfirmar(herramienta.id_activo)}
-            disabled={cargando}
-          >
-            {cargando
-              ? <><Spinner size="sm" color="white" /> Liberando...</>
-              : <><IconTrash /> Liberar</>}
-          </button>
-        </div>
+    <Modal
+      open={Boolean(herramienta)}
+      onClose={onCancelar}
+      title="Liberar herramienta"
+      width={420}
+    >
+      <div className={styles.confirmIconWrap}>
+        <IconTrash />
       </div>
-    </div>
+      <p className={styles.confirmDesc}>
+        ¿Deseas retirar <strong>{herramienta?.nombre_activo}</strong> de este vehículo?
+        La herramienta quedará disponible para reasignar.
+      </p>
+      <ModalActions>
+        <button className={styles.confirmCancelBtn} onClick={onCancelar} disabled={cargando}>
+          Cancelar
+        </button>
+        <button
+          className={styles.confirmDeleteBtn}
+          onClick={() => onConfirmar(herramienta.id_activo)}
+          disabled={cargando}
+        >
+          {cargando
+            ? <><Spinner size="sm" color="white" /> Liberando...</>
+            : <><IconTrash /> Liberar</>}
+        </button>
+      </ModalActions>
+    </Modal>
   )
 }
 
@@ -131,6 +128,7 @@ function ModalConfirmarLiberar({ herramienta, onConfirmar, onCancelar, cargando 
 export default function CarroDetallePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [carro,            setCarro]            = useState(null)
   const [herramientas,     setHerramientas]     = useState([])
@@ -141,35 +139,27 @@ export default function CarroDetallePage() {
   const [herramientaLiberar, setHerramientaLiberar] = useState(null)
   const [liberando,        setLiberando]        = useState(false)
 
-  const [successMsg,       setSuccessMsg]       = useState(null)
-  const [errorMsg,         setErrorMsg]         = useState(null)
-
   /* Fetch inicial  */
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [carroData, herrData] = await Promise.all([
-            getCarroById(id),
-            getHerramientasDeCarro(id),
-          ])
-          setCarro(carroData)
-          setHerramientas(herrData)
-      } catch (err) {
-        setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar el vehículo.')
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [carroData, herrData] = await Promise.all([
+        getCarroById(id),
+        getHerramientasDeCarro(id),
+      ])
+      setCarro(carroData)
+      setHerramientas(herrData)
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar el vehículo.')
+    } finally {
+      setLoading(false)
     }
-    fetchData()
   }, [id])
 
-  /*  Mostrar toast de éxito  */
-  const mostrarExito = (msg) => {
-    setSuccessMsg(msg)
-    setTimeout(() => setSuccessMsg(null), 3500)
-  }
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   /*  Asignar herramientas (desde modal)  */
   const handleAsignar = async (idsSeleccionados) => {
@@ -180,7 +170,7 @@ export default function CarroDetallePage() {
     const herrActualizadas = await getHerramientasDeCarro(id)
     setHerramientas(herrActualizadas)
     setModalAsignar(false)
-    mostrarExito(
+    toast.success(
       `${idsSeleccionados.length} herramienta${idsSeleccionados.length !== 1 ? 's asignadas' : ' asignada'} correctamente.`
     )
   }
@@ -188,14 +178,13 @@ export default function CarroDetallePage() {
   /*  Liberar herramienta  */
   const handleLiberar = async (idHerramienta) => {
     setLiberando(true)
-    setErrorMsg(null)
     try {
       await liberarHerramientaDeCarro(id, idHerramienta)
       setHerramientas((prev) => prev.filter((h) => h.id_activo !== idHerramienta))
       setHerramientaLiberar(null)
-      mostrarExito('Herramienta liberada y disponible para reasignación.')
+      toast.success('Herramienta liberada y disponible para reasignación.')
     } catch (err) {
-      setErrorMsg(err?.response?.data?.detail || err?.message || 'Error al liberar la herramienta.')
+      toast.error(err?.response?.data?.detail || err?.message || 'No se pudo liberar la herramienta.')
       setHerramientaLiberar(null)
     } finally {
       setLiberando(false)
@@ -214,51 +203,21 @@ export default function CarroDetallePage() {
   const estadoActual = estadoConfig[carro?.estado_vehiculo] ?? estadoConfig.disponible
 
   /*  Render  */
-  if (loading) {
-    return (
-      <div className={styles.center}>
-        <Spinner size="lg" />
-        <p className={styles.loadingText}>Cargando vehículo...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={styles.center}>
-        <p className={styles.errorText}>{error}</p>
-        <button className={styles.backBtn} onClick={() => navigate(-1)}>
-          <IconBack /> Volver
-        </button>
-      </div>
-    )
-  }
+  const estadoPagina = (
+    <PageState
+      loading={loading}
+      loadingLabel="Cargando vehículo..."
+      error={error}
+      onRetry={fetchData}
+      errorTitle="No se pudo cargar el vehículo"
+    />
+  )
+  if (estadoPagina) return estadoPagina
 
   return (
     <div className={styles.page}>
 
-      {/*  Toast de éxito  */}
-      {successMsg && (
-        <div className={styles.toast}>
-          <span className={styles.toastIcon}><IconCheck /></span>
-          <span className={styles.toastMsg}>{successMsg}</span>
-          <button className={styles.toastClose} onClick={() => setSuccessMsg(null)}>
-            <IconX />
-          </button>
-          <span className={styles.toastBar} />
-        </div>
-      )}
-
-      {/*  Error banner  */}
-      {errorMsg && (
-        <div className={styles.errorBanner}>
-          <IconInfo />
-          <span>{errorMsg}</span>
-          <button className={styles.errorClose} onClick={() => setErrorMsg(null)}>
-            <IconX />
-          </button>
-        </div>
-      )}
+      {/* El feedback de éxito/error sale por el toast global. */}
 
       {/*  Botón volver  */}
       <button className={styles.backBtn} onClick={() => navigate(-1)}>
