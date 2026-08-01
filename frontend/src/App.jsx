@@ -11,6 +11,9 @@ import RutaDiariaPage from './pages/RutaDiariaPage'
 import MapaPage       from './pages/MapaPage'
 import PausasPage     from './pages/PausasPage'
 import EquipoPage     from './pages/EquipoPage'
+/* Historial de tareas completadas — la misma pantalla sirve a técnico y
+   supervisor; el backend decide qué puede ver cada rol. */
+import HistorialTareasPage from './pages/HistorialTareasPage'
 
 /* Páginas del supervisor */
 import DashboardPage    from './pages/DashboardPage'
@@ -43,6 +46,7 @@ export default function App() {
             <Route path="/ruta"   element={<RutaDiariaPage />} />
             <Route path="/mapa"   element={<MapaPage />} />
             <Route path="/pausas" element={<PausasPage />} />
+            <Route path="/historial" element={<HistorialTareasPage />} />
             <Route path="/equipo" element={<EquipoPage />} />
           </Route>
 
@@ -64,6 +68,7 @@ export default function App() {
             <Route path="nueva-tarea" element={<NuevaTareaPage />} />
             <Route path="inventario"   element={<InventarioPage />} />
             <Route path="asistencia"   element={<HistorialAsistenciaPage />} />
+            <Route path="historial-tareas" element={<HistorialTareasPage />} />
             
           </Route>
 

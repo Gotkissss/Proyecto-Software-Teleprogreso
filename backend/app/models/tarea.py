@@ -19,6 +19,11 @@ class Tarea(Base):
     direccion_servicio:  Mapped[str | None]  = mapped_column(String(255), nullable=True)
     coordenada_servicio: Mapped[str | None]  = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     fecha_asignacion:    Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Momento real en que el técnico cerró la tarea. Distinto de
+    # `fecha_finalizacion`, que es la fecha *límite* pactada y la que usa el
+    # cálculo de tareas retrasadas. Esta es la que alimenta el historial de
+    # "tareas hechas por día".
+    fecha_completado:    Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     # Relaciones
     empleados:  Mapped[list["EmpleadoTarea"]] = relationship(back_populates="tarea")

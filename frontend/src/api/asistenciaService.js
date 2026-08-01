@@ -61,9 +61,46 @@ export const registrarEntrada = async () => {
  *
  * @param {string} _tipoPausa - Ignorado por el backend actual; se reserva para futuro.
  */
-export const iniciarPausa = async (_tipoPausa) => {
-  const { data } = await apiClient.post('/descanso/iniciar')
+export const iniciarPausa = async (tipoPausa) => {
+  // El tipo se manda al backend (columna `descanso.tipo`). Antes solo vivía en
+  // el estado de React: al recargar se perdía qué pausa se había tomado y el
+  // técnico podía repetir el almuerzo tantas veces como quisiera.
+  const { data } = await apiClient.post('/descanso/iniciar', {
+    tipo: tipoPausa ?? null,
+  })
   return data
+}
+
+/**
+ * Estado completo de pausas de la jornada de hoy.
+ * Endpoint: GET /descanso/hoy
+ *
+ * Es la fuente única con la que PausasPage se reconstruye: cronómetro, pausa
+ * en curso, historial y tipos ya consumidos vienen todos de aquí, así que
+ * recargar o cerrar sesión no reinicia nada.
+ *
+ * @returns {Promise<{
+ *   fecha: string, jornada_activa: boolean,
+ *   hora_entrada: string|null, hora_salida: string|null,
+ *   segundos_brutos: number, segundos_trabajados: number, segundos_en_pausa: number,
+ *   pausa_activa: Object|null, tipos_usados: string[], descansos: Array
+ * }>}
+ */
+export const getEstadoPausas = async () => {
+  const { data } = await apiClient.get('/descanso/hoy')
+  return {
+    fecha:               data.fecha ?? new Date().toISOString().split('T')[0],
+    id_asistencia:       data.id_asistencia ?? null,
+    jornada_activa:      Boolean(data.jornada_activa),
+    hora_entrada:        data.hora_entrada ?? null,
+    hora_salida:         data.hora_salida ?? null,
+    segundos_brutos:     data.segundos_brutos ?? 0,
+    segundos_trabajados: data.segundos_trabajados ?? 0,
+    segundos_en_pausa:   data.segundos_en_pausa ?? 0,
+    pausa_activa:        data.pausa_activa ?? null,
+    tipos_usados:        Array.isArray(data.tipos_usados) ? data.tipos_usados : [],
+    descansos:           Array.isArray(data.descansos) ? data.descansos : [],
+  }
 }
 
 /**

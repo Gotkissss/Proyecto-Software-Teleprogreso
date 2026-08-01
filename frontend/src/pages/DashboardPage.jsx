@@ -143,6 +143,8 @@ export default function DashboardPage() {
           label="Tareas completadas"
           value={metricas?.tareas_completadas ?? 0}
           variant="success"
+          onClick={() => navigate('/supervisor/historial-tareas')}
+          clickable
         />
         <MetricCard
           label="Tareas pendientes"

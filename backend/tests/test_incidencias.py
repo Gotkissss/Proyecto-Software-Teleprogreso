@@ -225,6 +225,70 @@ async def test_upload_foto_actualiza_la_incidencia(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_subir_foto_con_finalizar_cierra_la_tarea(tmp_path, monkeypatch):
+    """
+    Es el flujo del modal "Finalizar tarea": la tarea solo se cierra si la
+    foto de evidencia llegó a guardarse.
+    """
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    tarea = _tarea(estado="en_progreso", fecha_inicio=None)
+    incidencia = Incidencia(id_incidencia=5, id_tarea=1, descripcion="Evidencia.")
+    db = _db([_resultado(tarea), _resultado(SimpleNamespace()), _resultado(incidencia)])
+
+    await upload_foto_evidencia(
+        1,
+        5,
+        db,
+        _empleado(),  # el técnico asignado
+        file=_upload("evidencia.jpg", b"contenido"),
+        finalizar_tarea=True,
+    )
+
+    assert tarea.estado_tarea == "completado"
+    assert tarea.fecha_inicio == date.today()
+    assert incidencia.foto_evidencia is not None
+
+
+@pytest.mark.asyncio
+async def test_subir_foto_sin_finalizar_no_toca_el_estado(tmp_path, monkeypatch):
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    tarea = _tarea(estado="en_progreso")
+    incidencia = Incidencia(id_incidencia=5, id_tarea=1, descripcion="Evidencia.")
+    db = _db([_resultado(tarea), _resultado(incidencia)])
+
+    await upload_foto_evidencia(
+        1, 5, db, _empleado(rol="supervisor", id_empleado=9),
+        file=_upload("evidencia.jpg", b"contenido"),
+    )
+
+    assert tarea.estado_tarea == "en_progreso"
+
+
+@pytest.mark.asyncio
+async def test_no_se_puede_finalizar_una_tarea_cancelada_al_subir_la_foto(
+    tmp_path, monkeypatch
+):
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    incidencia = Incidencia(id_incidencia=5, id_tarea=1, descripcion="Evidencia.")
+    db = _db([_resultado(_tarea(estado="cancelado")), _resultado(incidencia)])
+
+    with pytest.raises(HTTPException) as error:
+        await upload_foto_evidencia(
+            1, 5, db, _empleado(rol="admin"),
+            file=_upload("evidencia.jpg", b"contenido"),
+            finalizar_tarea=True,
+        )
+
+    assert error.value.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_incidencia_inexistente_devuelve_404():
     db = _db([_resultado(_tarea()), _resultado(None)])
 

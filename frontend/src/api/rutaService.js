@@ -33,14 +33,22 @@ export const getMiRuta = async (idTecnico) => {
   const { data: tareas } = await apiClient.get('/tareas', { params })
 
   // Mapear cada tarea al formato de "servicio" que espera la UI
-  const servicios = tareas.map((t) => ({
-    id_servicio: t.id_tarea,
-    estado:      t.estado_tarea,          // pendiente | en_progreso | completado | cancelado
-    prioridad:   t.prioridad ?? 'media',  // urgente | alta | media | baja
-    nombre:      t.titulo,
-    direccion:   t.direccion_servicio ?? 'Dirección no especificada',
-    tipo:        _inferirTipo(t.titulo, t.descripcion),
-  }))
+  const servicios = tareas
+    .map((t) => ({
+      id_servicio:      t.id_tarea,
+      estado:           t.estado_tarea,          // pendiente | en_progreso | completado | cancelado
+      prioridad:        t.prioridad ?? 'media',  // urgente | alta | media | baja
+      nombre:           t.titulo,
+      direccion:        t.direccion_servicio ?? 'Dirección no especificada',
+      tipo:             _inferirTipo(t.titulo, t.descripcion),
+      fecha_completado: t.fecha_completado ?? null,
+      total_incidencias: t.total_incidencias ?? 0,
+    }))
+    // La ruta del día es eso: el día. Se muestran todas las tareas abiertas
+    // más las que el técnico cerró hoy (para que vea su avance), pero no el
+    // histórico completo: antes la lista arrastraba todas las tareas que le
+    // habían asignado alguna vez y parecía "quemada".
+    .filter((s) => esTareaDeHoy(s))
 
   // Calcular alerta si hay urgentes pendientes
   const urgentes = servicios.filter(
@@ -73,19 +81,64 @@ export const iniciarServicio = async (idTarea) => {
 }
 
 /**
- * Marca una tarea como completada en el backend.
- * Corresponde a PATCH /tareas/{id}/estado con estado='completado'.
+ * Cierra una tarea desde la app del técnico.
+ * Corresponde a PATCH /tareas/{id}/finalizar (requiere evidencia registrada).
+ *
+ * Se usa este endpoint y no PATCH /tareas/{id}/estado porque aquel está
+ * restringido a admin/supervisor: al técnico le devolvía 403 y la tarea se
+ * quedaba "en progreso" en el panel aunque la evidencia sí se hubiera subido.
  *
  * @param {number} idTarea
  */
-export const terminarServicio = async (idTarea) => {
-  const { data } = await apiClient.patch(`/tareas/${idTarea}/estado`, {
-    estado: 'completado',
-  })
+export const finalizarServicio = async (idTarea) => {
+  const { data } = await apiClient.patch(`/tareas/${idTarea}/finalizar`)
+  return data
+}
+
+/**
+ * Historial de tareas completadas, agrupado por día.
+ * Corresponde a GET /tareas/completadas.
+ *
+ * Un técnico solo recibe las suyas aunque no mande `id_tecnico`; el backend
+ * fuerza el filtro según el rol del token.
+ *
+ * @param {{fecha_desde?: string, fecha_hasta?: string, id_tecnico?: number}} filtros
+ * @returns {Promise<{total:number, desde:string, hasta:string, dias:Array}>}
+ */
+export const getTareasCompletadas = async (filtros = {}) => {
+  const params = Object.fromEntries(
+    Object.entries(filtros).filter(
+      ([, v]) => v !== '' && v !== null && v !== undefined
+    )
+  )
+  const { data } = await apiClient.get('/tareas/completadas', { params })
   return data
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * ¿Esta tarea pertenece a la ruta de hoy?
+ *
+ * Sí para todo lo que sigue abierto (pendiente / en progreso) y para lo que se
+ * cerró hoy. Las completadas de días anteriores viven en el historial, no en
+ * la ruta diaria.
+ *
+ * @param {{estado: string, fecha_completado: string|null}} servicio
+ */
+export function esTareaDeHoy(servicio) {
+  if (servicio.estado === 'cancelado') return false
+  if (servicio.estado !== 'completado') return true
+  if (!servicio.fecha_completado) return false
+
+  const cerrada = new Date(servicio.fecha_completado)
+  const hoy = new Date()
+  return (
+    cerrada.getFullYear() === hoy.getFullYear() &&
+    cerrada.getMonth() === hoy.getMonth() &&
+    cerrada.getDate() === hoy.getDate()
+  )
+}
 
 /**
  * Intenta inferir el tipo de servicio a partir del título o descripción.

@@ -61,13 +61,23 @@ const IconAsistencia = () => (
   </svg>
 )
 
+const IconHistorialTareas = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+)
+
 const NAV_ITEMS = [
-  { to: '/supervisor/dashboard',    label: 'Panel',      Icon: IconDashboard },
-  { to: '/supervisor/alertas',      label: 'Alertas',    Icon: IconAlertas },
-  { to: '/supervisor/reasignacion', label: 'Reasignar',  Icon: IconReasignar },
-  { to: '/supervisor/asistencia',   label: 'Asistencia', Icon: IconAsistencia },
-  { to: '/supervisor/empleados',    label: 'Empleados',  Icon: IconEmpleados },
-  { to: '/supervisor/inventario',   label: 'Inventario', Icon: IconInventario },
+  { to: '/supervisor/dashboard',        label: 'Panel',      Icon: IconDashboard },
+  { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
+  { to: '/supervisor/reasignacion',     label: 'Reasignar',  Icon: IconReasignar },
+  // Historial de lo cerrado por día, con evidencia. Antes el panel solo
+  // mostraba las últimas cinco tareas y no había forma de auditar un día.
+  { to: '/supervisor/historial-tareas', label: 'Realizadas', Icon: IconHistorialTareas },
+  { to: '/supervisor/asistencia',       label: 'Asistencia', Icon: IconAsistencia },
+  { to: '/supervisor/empleados',        label: 'Empleados',  Icon: IconEmpleados },
+  { to: '/supervisor/inventario',       label: 'Inventario', Icon: IconInventario },
 ]
 
 export default function SupervisorLayout() {

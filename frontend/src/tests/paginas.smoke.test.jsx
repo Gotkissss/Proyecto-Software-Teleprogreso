@@ -15,6 +15,19 @@ import { ToastProvider } from '../components/ui/Toast'
 
 /* ── Mocks de los servicios ─────────────────────────────────────────────── */
 
+// Las páginas leen el usuario del contexto de auth. Se mockea en vez de montar
+// el AuthProvider real para no depender de localStorage ni de /auth/me.
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id_empleado: 2, nombre: 'Juan Pérez', rol: 'tecnico' },
+    isLoading: false,
+    isAuthenticated: true,
+    loginUser: vi.fn(),
+    logoutUser: vi.fn(),
+  }),
+  AuthProvider: ({ children }) => children,
+}))
+
 vi.mock('../api/rutaService', () => ({
   getMiRuta: vi.fn(async () => ({
     fecha: '2026-07-28',
@@ -28,11 +41,44 @@ vi.mock('../api/rutaService', () => ({
         nombre: 'Instalación fibra óptica',
         direccion: 'Calle 15, Fraijanes',
         tipo: 'Instalación',
+        fecha_completado: null,
       },
     ],
   })),
   iniciarServicio: vi.fn(async () => ({})),
-  terminarServicio: vi.fn(async () => ({})),
+  finalizarServicio: vi.fn(async () => ({})),
+  getTareasCompletadas: vi.fn(async () => ({
+    total: 1,
+    desde: '2026-07-22',
+    hasta: '2026-07-28',
+    dias: [
+      {
+        fecha: '2026-07-28',
+        total: 1,
+        tareas: [
+          {
+            id_tarea: 1,
+            titulo: 'Instalación fibra óptica',
+            estado_tarea: 'completado',
+            prioridad: 'alta',
+            direccion_servicio: 'Calle 15, Fraijanes',
+            fecha_completado: '2026-07-28T15:04:00',
+            tecnico: { id_empleado: 2, nombre: 'Juan Pérez' },
+            total_incidencias: 1,
+            evidencias: [
+              {
+                id_incidencia: 1,
+                descripcion: 'Se instaló la acometida y se configuró la ONT.',
+                foto_evidencia: '/static/incidencias/x.jpg',
+                fecha_reporte: '2026-07-28T15:03:00',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })),
+  esTareaDeHoy: () => true,
 }))
 
 vi.mock('../api/equipoService', () => ({
@@ -63,6 +109,33 @@ vi.mock('../api/asistenciaService', () => ({
   getTiposPausa: vi.fn(async () => [
     { id: 'almuerzo', label: 'Pausa de Almuerzo', duracion_max_min: 60 },
   ]),
+  // Estado de pausas reconstruido desde el backend (GET /descanso/hoy).
+  getEstadoPausas: vi.fn(async () => ({
+    fecha: '2026-07-28',
+    id_asistencia: 1,
+    jornada_activa: true,
+    hora_entrada: '08:00:00',
+    hora_salida: null,
+    segundos_brutos: 7200,
+    segundos_trabajados: 6600,
+    segundos_en_pausa: 600,
+    pausa_activa: null,
+    tipos_usados: ['personal'],
+    descansos: [
+      {
+        id_descanso: 1,
+        tipo: 'personal',
+        label: 'Pausa Personal',
+        hora_inicio: '09:00:00',
+        hora_fin: '09:10:00',
+        duracion_segundos: 600,
+        duracion_max_seg: 600,
+        segundos_restantes: 0,
+        excedida: false,
+        en_curso: false,
+      },
+    ],
+  })),
   registrarEntrada: vi.fn(async () => ({})),
   iniciarPausa: vi.fn(async () => ({})),
   finalizarPausa: vi.fn(async () => ({})),
@@ -104,6 +177,7 @@ vi.mock('../api/incidenciaService', () => ({
   crearIncidencia: vi.fn(async () => ({ id_incidencia: 1 })),
   subirFotoEvidencia: vi.fn(async () => ({ foto_evidencia: '/static/x.jpg' })),
   eliminarIncidencia: vi.fn(async () => ({})),
+  finalizarTarea: vi.fn(async () => ({ id_tarea: 1, estado_tarea: 'completado' })),
   finalizarTareaConEvidencia: vi.fn(async () => ({ id_incidencia: 1 })),
   validarFoto: () => null,
   EXTENSIONES_FOTO: ['.jpg', '.png'],
@@ -193,6 +267,24 @@ describe('Pantallas del técnico', () => {
     const { default: PausasPage } = await import('../pages/PausasPage')
     const { container } = renderizar(PausasPage)
     await esperarContenido(container)
+  })
+
+  it('PausasPage reconstruye la pausa ya registrada en el servidor', async () => {
+    // El historial no vive en useState: si el backend reporta una pausa, la
+    // pantalla debe pintarla aunque sea el primer render tras un reinicio.
+    const { default: PausasPage } = await import('../pages/PausasPage')
+    renderizar(PausasPage)
+    expect(await screen.findByText('Pausa Personal')).toBeInTheDocument()
+  })
+
+  it('HistorialTareasPage lista lo completado por día', async () => {
+    const { default: HistorialTareasPage } = await import('../pages/HistorialTareasPage')
+    const { container } = renderizar(HistorialTareasPage)
+    await esperarContenido(container)
+    expect(await screen.findByText('Tareas realizadas')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Se instaló la acometida/i)
+    ).toBeInTheDocument()
   })
 })
 

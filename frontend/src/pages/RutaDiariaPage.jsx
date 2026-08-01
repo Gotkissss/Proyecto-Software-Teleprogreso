@@ -220,6 +220,12 @@ export default function RutaDiariaPage() {
   }
 
   const handleIniciar = async (idServicio) => {
+    // Se guarda el estado previo para poder revertir con exactitud si el
+    // backend rechaza el inicio (antes se revertía siempre a 'pendiente',
+    // aunque la tarea viniera de otro estado).
+    const estadoPrevio =
+      servicios.find((s) => s.id_servicio === idServicio)?.estado ?? 'pendiente'
+
     // Optimistic update
     setServicios((prev) =>
       prev.map((s) =>
@@ -239,8 +245,13 @@ export default function RutaDiariaPage() {
       // tarjeta no debe quedarse en "en progreso" engañando al técnico.
       setServicios((prev) =>
         prev.map((s) =>
-          s.id_servicio === idServicio ? { ...s, estado: 'pendiente' } : s
+          s.id_servicio === idServicio ? { ...s, estado: estadoPrevio } : s
         )
+      )
+      setDetalleAbierto((prev) =>
+        prev && prev.id_servicio === idServicio
+          ? { ...prev, estado: estadoPrevio }
+          : prev
       )
       toast.error(detalle || 'No se pudo iniciar el servicio.')
     }
@@ -263,11 +274,20 @@ export default function RutaDiariaPage() {
       ordenarServicios(
         prev.map((s) =>
           s.id_servicio === idServicio
-            ? { ...s, estado: 'completado', total_incidencias: (s.total_incidencias ?? 0) + 1 }
+            ? {
+                ...s,
+                estado: 'completado',
+                fecha_completado: new Date().toISOString(),
+                total_incidencias: (s.total_incidencias ?? 0) + 1,
+              }
             : s
         )
       )
     )
+    // Se recarga contra el servidor para que la lista refleje lo que quedó
+    // realmente guardado. Antes solo se actualizaba el array local: al salir
+    // y volver a entrar reaparecía la tarea como si nada hubiera pasado.
+    fetchRuta()
   }
 
   const handleVerDetalle = (servicio) => {

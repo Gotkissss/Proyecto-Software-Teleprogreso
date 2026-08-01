@@ -15,7 +15,8 @@ Se tiene el siguiente control de acceso por rol:
 Requiere token JWT valido en Authorization: Bearer <token>.
 """
 
-from datetime import date
+from collections import OrderedDict
+from datetime import date, datetime, time, timedelta
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -33,18 +34,26 @@ from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
 from app.schemas.tarea import (
+    DiaCompletadas,
+    EvidenciaResumen,
+    HistorialTareasResponse,
+    TareaCompletadaResponse,
     TareaCreate,
     TareaReasignar,
     TareaResponse,
     TareaUpdate,
     TareaUpdateEstado,
 )
+from app.services.tareas import marcar_completada, marcar_reabierta
 
 router = APIRouter(prefix="/tareas", tags=["Tareas"])
 
 # Estados que cuentan como "tareas activas" para el límite de carga
 ESTADOS_ACTIVOS = ("pendiente", "en_progreso")
 LIMITE_TAREAS_ACTIVAS = 3
+
+# Roles que ven el trabajo de todos los técnicos, no solo el propio.
+ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 
 
 # ─── Utilidad interna ────────────────────────────────────────────────────────
@@ -123,6 +132,7 @@ async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
         fecha_inicio=tarea.fecha_inicio,
         fecha_finalizacion=tarea.fecha_finalizacion,
         fecha_asignacion=tarea.fecha_asignacion,
+        fecha_completado=tarea.fecha_completado,
         tecnico=await _obtener_tecnico_de_tarea(db, tarea.id_tarea),
     )
 
@@ -187,6 +197,7 @@ async def get_tareas(
                 fecha_inicio=tarea.fecha_inicio,
                 fecha_finalizacion=tarea.fecha_finalizacion,
                 fecha_asignacion=tarea.fecha_asignacion,
+                fecha_completado=tarea.fecha_completado,
                 tecnico=tecnico,
                 total_incidencias=incidencias_por_tarea.get(tarea.id_tarea, 0),
             )
@@ -359,9 +370,18 @@ async def update_tarea(
         tarea.fecha_finalizacion = cambios["fecha_finalizacion"]
 
     if "estado" in cambios and cambios["estado"] is not None:
-        tarea.estado_tarea = data.estado.value
-        if tarea.estado_tarea == "en_progreso" and tarea.fecha_inicio is None:
-            tarea.fecha_inicio = date.today()
+        nuevo_estado = data.estado.value
+        if nuevo_estado == "completado":
+            # Pasa por el helper compartido para que la tarea quede con
+            # `fecha_completado` y aparezca en el historial diario.
+            marcar_completada(tarea)
+        else:
+            tarea.estado_tarea = nuevo_estado
+            # Reabrir una tarea borra la marca de cierre: si no, seguiría
+            # contando como "hecha" ese día.
+            marcar_reabierta(tarea)
+            if nuevo_estado == "en_progreso" and tarea.fecha_inicio is None:
+                tarea.fecha_inicio = date.today()
 
     # ── Reasignación de técnico ─────────────────────────────────────────────
     if "id_tecnico" in cambios:
@@ -447,9 +467,15 @@ async def update_estado(
             detail=f"Tarea con id={id} no encontrada.",
         )
 
-    tarea.estado_tarea = data.estado.value
-    if tarea.estado_tarea == "en_progreso" and tarea.fecha_inicio is None:
-        tarea.fecha_inicio = date.today()
+    nuevo_estado = data.estado.value
+
+    if nuevo_estado == "completado":
+        marcar_completada(tarea)
+    else:
+        tarea.estado_tarea = nuevo_estado
+        marcar_reabierta(tarea)
+        if nuevo_estado == "en_progreso" and tarea.fecha_inicio is None:
+            tarea.fecha_inicio = date.today()
 
     await db.flush()
     return await _tarea_a_response(db, tarea)
@@ -578,19 +604,248 @@ async def iniciar_tarea(
                        "Solo el técnico asignado puede iniciarla.",
             )
 
-    if tarea.fecha_inicio is not None:
+    # El bloqueo se decide por el ESTADO, no por `fecha_inicio`.
+    #
+    # Antes se rechazaba la petición si `fecha_inicio` no era NULL, pero esa
+    # columna es la fecha *programada* de la tarea: el supervisor la llena al
+    # crearla desde "Nueva tarea". Resultado: toda tarea con fecha planificada
+    # nacía imposible de iniciar y el técnico veía "La tarea ya fue iniciada
+    # anteriormente" en la primera pulsación.
+    if tarea.estado_tarea == "completado":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La tarea ya fue iniciada anteriormente.",
+            detail="Esta tarea ya fue completada. No se puede volver a iniciar.",
         )
 
-    tarea.fecha_inicio = date.today()
-    tarea.estado_tarea = "en_progreso"
+    if tarea.estado_tarea == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta tarea está cancelada. Pide a tu supervisor que la reactive.",
+        )
+
+    # Iniciar una tarea que ya está en curso es idempotente: si al técnico se
+    # le fue la señal y reintenta, debe encontrarse la tarea abierta, no un
+    # error.
+    ya_en_curso = tarea.estado_tarea == "en_progreso"
+
+    if not ya_en_curso:
+        tarea.estado_tarea = "en_progreso"
+        # Solo se sobreescribe si no había fecha planificada.
+        if tarea.fecha_inicio is None:
+            tarea.fecha_inicio = date.today()
+
+    await db.flush()
 
     return {
-        "message": "Tarea iniciada correctamente",
+        "message": (
+            "La tarea ya estaba en curso"
+            if ya_en_curso
+            else "Tarea iniciada correctamente"
+        ),
         "id_tarea": tarea.id_tarea,
         "titulo": tarea.titulo,
-        "fecha_inicio": str(tarea.fecha_inicio),
+        "fecha_inicio": str(tarea.fecha_inicio) if tarea.fecha_inicio else None,
         "estado": tarea.estado_tarea,
     }
+
+
+# ─── PATCH /tareas/{id}/finalizar ─────────────────────────────────────────────
+# Acceso: técnico asignado, admin y supervisor.
+
+@router.patch(
+    "/{id}/finalizar",
+    response_model=TareaResponse,
+    summary="Finalizar una tarea asignada (técnico)",
+    status_code=status.HTTP_200_OK,
+)
+async def finalizar_tarea(
+    id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(require_tecnico)],
+):
+    """
+    Cierra una tarea y deja marcado el momento exacto del cierre.
+
+    Existe como endpoint propio porque el cierre venía viajando como un flag
+    dentro del upload multipart de la foto de evidencia: si ese flag se perdía
+    (proxy, reintento, timeout de la subida) la evidencia quedaba guardada
+    pero la tarea seguía "en progreso" en el panel del supervisor. Ahora el
+    frontend confirma el cierre con esta llamada, que es idempotente.
+
+    Reglas:
+    - Solo el técnico asignado puede finalizar (admin/supervisor pasan igual).
+    - Requiere al menos una evidencia registrada en la tarea.
+    - Una tarea cancelada no puede completarse.
+
+    Roles: técnico asignado, admin, supervisor.
+    """
+    result = await db.execute(select(Tarea).where(Tarea.id_tarea == id))
+    tarea = result.scalar_one_or_none()
+
+    if not tarea:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tarea con id={id} no encontrada.",
+        )
+
+    if current_user.rol == "tecnico":
+        result_asig = await db.execute(
+            select(EmpleadoTarea).where(
+                EmpleadoTarea.id_tarea == id,
+                EmpleadoTarea.id_empleado == current_user.id_empleado,
+            )
+        )
+        if result_asig.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para finalizar esta tarea. "
+                       "Solo el técnico asignado puede cerrarla.",
+            )
+
+    if tarea.estado_tarea == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede finalizar una tarea cancelada.",
+        )
+
+    # La evidencia es obligatoria (SCRUM-139): cerrar sin ella dejaría al
+    # supervisor sin constancia de lo hecho.
+    if await _contar_incidencias(db, id) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registra la evidencia (descripción y foto) antes de finalizar la tarea.",
+        )
+
+    marcar_completada(tarea)
+    await db.flush()
+
+    return await _tarea_a_response(db, tarea)
+
+
+# ─── GET /tareas/completadas ──────────────────────────────────────────────────
+# Acceso: cualquier empleado autenticado (el técnico solo ve las suyas).
+
+@router.get(
+    "/completadas",
+    response_model=HistorialTareasResponse,
+    summary="Historial de tareas completadas, agrupado por día",
+    status_code=status.HTTP_200_OK,
+)
+async def get_tareas_completadas(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    fecha_desde: Optional[date] = Query(
+        None, description="Fecha mínima (YYYY-MM-DD). Por defecto, hace 7 días."
+    ),
+    fecha_hasta: Optional[date] = Query(
+        None, description="Fecha máxima (YYYY-MM-DD). Por defecto, hoy."
+    ),
+    id_tecnico: Optional[int] = Query(
+        None,
+        description="Filtrar por técnico. Los técnicos solo pueden verse a sí mismos.",
+    ),
+):
+    """
+    Devuelve lo que realmente se cerró en un rango de fechas, agrupado por día
+    y con las evidencias de cada tarea incluidas.
+
+    El corte por día se hace sobre `fecha_completado` (el momento real del
+    cierre), no sobre `fecha_finalizacion`, que es la fecha límite pactada.
+
+    Control de acceso:
+    - admin, supervisor y gerente ven el historial de todos los técnicos.
+    - un técnico solo ve sus propias tareas, aunque mande otro `id_tecnico`.
+    """
+    hoy = date.today()
+    hasta = fecha_hasta or hoy
+    desde = fecha_desde or (hasta - timedelta(days=6))
+
+    if desde > hasta:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha inicial no puede ser posterior a la final.",
+        )
+
+    # Un técnico nunca ve el trabajo de otro, mande lo que mande en la query.
+    if current_user.rol not in ROLES_SUPERVISION:
+        id_empleado_filtro = current_user.id_empleado
+    else:
+        id_empleado_filtro = id_tecnico
+
+    # `fecha_completado` es un DateTime: el límite superior es el inicio del
+    # día siguiente, si no se perderían las tareas cerradas después de las
+    # 00:00:00 del último día del rango.
+    query = (
+        select(Tarea)
+        .options(
+            selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado),
+            selectinload(Tarea.incidencias),
+        )
+        .where(
+            Tarea.estado_tarea == "completado",
+            Tarea.fecha_completado.isnot(None),
+            Tarea.fecha_completado >= datetime.combine(desde, time.min),
+            Tarea.fecha_completado < datetime.combine(hasta + timedelta(days=1), time.min),
+        )
+        .order_by(Tarea.fecha_completado.desc())
+    )
+
+    if id_empleado_filtro is not None:
+        query = query.join(
+            EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea
+        ).where(EmpleadoTarea.id_empleado == id_empleado_filtro)
+
+    result = await db.execute(query)
+    tareas = result.scalars().unique().all()
+
+    # Agrupación por día, preservando el orden descendente de la consulta.
+    dias: "OrderedDict[date, List[TareaCompletadaResponse]]" = OrderedDict()
+
+    for tarea in tareas:
+        tecnico = None
+        if tarea.empleados:
+            emp = tarea.empleados[0].empleado
+            tecnico = {
+                "id_empleado": emp.id_empleado,
+                "nombre": f"{emp.nombre} {emp.apellido}",
+            }
+
+        evidencias = sorted(
+            tarea.incidencias, key=lambda i: i.fecha_reporte, reverse=True
+        )
+
+        item = TareaCompletadaResponse(
+            id_tarea=tarea.id_tarea,
+            titulo=tarea.titulo,
+            descripcion=tarea.descripcion,
+            direccion_servicio=tarea.direccion_servicio,
+            estado_tarea=tarea.estado_tarea,
+            prioridad=tarea.prioridad,
+            fecha_inicio=tarea.fecha_inicio,
+            fecha_finalizacion=tarea.fecha_finalizacion,
+            fecha_asignacion=tarea.fecha_asignacion,
+            fecha_completado=tarea.fecha_completado,
+            tecnico=tecnico,
+            total_incidencias=len(evidencias),
+            evidencias=[
+                EvidenciaResumen(
+                    id_incidencia=e.id_incidencia,
+                    descripcion=e.descripcion,
+                    foto_evidencia=e.foto_evidencia,
+                    fecha_reporte=e.fecha_reporte,
+                )
+                for e in evidencias
+            ],
+        )
+
+        dias.setdefault(tarea.fecha_completado.date(), []).append(item)
+
+    return HistorialTareasResponse(
+        total=len(tareas),
+        desde=desde,
+        hasta=hasta,
+        dias=[
+            DiaCompletadas(fecha=fecha, total=len(items), tareas=items)
+            for fecha, items in dias.items()
+        ],
+    )

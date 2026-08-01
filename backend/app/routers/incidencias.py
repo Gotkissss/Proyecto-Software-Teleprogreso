@@ -20,10 +20,17 @@ Requiere token JWT válido en Authorization: Bearer <token>.
 -----------------------------------------------------------------------------
 """
 
-from datetime import date
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +43,7 @@ from app.schemas.incidencia import (
     IncidenciaCreate,
     IncidenciaResponse,
 )
+from app.services.tareas import marcar_completada
 from app.services.uploads import eliminar_imagen, guardar_imagen
 
 # El prefijo cuelga de /tareas para respetar la jerarquía del recurso.
@@ -85,6 +93,26 @@ async def _obtener_tarea_autorizada(
             )
 
     return tarea
+
+
+def _finalizar_tarea(tarea: Tarea) -> None:
+    """
+    Marca la tarea como completada tras registrar su evidencia.
+
+    Vive aparte porque lo usan dos endpoints: el registro de la evidencia
+    (cuando no lleva foto) y el upload de la foto (el caso normal del modal
+    "Finalizar tarea", donde la tarea solo debe cerrarse si la foto llegó bien).
+
+    Delega en `marcar_completada` para que el cierre deje siempre puesta la
+    `fecha_completado`; antes esta función solo cambiaba el estado y la tarea
+    no llegaba nunca al historial diario.
+    """
+    if tarea.estado_tarea == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede finalizar una tarea cancelada.",
+        )
+    marcar_completada(tarea)
 
 
 async def _obtener_incidencia(
@@ -148,14 +176,7 @@ async def crear_incidencia(
     db.add(incidencia)
 
     if data.finalizar_tarea:
-        if tarea.estado_tarea == "cancelado":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede finalizar una tarea cancelada.",
-            )
-        tarea.estado_tarea = "completado"
-        if tarea.fecha_inicio is None:
-            tarea.fecha_inicio = date.today()
+        _finalizar_tarea(tarea)
 
     await db.flush()
     # fecha_reporte la pone la BD (server_default NOW()); hay que releerla
@@ -209,7 +230,23 @@ async def upload_foto_evidencia(
     id_incidencia: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    file: UploadFile = File(..., description="Imagen jpg, jpeg, png, webp o gif."),
+    file: Annotated[
+        UploadFile, File(description="Imagen jpg, jpeg, png, webp o gif.")
+    ],
+    # Con Annotated el valor por defecto es un bool de verdad. Escrito como
+    # `finalizar_tarea: bool = Form(False)`, el default sería el objeto Form,
+    # que es truthy: al llamar la función fuera de FastAPI (tests) la tarea se
+    # cerraría siempre.
+    finalizar_tarea: Annotated[
+        bool,
+        Form(
+            description=(
+                "Si es true, marca la tarea como 'completado' una vez guardada "
+                "la foto. Es lo que usa el modal 'Finalizar tarea': así la "
+                "tarea solo se cierra si la evidencia se subió bien."
+            )
+        ),
+    ] = False,
 ):
     """
     Adjunta la foto de evidencia a una incidencia ya creada.
@@ -219,9 +256,13 @@ async def upload_foto_evidencia(
     - Tamaño máximo: 5 MB
     - Si ya había una foto, se reemplaza y la anterior se borra del disco
 
+    Con `finalizar_tarea=true` cierra además la tarea, dejando el flujo del
+    técnico en dos peticiones (crear evidencia → subir foto y finalizar) sin
+    tener que crear una incidencia extra solo para cambiar el estado.
+
     Roles: el técnico asignado, admin o supervisor.
     """
-    await _obtener_tarea_autorizada(db, id, current_user)
+    tarea = await _obtener_tarea_autorizada(db, id, current_user)
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
 
     incidencia.foto_evidencia = await guardar_imagen(
@@ -230,6 +271,10 @@ async def upload_foto_evidencia(
         prefijo=f"incidencia_{id_incidencia}",
         url_anterior=incidencia.foto_evidencia,
     )
+
+    if finalizar_tarea:
+        _finalizar_tarea(tarea)
+
     await db.flush()
 
     return FotoEvidenciaResponse(

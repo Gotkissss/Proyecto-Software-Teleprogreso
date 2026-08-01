@@ -1,11 +1,28 @@
+/**
+ * pages/PausasPage.jsx
+ * ---------------------------------------------------------------------------
+ * Pantalla de jornada y pausas del técnico.
+ *
+ * Regla de oro de esta pantalla: **no inventa tiempo**. Todo el estado
+ * (jornada abierta, pausa en curso, segundos ya consumidos, historial, pausas
+ * ya usadas) se reconstruye desde `GET /descanso/hoy` en cada montaje.
+ *
+ * Antes los cronómetros arrancaban en 0 en cada montaje y el historial vivía
+ * en un useState, así que salir de la pantalla —o cerrar sesión— reiniciaba
+ * todo aunque en la base de datos la pausa siguiera abierta. Ahora el contador
+ * del navegador solo sirve para animar: el valor base y el ancla temporal
+ * vienen del servidor.
+ * ---------------------------------------------------------------------------
+ */
+
 import { useCallback, useState, useEffect, useRef } from 'react'
 import {
-  getAsistenciaHoy,
   registrarEntrada,
   iniciarPausa,
   finalizarPausa,
   finalizarJornada,
   getTiposPausa,
+  getEstadoPausas,
 } from '../api/asistenciaService'
 import Modal from '../components/ui/Modal'
 import Spinner from '../components/ui/Spinner'
@@ -26,29 +43,28 @@ const IconLogin   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 
 const JORNADA_TOTAL_SEGUNDOS = 8 * 3600 // 8 horas
 
-const secsToHHMM = (s) => {
+const secsToHHMMSS = (total) => {
+  const s = Math.max(0, Math.floor(total))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`
 }
 
 const formatCountdown = (seconds) => {
-  if (seconds < 0) seconds = 0
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+  const s = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (h > 0) return secsToHHMMSS(s)
+  return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`
 }
 
 const formatDuracion = (seconds) => {
   if (!seconds) return ''
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+  return formatCountdown(seconds)
 }
+
+/** "14:32:05" → "14:32" para las etiquetas del historial. */
+const horaCorta = (hora) => (hora ? hora.slice(0, 5) : '')
 
 function ModalPausa({ open, tipos, pausasUsadas, onSelect, onClose, loading }) {
   // Antes era un overlay propio de esta página; ahora usa el Modal compartido.
@@ -108,70 +124,40 @@ function HistorialRow({ item }) {
 
 export default function PausasPage() {
   const toast = useToast()
-  const [asistencia, setAsistencia] = useState(null)
+
+  // Estado tal como lo reporta el backend. Es la única fuente de verdad.
+  const [estado,     setEstado]     = useState(null)
   const [tiposPausa, setTiposPausa] = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [showModal,  setShowModal]  = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-  // segundos transcurridos desde que entró (para el countdown de jornada)
-  const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0)
-  // pausa activa: { id, label, duracionMaxSeg, segundosRestantes }
-  const [pausaActiva, setPausaActiva] = useState(null)
-  // IDs de pausas ya usadas esta jornada
-  const [pausasUsadas, setPausasUsadas] = useState([])
-  // historial local construido manualmente
-  const [historial, setHistorial] = useState([])
 
-  const enPausa = !!pausaActiva
-  const jornadaIniciada = !!asistencia?.hora_entrada
-  const jornadaFinalizada = !!asistencia?.hora_salida
+  // Segundos añadidos por el tick local desde la última respuesta del servidor.
+  // Solo anima el reloj: el valor de partida siempre viene del backend, así
+  // que salir y volver a entrar no reinicia nada.
+  const [tickLocal, setTickLocal] = useState(0)
 
-  // Tick del tiempo transcurrido de jornada (cuenta hacia arriba internamente,
-  // pero lo mostramos como JORNADA_TOTAL - transcurrido = tiempo restante)
-  const tiempoTranscurridoRef = useRef(null)
-  useEffect(() => {
-    if (jornadaIniciada && !jornadaFinalizada && !enPausa) {
-      tiempoTranscurridoRef.current = setInterval(() => {
-        setTiempoTranscurrido((s) => s + 1)
-      }, 1000)
-    } else {
-      clearInterval(tiempoTranscurridoRef.current)
-    }
-    return () => clearInterval(tiempoTranscurridoRef.current)
-  }, [jornadaIniciada, jornadaFinalizada, enPausa])
+  const jornadaIniciada   = Boolean(estado?.hora_entrada)
+  const jornadaFinalizada = Boolean(estado?.hora_salida)
+  const pausaActiva       = estado?.pausa_activa ?? null
+  const enPausa           = Boolean(pausaActiva)
 
-  // Tick del countdown de pausa
-  const pausaRef = useRef(null)
-  useEffect(() => {
-    if (enPausa) {
-      pausaRef.current = setInterval(() => {
-        setPausaActiva((prev) => {
-          if (!prev) return prev
-          const next = prev.segundosRestantes - 1
-          return { ...prev, segundosRestantes: next < 0 ? 0 : next }
-        })
-      }, 1000)
-    } else {
-      clearInterval(pausaRef.current)
-    }
-    return () => clearInterval(pausaRef.current)
-  }, [enPausa])
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true)
     try {
       setError(null)
-      const [asist, tipos] = await Promise.all([
-        getAsistenciaHoy(),
+      const [estadoPausas, tipos] = await Promise.all([
+        getEstadoPausas(),
         getTiposPausa(),
       ])
-      setAsistencia(asist)
+      setEstado(estadoPausas)
       setTiposPausa(tipos)
+      setTickLocal(0)
     } catch (err) {
       setError(err?.response?.data?.detail || 'No se pudo cargar la asistencia.')
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [])
 
@@ -179,14 +165,37 @@ export default function PausasPage() {
     fetchData()
   }, [fetchData])
 
+  // Tick de 1 s mientras la jornada esté abierta. Solo incrementa el offset
+  // local; los totales reales siguen siendo los del servidor + este offset.
+  const tickRef = useRef(null)
+  useEffect(() => {
+    if (jornadaIniciada && !jornadaFinalizada) {
+      tickRef.current = setInterval(() => setTickLocal((s) => s + 1), 1000)
+    } else {
+      clearInterval(tickRef.current)
+    }
+    return () => clearInterval(tickRef.current)
+  }, [jornadaIniciada, jornadaFinalizada])
+
+  // Al volver a la pestaña, se resincroniza con el servidor: si el móvil
+  // suspendió la app, el setInterval se congela y el reloj se queda corto.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchData({ silencioso: true })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [fetchData])
+
   const handleRegistrarEntrada = async () => {
     setActionLoading(true)
     try {
-      const updated = await registrarEntrada()
-      setAsistencia(updated)
-      const horaLabel = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
-      setHistorial([{ tipo: 'entrada', label: 'Inicio de Jornada', hora_inicio: horaLabel, hora_fin: null, duracion_segundos: null }])
-      setTiempoTranscurrido(0)
+      await registrarEntrada()
+      await fetchData({ silencioso: true })
       toast.success('¡Entrada registrada correctamente!')
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo registrar la entrada.')
@@ -198,20 +207,14 @@ export default function PausasPage() {
   const handleIniciarPausa = async (tipoPausaId) => {
     setActionLoading(true)
     try {
-      const tipo = tiposPausa.find((t) => t.id === tipoPausaId)
       await iniciarPausa(tipoPausaId)
-      const horaLabel = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
-      setPausaActiva({
-        id: tipoPausaId,
-        label: tipo.label,
-        duracionMaxSeg: tipo.duracion_max_min * 60,
-        segundosRestantes: tipo.duracion_max_min * 60,
-        horaInicio: horaLabel,
-      })
-      setPausasUsadas((prev) => [...prev, tipoPausaId])
       setShowModal(false)
+      // Se recarga en vez de construir el estado a mano: la hora de inicio
+      // que vale es la que quedó guardada en la base de datos.
+      await fetchData({ silencioso: true })
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo iniciar la pausa.')
+      await fetchData({ silencioso: true })
     } finally {
       setActionLoading(false)
     }
@@ -221,21 +224,11 @@ export default function PausasPage() {
     setActionLoading(true)
     try {
       await finalizarPausa()
-      const horaFin = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
-      const duracionUsada = pausaActiva.duracionMaxSeg - pausaActiva.segundosRestantes
-      setHistorial((prev) => [
-        ...prev,
-        {
-          tipo: 'pausa',
-          label: pausaActiva.label,
-          hora_inicio: pausaActiva.horaInicio,
-          hora_fin: horaFin,
-          duracion_segundos: duracionUsada,
-        },
-      ])
-      setPausaActiva(null)
+      await fetchData({ silencioso: true })
+      toast.success('Jornada reanudada.')
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo reanudar la jornada.')
+      await fetchData({ silencioso: true })
     } finally {
       setActionLoading(false)
     }
@@ -246,8 +239,8 @@ export default function PausasPage() {
     setActionLoading(true)
     try {
       await finalizarJornada()
+      await fetchData({ silencioso: true })
       toast.success('¡Jornada finalizada! Tu estado se actualizó.')
-      setAsistencia((prev) => ({ ...prev, hora_salida: new Date().toISOString() }))
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo finalizar la jornada.')
     } finally {
@@ -255,37 +248,77 @@ export default function PausasPage() {
     }
   }
 
-  const getEstadoJornada = () => {
-    if (!jornadaIniciada)    return { label: 'Inactivo',           color: '#94a3b8' }
-    if (jornadaFinalizada)   return { label: 'Jornada finalizada', color: '#16a34a' }
-    if (enPausa)             return { label: pausaActiva.label,    color: '#d97706' }
-    return                          { label: 'Activo',             color: '#16a34a' }
-  }
-
-  if (loading || (error && !asistencia)) {
+  if (loading || (error && !estado)) {
     return (
       <PageState
         loading={loading}
         loadingLabel="Cargando asistencia..."
-        error={!asistencia ? error : null}
+        error={!estado ? error : null}
         onRetry={fetchData}
         errorTitle="No se pudo cargar tu asistencia"
       />
     )
   }
 
-  const estadoJornada = getEstadoJornada()
-  // Tiempo restante de jornada (8h - transcurrido)
-  const segundosRestantesJornada = Math.max(0, JORNADA_TOTAL_SEGUNDOS - tiempoTranscurrido)
-  const jornadaDisplay = formatCountdown(segundosRestantesJornada)
+  /* ── Valores derivados: base del servidor + tick local ────────────────── */
+
+  // El tick solo avanza si la jornada sigue abierta.
+  const offset = jornadaFinalizada ? 0 : tickLocal
+
+  const segundosDesdeEntrada = (estado?.segundos_brutos ?? 0) + offset
+  const segundosEnPausaTotal = (estado?.segundos_en_pausa ?? 0) + (enPausa ? offset : 0)
+  const segundosTrabajados   = Math.max(0, segundosDesdeEntrada - segundosEnPausaTotal)
+  const segundosRestantesJornada = Math.max(0, JORNADA_TOTAL_SEGUNDOS - segundosTrabajados)
+
+  const pausaTranscurrida = enPausa ? (pausaActiva.duracion_segundos ?? 0) + offset : 0
+  const pausaRestante = enPausa
+    ? Math.max(0, (pausaActiva.duracion_max_seg ?? 0) - pausaTranscurrida)
+    : 0
+  const pausaExcedida = enPausa && pausaTranscurrida > (pausaActiva.duracion_max_seg ?? 0)
+
+  const pausasUsadas = estado?.tipos_usados ?? []
+
+  // Historial: la entrada del día más cada pausa registrada en la BD.
+  const historial = []
+  if (estado?.hora_entrada) {
+    historial.push({
+      tipo: 'entrada',
+      label: 'Inicio de Jornada',
+      hora_inicio: horaCorta(estado.hora_entrada),
+      hora_fin: null,
+      duracion_segundos: null,
+    })
+  }
+  for (const d of estado?.descansos ?? []) {
+    historial.push({
+      tipo: 'pausa',
+      label: d.en_curso ? `${d.label} (en curso)` : d.label,
+      hora_inicio: horaCorta(d.hora_inicio),
+      hora_fin: horaCorta(d.hora_fin),
+      duracion_segundos: d.en_curso ? pausaTranscurrida : d.duracion_segundos,
+    })
+  }
+
+  const estadoJornada = !jornadaIniciada
+    ? { label: 'Inactivo',           color: '#94a3b8' }
+    : jornadaFinalizada
+    ? { label: 'Jornada finalizada', color: '#16a34a' }
+    : enPausa
+    ? { label: pausaActiva.label,    color: pausaExcedida ? '#dc2626' : '#d97706' }
+    : { label: 'Activo',             color: '#16a34a' }
+
+  // Productividad = tiempo efectivo sobre el tiempo total de presencia.
+  const productividadPct = segundosDesdeEntrada > 0
+    ? Math.round((segundosTrabajados / segundosDesdeEntrada) * 100)
+    : 0
 
   return (
     <div className={styles.page}>
       <section className={styles.hero}>
         <p className={styles.jornadaLabel}>
           Jornada de Hoy:{' '}
-          {asistencia?.fecha
-            ? new Date(asistencia.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
+          {estado?.fecha
+            ? new Date(estado.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
                 day: 'numeric', month: 'long', year: 'numeric'
               })
             : ''}
@@ -319,22 +352,24 @@ export default function PausasPage() {
           </div>
         ) : (
           <>
-            {/* Reloj principal: countdown jornada o countdown pausa */}
+            {/* Reloj principal: countdown de jornada o de la pausa en curso */}
             <div className={`${styles.clockRing} ${enPausa ? styles.clockRingPaused : ''}`}>
               <span className={styles.clockIcon}><IconClock /></span>
               <span className={`${styles.clockTime} ${enPausa ? styles.clockTimePaused : ''}`}>
                 {enPausa
-                  ? formatCountdown(pausaActiva.segundosRestantes)
-                  : jornadaDisplay}
+                  ? formatCountdown(pausaRestante)
+                  : formatCountdown(segundosRestantesJornada)}
               </span>
               <span className={styles.clockLabel}>
-                {enPausa ? 'TIEMPO DE PAUSA' : 'TIEMPO RESTANTE'}
+                {enPausa
+                  ? (pausaExcedida ? 'PAUSA EXCEDIDA' : 'TIEMPO DE PAUSA')
+                  : 'TIEMPO RESTANTE'}
               </span>
             </div>
 
             <p className={styles.normativaText}>
               {enPausa
-                ? `Pausa en curso: ${pausaActiva.label}`
+                ? `Pausa en curso: ${pausaActiva.label} · desde las ${horaCorta(pausaActiva.hora_inicio)}`
                 : 'Registra tus pausas obligatorias para cumplir con la normativa operativa.'}
             </p>
 
@@ -359,7 +394,9 @@ export default function PausasPage() {
           <span className={styles.metricIcon}><IconBolt /></span>
           <div>
             <p className={styles.metricLabel}>PRODUCTIVIDAD</p>
-            <p className={styles.metricValue}>{asistencia?.productividad_pct ?? '-'}%</p>
+            <p className={styles.metricValue}>
+              {jornadaIniciada ? `${productividadPct}%` : '-'}
+            </p>
           </div>
         </div>
         <div className={styles.metricCard}>
@@ -367,9 +404,7 @@ export default function PausasPage() {
           <div>
             <p className={styles.metricLabel}>EN PAUSA</p>
             <p className={styles.metricValue}>
-              {asistencia?.tiempo_en_pausa_segundos != null
-                ? secsToHHMM(asistencia.tiempo_en_pausa_segundos)
-                : '--:--:--'}
+              {jornadaIniciada ? secsToHHMMSS(segundosEnPausaTotal) : '--:--:--'}
             </p>
           </div>
         </div>
@@ -381,7 +416,9 @@ export default function PausasPage() {
             <IconHistory />
             Historial de hoy
           </span>
-          <button className={styles.verTodoBtn}>Ver todo</button>
+          <button className={styles.verTodoBtn} onClick={() => fetchData()}>
+            Actualizar
+          </button>
         </div>
 
         <div className={styles.historialList}>
@@ -391,9 +428,6 @@ export default function PausasPage() {
           }
         </div>
       </section>
-
-      {/* El feedback de éxito/error ahora sale por el toast global
-          (components/ui/Toast), igual que en el resto de la app. */}
 
       {jornadaIniciada && !jornadaFinalizada && (
         <div className={styles.finalizarWrap}>
@@ -406,7 +440,9 @@ export default function PausasPage() {
             <span>Guardar y Finalizar Jornada</span>
           </button>
           <p className={styles.finalizarNote}>
-            Al finalizar, tu ubicación y estado se actualizarán en el panel de supervisión.
+            {enPausa
+              ? 'Reanuda tu jornada antes de finalizarla.'
+              : 'Al finalizar, tu ubicación y estado se actualizarán en el panel de supervisión.'}
           </p>
         </div>
       )}
@@ -414,7 +450,7 @@ export default function PausasPage() {
       {jornadaFinalizada && (
         <div className={styles.jornadaFinalizada}>
           <IconCheck />
-          <span>Jornada finalizada</span>
+          <span>Jornada finalizada · {secsToHHMMSS(segundosTrabajados)} trabajadas</span>
         </div>
       )}
 

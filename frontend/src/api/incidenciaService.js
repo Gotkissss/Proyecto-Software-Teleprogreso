@@ -147,5 +147,35 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto })
     { finalizarTarea: true },
   )
 
-  return { ...incidencia, foto_evidencia }
+  // Tercer paso: confirmar el cierre con una llamada explícita.
+  //
+  // El flag `finalizar_tarea` viaja dentro del multipart de la foto, y ese es
+  // justo el punto frágil: bastaba con que el campo se perdiera (proxy que
+  // recorta el form, reintento del navegador con datos móviles) para que la
+  // evidencia quedara guardada y la tarea siguiera "en progreso" en el panel
+  // del supervisor — el síntoma que se estaba viendo.
+  //
+  // PATCH /tareas/{id}/finalizar es idempotente, así que si el flag sí llegó
+  // esta llamada no cambia nada. Y si falla, la evidencia ya está guardada:
+  // se avisa pero no se pierde el trabajo del técnico.
+  let tarea = null
+  try {
+    tarea = await finalizarTarea(idTarea)
+  } catch (err) {
+    console.error('La evidencia se guardó pero no se pudo confirmar el cierre:', err)
+    throw err
+  }
+
+  return { ...incidencia, foto_evidencia, tarea }
+}
+
+/**
+ * Cierra la tarea (PATCH /tareas/{id}/finalizar).
+ * Requiere que ya exista al menos una evidencia registrada.
+ *
+ * @param {number} idTarea
+ */
+export async function finalizarTarea(idTarea) {
+  const { data } = await apiClient.patch(`/tareas/${idTarea}/finalizar`)
+  return data
 }

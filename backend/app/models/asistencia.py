@@ -1,5 +1,5 @@
 from datetime import date, time
-from sqlalchemy import Date, ForeignKey, Integer, Time
+from sqlalchemy import Date, ForeignKey, Integer, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geography
 
@@ -29,6 +29,10 @@ class Descanso(Base):
     id_asistencia: Mapped[int]       = mapped_column(Integer, ForeignKey("asistencia.id_asistencia", ondelete="CASCADE"), nullable=False)
     hora_inicio:  Mapped[time]       = mapped_column(Time, nullable=False)
     hora_fin:     Mapped[time | None] = mapped_column(Time, nullable=True)
+    # Tipo de pausa según la normativa (almuerzo | tecnica | personal).
+    # Nullable porque los descansos creados antes de la migración 0004 no lo
+    # tienen; la UI los muestra como "Pausa".
+    tipo:         Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Relaciones
     asistencia: Mapped["Asistencia"] = relationship(back_populates="descansos")

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
-from datetime import date
+from typing import List, Optional
+from datetime import date, datetime
 from enum import Enum
 
 
@@ -76,6 +76,9 @@ class TareaResponse(BaseModel):
     fecha_inicio:       Optional[date]            = None
     fecha_finalizacion: Optional[date]            = None
     fecha_asignacion:   Optional[date]            = None
+    # Momento real de cierre. Es lo que permite al frontend distinguir "esto
+    # se completó hoy" de "esto se completó la semana pasada" sin adivinar.
+    fecha_completado:   Optional[datetime]        = None
     tecnico:            Optional[TecnicoResponse] = None
     # Cuántas evidencias (incidencias) tiene registradas la tarea. Permite al
     # dashboard del supervisor mostrar el acceso a "ver evidencias" sin pedir
@@ -94,3 +97,46 @@ class TareaUpdateEstado(BaseModel):
 # 🔹 REASIGNAR
 class TareaReasignar(BaseModel):
     id_tecnico: int
+
+
+# 🔹 HISTORIAL DE TAREAS COMPLETADAS ─────────────────────────────────────────
+
+class EvidenciaResumen(BaseModel):
+    """Evidencia de una tarea, tal como se muestra en el historial diario."""
+
+    id_incidencia:  int
+    descripcion:    Optional[str] = None
+    foto_evidencia: Optional[str] = None
+    fecha_reporte:  datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TareaCompletadaResponse(TareaResponse):
+    """Una tarea cerrada, con sus evidencias ya incluidas."""
+
+    evidencias: List[EvidenciaResumen] = []
+
+
+class DiaCompletadas(BaseModel):
+    """Bloque de un día del historial: la fecha y lo que se cerró ese día."""
+
+    fecha:  date
+    total:  int
+    tareas: List[TareaCompletadaResponse]
+
+
+class HistorialTareasResponse(BaseModel):
+    """
+    Respuesta de GET /tareas/completadas.
+
+    Viene agrupada por día desde el backend para que la pantalla no tenga que
+    reagrupar ni preocuparse por zonas horarias: el corte por día lo hace el
+    servidor, que es quien guardó `fecha_completado`.
+    """
+
+    total: int
+    desde: date
+    hasta: date
+    dias:  List[DiaCompletadas]

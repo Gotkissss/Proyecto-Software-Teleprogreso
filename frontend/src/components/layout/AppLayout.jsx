@@ -43,6 +43,12 @@ const IconEquipo = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 )
+const IconHistorial = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+)
 const IconLogo = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -50,10 +56,13 @@ const IconLogo = () => (
 )
 
 const NAV_ITEMS = [
-  { to: '/ruta',   label: 'Ruta',   Icon: IconRuta },
-  { to: '/mapa',   label: 'Mapa',   Icon: IconMapa },
-  { to: '/pausas', label: 'Pausas', Icon: IconPausas },
-  { to: '/equipo', label: 'Equipo', Icon: IconEquipo },
+  { to: '/ruta',      label: 'Ruta',      Icon: IconRuta },
+  { to: '/mapa',      label: 'Mapa',      Icon: IconMapa },
+  { to: '/pausas',    label: 'Pausas',    Icon: IconPausas },
+  // Lo que el técnico ya cerró, por día: la ruta diaria solo muestra el día
+  // en curso, así que sin esto no había forma de revisar el trabajo pasado.
+  { to: '/historial', label: 'Historial', Icon: IconHistorial },
+  { to: '/equipo',    label: 'Equipo',    Icon: IconEquipo },
 ]
 
 export default function AppLayout() {
