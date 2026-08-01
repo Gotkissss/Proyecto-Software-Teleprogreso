@@ -17,6 +17,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
+# usar datetime.now() aquí desplazaba las fechas 6 horas.
+from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import require_admin_supervisor_gerente, require_supervisor
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
@@ -53,7 +56,7 @@ async def get_metricas_supervisor(
 
     Roles: admin | supervisor | gerente.
     """
-    hoy = date.today()
+    hoy = hoy_local()
 
     # ── 1. Técnicos con jornada activa hoy ──────────────────────────────────
     # Un técnico está "activo" si tiene asistencia de hoy con hora_entrada

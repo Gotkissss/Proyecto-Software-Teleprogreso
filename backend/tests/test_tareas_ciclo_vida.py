@@ -24,7 +24,8 @@ from fastapi import HTTPException
 
 from app.models.empleado import EmpleadoTarea
 from app.models.tarea import Tarea
-from app.routers.tareas import finalizar_tarea, iniciar_tarea
+from app.routers.tareas import finalizar_tarea, iniciar_tarea, reasignar_tarea
+from app.schemas.tarea import TareaReasignar
 from app.services.tareas import es_de_hoy, marcar_completada, marcar_reabierta
 
 
@@ -270,3 +271,55 @@ async def test_el_supervisor_finaliza_sin_estar_asignado():
     await finalizar_tarea(1, db, _empleado(rol="supervisor"))
 
     assert tarea.estado_tarea == "completado"
+
+
+# ─── PATCH /tareas/{id}/reasignar ────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_no_se_reasigna_una_tarea_completada():
+    """
+    La pantalla de reasignación ya no las lista, pero la regla tiene que estar
+    también en el backend: el trabajo entregado queda ligado a quien lo hizo.
+    """
+    tarea = _tarea(estado="completado", fecha_completado=datetime.now())
+    db = _db([_resultado(tarea)])
+
+    with pytest.raises(HTTPException) as exc:
+        await reasignar_tarea(1, TareaReasignar(id_tecnico=5), db, _empleado("supervisor"))
+
+    assert exc.value.status_code == 400
+    assert "completado" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_no_se_reasigna_una_tarea_cancelada():
+    tarea = _tarea(estado="cancelado")
+    db = _db([_resultado(tarea)])
+
+    with pytest.raises(HTTPException) as exc:
+        await reasignar_tarea(1, TareaReasignar(id_tecnico=5), db, _empleado("supervisor"))
+
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_una_tarea_abierta_si_se_reasigna():
+    tarea = _tarea(estado="en_progreso")
+    tecnico_destino = SimpleNamespace(
+        id_empleado=5, nombre="Ana", apellido="López", estado="activo"
+    )
+    db = _db([
+        _resultado(tarea),             # SELECT tarea
+        _resultado(tecnico_destino),   # SELECT técnico destino
+        _resultado(0),                 # COUNT tareas activas del destino
+        _resultado(None),              # DELETE asignaciones previas
+        _resultado(0),                 # COUNT incidencias (respuesta)
+        _resultado(None),              # técnico de la respuesta
+    ])
+
+    respuesta = await reasignar_tarea(
+        1, TareaReasignar(id_tecnico=5), db, _empleado("supervisor")
+    )
+
+    assert respuesta.id_tarea == 1
+    db.add.assert_called_once()

@@ -29,6 +29,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
+# usar datetime.now() aquí desplazaba las fechas 6 horas.
+from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import get_current_empleado
 from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
@@ -108,12 +111,19 @@ def _serializar_descanso(descanso: Descanso, ahora: time) -> dict:
 
 
 async def _jornada_activa(db: AsyncSession, id_empleado: int) -> Optional[Asistencia]:
-    """Jornada abierta (entrada sin salida) del empleado, o None."""
+    """
+    Jornada abierta (entrada sin salida) más reciente del empleado, o None.
+
+    Se ordena por fecha descendente para que una jornada vieja que quedó sin
+    cerrar no se lleve las pausas de hoy.
+    """
     result = await db.execute(
-        select(Asistencia).where(
+        select(Asistencia)
+        .where(
             Asistencia.id_empleado == id_empleado,
             Asistencia.hora_salida.is_(None),
         )
+        .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
     )
     return result.scalars().first()
 
@@ -221,7 +231,7 @@ async def iniciar_descanso(
         )
 
     # 4. Crear el nuevo descanso
-    now = datetime.now()
+    now = ahora_local()
     nuevo_descanso = Descanso(
         id_asistencia=jornada.id_asistencia,
         hora_inicio=now.time(),
@@ -290,7 +300,7 @@ async def finalizar_descanso(
         )
 
     # 3. Registrar la hora de fin
-    now = datetime.now()
+    now = ahora_local()
     descanso_activo.hora_fin = now.time()
     await db.flush()
 
@@ -329,7 +339,7 @@ async def get_descanso_activo(
         return {"jornada_activa": False, "pausa_activa": None}
 
     descanso = await _descanso_activo(db, jornada.id_asistencia)
-    ahora = datetime.now().time()
+    ahora = hora_local()
 
     return {
         "jornada_activa": True,
@@ -359,8 +369,8 @@ async def get_descansos_hoy(
     Si no hay jornada hoy devuelve la estructura vacía con 200, no un 404: es
     un estado válido (el técnico todavía no ha marcado entrada).
     """
-    hoy = date.today()
-    ahora = datetime.now().time()
+    hoy = hoy_local()
+    ahora = hora_local()
 
     result = await db.execute(
         select(Asistencia)

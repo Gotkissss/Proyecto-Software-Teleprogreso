@@ -25,6 +25,9 @@ python-dotenv==1.0.1
 
 # Utilidades
 python-multipart==0.0.9
+# Base de datos de zonas horarias: las imágenes -slim de Python no la traen y
+# zoneinfo no puede resolver "America/Guatemala" sin ella.
+tzdata==2024.1
 
 #  Dependencias de prueba
 # Instalar con: pip install -r requirements.txt

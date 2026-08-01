@@ -148,6 +148,10 @@
   gap: 1.75rem;
 }
 
+.dia {
+  scroll-margin-top: 1rem;
+}
+
 .diaHeader {
   display: flex;
   align-items: baseline;

@@ -15,6 +15,11 @@ ORM) para poder probarlas sin PostgreSQL.
 
 from datetime import date, datetime
 
+# Reloj de la operación (America/Guatemala). Con datetime.now() en un
+# contenedor UTC, una tarea cerrada a las 19:00 hora local se guardaba con la
+# fecha del día siguiente y desaparecía del historial diario.
+from app.core.tiempo import ahora, hoy
+
 
 def marcar_completada(tarea, *, momento: datetime | None = None) -> None:
     """
@@ -27,15 +32,15 @@ def marcar_completada(tarea, *, momento: datetime | None = None) -> None:
     `fecha_inicio` se rellena si venía vacía, porque una tarea cerrada sin
     fecha de inicio rompe los cálculos de duración del panel.
     """
-    ahora = momento or datetime.now()
+    momento_cierre = momento or ahora()
 
     tarea.estado_tarea = "completado"
 
     if tarea.fecha_completado is None:
-        tarea.fecha_completado = ahora
+        tarea.fecha_completado = momento_cierre
 
     if tarea.fecha_inicio is None:
-        tarea.fecha_inicio = ahora.date()
+        tarea.fecha_inicio = momento_cierre.date()
 
 
 def marcar_reabierta(tarea) -> None:
@@ -48,8 +53,8 @@ def marcar_reabierta(tarea) -> None:
     tarea.fecha_completado = None
 
 
-def es_de_hoy(momento: datetime | None, hoy: date | None = None) -> bool:
+def es_de_hoy(momento: datetime | None, hoy_referencia: date | None = None) -> bool:
     """True si `momento` cae en el día indicado (hoy por defecto)."""
     if momento is None:
         return False
-    return momento.date() == (hoy or date.today())
+    return momento.date() == (hoy_referencia or hoy())

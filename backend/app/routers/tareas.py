@@ -20,7 +20,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import DateTime, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +30,9 @@ from app.core.deps import (
     require_supervisor,
     require_tecnico,
 )
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
+# usar datetime.now() aquí desplazaba las fechas 6 horas.
+from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
@@ -276,7 +279,7 @@ async def create_tarea(
         estado_tarea="pendiente",
         fecha_inicio=tarea.fecha_inicio,
         fecha_finalizacion=tarea.fecha_finalizacion,
-        fecha_asignacion=date.today() if tarea.id_tecnico else None,
+        fecha_asignacion=hoy_local() if tarea.id_tecnico else None,
     )
 
     db.add(nueva_tarea)
@@ -381,7 +384,7 @@ async def update_tarea(
             # contando como "hecha" ese día.
             marcar_reabierta(tarea)
             if nuevo_estado == "en_progreso" and tarea.fecha_inicio is None:
-                tarea.fecha_inicio = date.today()
+                tarea.fecha_inicio = hoy_local()
 
     # ── Reasignación de técnico ─────────────────────────────────────────────
     if "id_tecnico" in cambios:
@@ -431,7 +434,7 @@ async def update_tarea(
                     delete(EmpleadoTarea).where(EmpleadoTarea.id_tarea == id)
                 )
                 db.add(EmpleadoTarea(id_empleado=nuevo_tecnico, id_tarea=id))
-                tarea.fecha_asignacion = tarea.fecha_asignacion or date.today()
+                tarea.fecha_asignacion = tarea.fecha_asignacion or hoy_local()
 
     await db.flush()
     return await _tarea_a_response(db, tarea)
@@ -475,7 +478,7 @@ async def update_estado(
         tarea.estado_tarea = nuevo_estado
         marcar_reabierta(tarea)
         if nuevo_estado == "en_progreso" and tarea.fecha_inicio is None:
-            tarea.fecha_inicio = date.today()
+            tarea.fecha_inicio = hoy_local()
 
     await db.flush()
     return await _tarea_a_response(db, tarea)
@@ -499,6 +502,7 @@ async def reasignar_tarea(
     """
     Reasigna una tarea a un técnico diferente.
 
+    - Solo tareas abiertas: una tarea completada o cancelada ya no se mueve.
     - Valida que el nuevo técnico no supere el límite de tareas activas.
     - Elimina todas las asignaciones previas de la tarea.
     - Crea una nueva asignación con el técnico indicado.
@@ -510,6 +514,18 @@ async def reasignar_tarea(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Tarea con id={id} no encontrada.",
+        )
+
+    # Una tarea cerrada no se reasigna: el trabajo ya se entregó y su
+    # evidencia quedó ligada al técnico que la hizo. La UI ya las oculta de
+    # la lista, pero la regla tiene que vivir también aquí.
+    if tarea.estado_tarea in ("completado", "cancelado"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"La tarea está en estado '{tarea.estado_tarea}' y ya no puede "
+                f"reasignarse. Reábrela primero si necesitas cambiar el técnico."
+            ),
         )
 
     # Verificar límite de carga del técnico destino
@@ -552,7 +568,7 @@ async def reasignar_tarea(
         id_tarea=id,
     )
     db.add(nueva_asignacion)
-    tarea.fecha_asignacion = tarea.fecha_asignacion or date.today()
+    tarea.fecha_asignacion = tarea.fecha_asignacion or hoy_local()
 
     await db.flush()
     return await _tarea_a_response(db, tarea)
@@ -632,7 +648,7 @@ async def iniciar_tarea(
         tarea.estado_tarea = "en_progreso"
         # Solo se sobreescribe si no había fecha planificada.
         if tarea.fecha_inicio is None:
-            tarea.fecha_inicio = date.today()
+            tarea.fecha_inicio = hoy_local()
 
     await db.flush()
 
@@ -756,7 +772,7 @@ async def get_tareas_completadas(
     - admin, supervisor y gerente ven el historial de todos los técnicos.
     - un técnico solo ve sus propias tareas, aunque mande otro `id_tecnico`.
     """
-    hoy = date.today()
+    hoy = hoy_local()
     hasta = fecha_hasta or hoy
     desde = fecha_desde or (hasta - timedelta(days=6))
 
@@ -772,9 +788,18 @@ async def get_tareas_completadas(
     else:
         id_empleado_filtro = id_tecnico
 
-    # `fecha_completado` es un DateTime: el límite superior es el inicio del
-    # día siguiente, si no se perderían las tareas cerradas después de las
-    # 00:00:00 del último día del rango.
+    # Momento de cierre con respaldo: las tareas que se completaron antes de
+    # que existiera la columna `fecha_completado` la tienen en NULL y, si se
+    # exigiera, desaparecerían del historial. Para esas se cae a
+    # `fecha_inicio`, que es lo más cercano que hay.
+    momento_cierre = func.coalesce(
+        Tarea.fecha_completado,
+        cast(Tarea.fecha_inicio, DateTime),
+    )
+
+    # El límite superior es el inicio del día siguiente: `momento_cierre` es
+    # un DateTime, así que comparar contra `hasta` a secas dejaría fuera todo
+    # lo cerrado después de las 00:00:00 del último día del rango.
     query = (
         select(Tarea)
         .options(
@@ -783,11 +808,11 @@ async def get_tareas_completadas(
         )
         .where(
             Tarea.estado_tarea == "completado",
-            Tarea.fecha_completado.isnot(None),
-            Tarea.fecha_completado >= datetime.combine(desde, time.min),
-            Tarea.fecha_completado < datetime.combine(hasta + timedelta(days=1), time.min),
+            momento_cierre.isnot(None),
+            momento_cierre >= datetime.combine(desde, time.min),
+            momento_cierre < datetime.combine(hasta + timedelta(days=1), time.min),
         )
-        .order_by(Tarea.fecha_completado.desc())
+        .order_by(momento_cierre.desc())
     )
 
     if id_empleado_filtro is not None:
@@ -802,6 +827,16 @@ async def get_tareas_completadas(
     dias: "OrderedDict[date, List[TareaCompletadaResponse]]" = OrderedDict()
 
     for tarea in tareas:
+        # Mismo respaldo que en la consulta: sin él, una tarea vieja sin
+        # `fecha_completado` reventaría al pedirle `.date()`.
+        cerrada_en = tarea.fecha_completado or (
+            datetime.combine(tarea.fecha_inicio, time.min)
+            if tarea.fecha_inicio
+            else None
+        )
+        if cerrada_en is None:
+            continue
+
         tecnico = None
         if tarea.empleados:
             emp = tarea.empleados[0].empleado
@@ -838,10 +873,12 @@ async def get_tareas_completadas(
             ],
         )
 
-        dias.setdefault(tarea.fecha_completado.date(), []).append(item)
+        dias.setdefault(cerrada_en.date(), []).append(item)
+
+    total = sum(len(items) for items in dias.values())
 
     return HistorialTareasResponse(
-        total=len(tareas),
+        total=total,
         desde=desde,
         hasta=hasta,
         dias=[

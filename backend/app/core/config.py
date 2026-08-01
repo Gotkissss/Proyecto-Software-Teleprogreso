@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Zona horaria de la operación. El contenedor corre en UTC, así que sin
+    # esto las fechas guardadas (cierre de tarea, entrada, pausas) quedan 6
+    # horas adelantadas respecto de lo que ve el usuario, y el trabajo hecho
+    # después de las 18:00 se registra con la fecha del día siguiente.
+    TIMEZONE: str = "America/Guatemala"
+
     # Hora local a partir de la cual un técnico sin asistencia genera alerta.
     # Se deja configurable para adaptar la regla a la jornada de Teleprogreso
     # sin modificar el código cuando cambie el horario operativo.

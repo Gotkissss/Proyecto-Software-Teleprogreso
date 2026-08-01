@@ -11,6 +11,9 @@ from app.models.alerta import Alerta
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado
 from app.models.tarea import Tarea
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
+# usar datetime.now() aquí desplazaba las fechas 6 horas.
+from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 
 
 TIPO_TAREA_VENCIDA = "tarea_vencida"
@@ -38,7 +41,7 @@ async def generar_alertas(db: AsyncSession) -> int:
     el problema sigue vigente, pero no reaparece a los 30 segundos de haberla
     atendido.
     """
-    hoy = date.today()
+    hoy = hoy_local()
     referencias_existentes = await _obtener_referencias_existentes(db, hoy)
     nuevas_alertas: list[Alerta] = []
 
@@ -68,7 +71,7 @@ async def generar_alertas(db: AsyncSession) -> int:
     # Antes de la hora límite todavía es válido que un técnico no haya
     # marcado entrada. La hora se obtiene del reloj local del servidor, igual
     # que los endpoints actuales de asistencia.
-    if datetime.now().time() >= _hora_limite():
+    if hora_local() >= _hora_limite():
         result_tecnicos = await db.execute(
             select(Empleado.id_empleado)
             .outerjoin(

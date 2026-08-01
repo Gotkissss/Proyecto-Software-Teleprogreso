@@ -2,7 +2,7 @@
  * pages/ReasignacionPage.jsx
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Badge from '../components/ui/Badge'
 import Modal, { ModalActions } from '../components/ui/Modal'
@@ -15,6 +15,13 @@ import styles from './ReasignacionPage.module.css'
 
 
 const LIMITE_TAREAS = 3
+
+// Estados en los que la tarea ya está cerrada: no se reasigna algo que
+// el técnico ya entregó (ni algo que se canceló).
+const ESTADOS_CERRADOS = ['completado', 'cancelado']
+
+const estadoDe = (tarea) => tarea.estado_tarea ?? tarea.estado
+const estaCerrada = (tarea) => ESTADOS_CERRADOS.includes(estadoDe(tarea))
 
 export default function ReasignacionPage() {
 
@@ -158,6 +165,20 @@ export default function ReasignacionPage() {
     setErrorReasignacion(null)
   }
 
+  // Esta pantalla es para repartir trabajo pendiente. Las tareas ya cerradas
+  // se sacan de la lista: dejarlas ahí con su botón "Reasignar" invitaba a
+  // mover trabajo que el técnico ya entregó, y además ensuciaba la lista.
+  // El detalle de lo cerrado vive en "Realizadas".
+  const tareasActivas = useMemo(
+    () => tareas.filter((t) => !estaCerrada(t)),
+    [tareas]
+  )
+  const totalCerradas = tareas.length - tareasActivas.length
+
+  /** Técnico que ya tiene la tarea abierta en el modal. */
+  const idTecnicoActual =
+    tareaSeleccionada?.tecnico?.id_empleado ?? null
+
   /** Refleja en la lista la tarea que devolvió PATCH /tareas/{id}. */
   const handleTareaEditada = (actualizada) => {
     setTareas((prev) =>
@@ -217,11 +238,36 @@ export default function ReasignacionPage() {
         </button>
       </div>
 
-      {tareas.length === 0 ? (
+      {/* Aviso de lo que se está ocultando, con salida hacia el historial:
+          si no, parecería que las tareas cerradas se perdieron. */}
+      {totalCerradas > 0 && (
+        <p className={styles.cerradasNota}>
+          {totalCerradas} tarea{totalCerradas === 1 ? '' : 's'} ya cerrada
+          {totalCerradas === 1 ? '' : 's'} no aparece
+          {totalCerradas === 1 ? '' : 'n'} aquí.{' '}
+          <button
+            type="button"
+            className={styles.verRealizadasBtn}
+            onClick={() => navigate('/supervisor/historial-tareas')}
+          >
+            Ver tareas realizadas
+          </button>
+        </p>
+      )}
+
+      {tareasActivas.length === 0 ? (
         <PageState
           empty
-          emptyTitle="No hay tareas para reasignar"
-          emptyDescription="Crea una tarea nueva para asignarla a un técnico."
+          emptyTitle={
+            totalCerradas > 0
+              ? 'No queda trabajo pendiente por repartir'
+              : 'No hay tareas para reasignar'
+          }
+          emptyDescription={
+            totalCerradas > 0
+              ? 'Todas las tareas están cerradas. Consúltalas en "Realizadas" o crea una nueva.'
+              : 'Crea una tarea nueva para asignarla a un técnico.'
+          }
           emptyAction={
             <button
               className={styles.nuevaTareaBtn}
@@ -233,7 +279,7 @@ export default function ReasignacionPage() {
         />
       ) : (
         <ul className={styles.tareasList}>
-          {tareas.map((tarea) => {
+          {tareasActivas.map((tarea) => {
             const id = tarea.id_tarea ?? tarea.id
 
             return (
@@ -311,8 +357,16 @@ export default function ReasignacionPage() {
           </div>
         )}
 
+        {/* Quién la tiene ahora. Sin esto el supervisor abría el modal, veía
+            a Juan Pérez en la lista y no entendía si era el asignado actual
+            o una opción nueva. */}
+        <p className={styles.asignadoActual}>
+          Asignada actualmente a:{' '}
+          <strong>{tareaSeleccionada?.tecnico?.nombre ?? 'nadie'}</strong>
+        </p>
+
         <label className={styles.label} htmlFor="reasignar-tecnico">
-          Asignar a:
+          Reasignar a:
         </label>
 
         <select
@@ -328,20 +382,39 @@ export default function ReasignacionPage() {
 
           {tecnicos.map((tec) => {
             const alLimite = (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
+            // El técnico que ya la tiene se muestra marcado y bloqueado:
+            // reasignar una tarea a quien ya la tiene no hace nada.
+            const esElActual = tec.id === idTecnicoActual
 
             return (
-              <option key={tec.id} value={tec.id} disabled={alLimite}>
+              <option
+                key={tec.id}
+                value={tec.id}
+                disabled={alLimite || esElActual}
+              >
                 {tec.nombre_completo}
                 {' — '}
                 {tec.tareas_activas ?? 0} tarea
                 {tec.tareas_activas !== 1 ? 's' : ''}
                 {' '}activa
                 {tec.tareas_activas !== 1 ? 's' : ''}
-                {alLimite ? ' (límite alcanzado)' : ''}
+                {esElActual ? ' (ya tiene esta tarea)' : ''}
+                {!esElActual && alLimite ? ' (límite alcanzado)' : ''}
               </option>
             )
           })}
         </select>
+
+        {/* Único técnico en la plantilla y ya tiene la tarea: no hay a quién
+            pasársela, y conviene decirlo en lugar de dejar un select inerte. */}
+        {tecnicos.length > 0 &&
+          tecnicos.every(
+            (t) => t.id === idTecnicoActual || (t.tareas_activas ?? 0) >= LIMITE_TAREAS
+          ) && (
+            <p className={styles.limiteMsg}>
+              ⚠ No hay ningún otro técnico disponible para recibir esta tarea.
+            </p>
+          )}
 
         {tecnicoNuevo && (() => {
           const tec = tecnicos.find((t) => t.id === Number(tecnicoNuevo))

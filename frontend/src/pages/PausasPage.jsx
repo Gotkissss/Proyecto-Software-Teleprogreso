@@ -336,10 +336,17 @@ export default function PausasPage() {
           {estadoJornada.label}
         </span>
 
-        {!jornadaIniciada ? (
+        {/* Sin jornada abierta se ofrece el botón de entrada. Ojo con el caso
+            de la jornada YA finalizada: antes esta rama solo miraba
+            `jornadaIniciada`, así que al cerrar la jornada el botón
+            desaparecía para siempre y la pantalla se quedaba con un reloj
+            congelado y ninguna acción posible. */}
+        {!jornadaIniciada || jornadaFinalizada ? (
           <div className={styles.entradaWrap}>
             <p className={styles.normativaText}>
-              Registra tu entrada para iniciar la jornada laboral.
+              {jornadaFinalizada
+                ? 'Tu jornada de hoy ya está cerrada. Si vuelves a trabajar, registra una nueva entrada.'
+                : 'Registra tu entrada para iniciar la jornada laboral.'}
             </p>
             <button
               className={styles.entradaBtn}
@@ -347,7 +354,9 @@ export default function PausasPage() {
               disabled={actionLoading}
             >
               {actionLoading ? <Spinner size="sm" color="white" /> : <IconLogin />}
-              <span>Registrar Entrada</span>
+              <span>
+                {jornadaFinalizada ? 'Registrar nueva entrada' : 'Registrar Entrada'}
+              </span>
             </button>
           </div>
         ) : (

@@ -14,7 +14,7 @@ Endpoints que se tieneen:
   GET  /asistencia/historial  = Historial de jornadas con filtros y paginación
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from math import ceil
 from typing import Annotated, Optional
 
@@ -23,6 +23,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
+# usar datetime.now() aquí desplazaba las fechas 6 horas.
+from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import get_current_empleado
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
@@ -62,24 +65,38 @@ async def registrar_entrada(
       (sin hora de salida) para el día actual.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
-    # 1. Verificar si ya existe una jornada activa (entrada sin salida)
+    # 1. Buscar jornadas abiertas (entrada sin salida) del empleado.
+    #
+    # Se piden todas y no `scalar_one_or_none()`: si por lo que sea quedaron
+    # dos abiertas, aquel método lanza MultipleResultsFound y el técnico se
+    # queda sin poder marcar entrada nunca más, con un 500 sin explicación.
+    now = ahora_local()
+
     result = await db.execute(
-        select(Asistencia).where(
+        select(Asistencia)
+        .where(
             Asistencia.id_empleado == current_user.id_empleado,
             Asistencia.hora_salida.is_(None),
         )
+        .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
     )
-    asistencia_activa = result.scalar_one_or_none()
+    abiertas = list(result.scalars().all())
 
-    if asistencia_activa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una jornada activa para este empleado. "
-                   "Registra la salida antes de iniciar una nueva jornada.",
-        )
+    for jornada in abiertas:
+        if jornada.fecha == now.date():
+            # Jornada de hoy todavía abierta: eso sí es un error del usuario.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ya tienes una jornada abierta hoy. "
+                       "Registra la salida antes de iniciar una nueva.",
+            )
 
-    # 2. Capturar fecha y hora actuales
-    now = datetime.now()
+        # Jornada de un día anterior que nunca se cerró: el técnico se fue sin
+        # marcar salida. Bloquear la entrada de hoy por eso lo dejaba atrapado
+        # sin forma de trabajar. Se cierra al final de aquel día y se sigue.
+        jornada.hora_salida = jornada.hora_salida or time(23, 59, 59)
+
+    await db.flush()
 
     # 3. Crear el registro de asistencia
     nueva_asistencia = Asistencia(
@@ -136,7 +153,7 @@ async def registrar_salida(
         )
 
     # 2. Registrar la hora de salida
-    now = datetime.now()
+    now = ahora_local()
     asistencia_activa.hora_salida = now.time()
 
     return {
@@ -167,14 +184,21 @@ async def get_asistencia_hoy(
     - Si no hay registro de entrada hoy, retorna 404.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
-    # Buscar asistencia del dia actual para el empleado autenticado
+    # Buscar asistencia del dia actual para el empleado autenticado.
+    #
+    # Se toma la más reciente en lugar de exigir que haya exactamente una:
+    # un técnico puede cerrar su jornada y abrir otra el mismo día, y con
+    # `scalar_one_or_none()` el segundo registro hacía reventar el endpoint
+    # con un 500 (MultipleResultsFound).
     result = await db.execute(
-        select(Asistencia).where(
+        select(Asistencia)
+        .where(
             Asistencia.id_empleado == current_user.id_empleado,
-            Asistencia.fecha == date.today(),
+            Asistencia.fecha == hoy_local(),
         )
+        .order_by(Asistencia.hora_entrada.desc())
     )
-    asistencia = result.scalar_one_or_none()
+    asistencia = result.scalars().first()
 
     if not asistencia:
         raise HTTPException(
@@ -203,7 +227,7 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
     para que el supervisor vea el avance en tiempo real; las jornadas de días
     anteriores que quedaron abiertas no inventan tiempo y reportan 00:00.
     """
-    referencia = datetime.now().time() if asistencia.fecha == hoy else None
+    referencia = hora_local() if asistencia.fecha == hoy else None
     resumen = calcular_jornada(asistencia, asistencia.descansos, referencia=referencia)
 
     empleado = asistencia.empleado
@@ -308,7 +332,7 @@ async def get_historial_asistencia(
     total: int = result_total.scalar() or 0
     total_pages = ceil(total / page_size) if total else 0
 
-    hoy = date.today()
+    hoy = hoy_local()
 
     # ── 4. Página solicitada ─────────────────────────────────────────────────
     query = (
@@ -360,7 +384,7 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
     abiertas = 0
 
     for jornada in jornadas:
-        referencia = datetime.now().time() if jornada.fecha == hoy else None
+        referencia = hora_local() if jornada.fecha == hoy else None
         resumen = calcular_jornada(jornada, jornada.descansos, referencia=referencia)
         minutos_brutos += resumen.minutos_brutos
         minutos_pausa += resumen.minutos_pausa
