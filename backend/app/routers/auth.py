@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_empleado
 from app.core.security import (
     create_access_token,
+    decode_access_token,
+    purgar_tokens_expirados,
     revoke_token,
     verify_password,
 )
@@ -86,13 +88,23 @@ async def login(
 )
 async def logout(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     _empleado: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
     Revoca el token JWT activo del usuario autenticado.
     Tras este llamado el token queda invalido aunque no haya expirado.
+
+    La revocación se guarda en la tabla `token_revocado`, así que sobrevive a
+    reinicios y la ven todos los workers del backend.
     """
-    revoke_token(credentials.credentials)
+    payload = decode_access_token(credentials.credentials)
+    await revoke_token(db, payload)
+
+    # Aprovecha el logout para barrer los tokens que ya expiraron solos: sin
+    # esto la tabla solo crecería.
+    await purgar_tokens_expirados(db)
+
     return {"detail": "Sesion cerrada correctamente"}
 
 

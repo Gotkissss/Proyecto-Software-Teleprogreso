@@ -151,9 +151,21 @@ async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
 )
 async def get_tareas(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    estado: Optional[str] = Query(None),
-    id_tecnico: Optional[int] = Query(None),
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    # Estilo Annotated a propósito: con `estado: str = Query(None)` el valor
+    # por defecto es el objeto Query, no None, y cualquier llamada directa a
+    # la función (los tests, u otro router que la reutilice) acaba armando
+    # filtros con basura porque un Query() siempre es truthy.
+    estado: Annotated[Optional[str], Query()] = None,
+    id_tecnico: Annotated[Optional[int], Query()] = None,
+    limite: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=2000,
+            description="Máximo de tareas devueltas, de la más reciente hacia atrás.",
+        ),
+    ] = 500,
 ):
     query = (
         select(Tarea)
@@ -163,16 +175,47 @@ async def get_tareas(
     if estado:
         query = query.where(Tarea.estado_tarea == estado)
 
+    # Un técnico solo puede ver su propia carga de trabajo. Antes este endpoint
+    # devolvía las tareas de toda la empresa a cualquier autenticado y el
+    # recorte por técnico lo hacía el cliente, así que bastaba con llamar a
+    # /tareas sin filtros para leer el trabajo de los demás.
+    if current_user.rol in ROLES_SUPERVISION:
+        tecnico_filtrado = id_tecnico
+    else:
+        tecnico_filtrado = current_user.id_empleado
+
+    if tecnico_filtrado is not None:
+        # El filtro se resuelve en SQL: antes se traían todas las tareas y se
+        # descartaban en Python, lo que además rompía el límite de resultados.
+        query = query.where(
+            Tarea.id_tarea.in_(
+                select(EmpleadoTarea.id_tarea).where(
+                    EmpleadoTarea.id_empleado == tecnico_filtrado
+                )
+            )
+        )
+
+    # Cota superior explícita: la tabla solo crece y sin límite la respuesta
+    # terminaría materializando el histórico completo en memoria.
+    query = query.order_by(Tarea.id_tarea.desc()).limit(limite)
+
     result = await db.execute(query)
     tareas = result.scalars().all()
 
-    # Conteo de evidencias de todas las tareas en una sola consulta agrupada,
-    # para no lanzar un COUNT por tarea (N+1) al construir la respuesta.
-    result_incidencias = await db.execute(
-        select(Incidencia.id_tarea, func.count(Incidencia.id_incidencia))
-        .group_by(Incidencia.id_tarea)
-    )
-    incidencias_por_tarea = dict(result_incidencias.all())
+    ids = [t.id_tarea for t in tareas]
+
+    # Conteo de evidencias en una sola consulta agrupada, para no lanzar un
+    # COUNT por tarea (N+1) al construir la respuesta. Se restringe a las
+    # tareas devueltas: agrupar sobre la tabla entera hacía trabajo de más.
+    incidencias_por_tarea: dict[int, int] = {}
+
+    if ids:
+        result_incidencias = await db.execute(
+            select(Incidencia.id_tarea, func.count(Incidencia.id_incidencia))
+            .where(Incidencia.id_tarea.in_(ids))
+            .group_by(Incidencia.id_tarea)
+        )
+        incidencias_por_tarea = dict(result_incidencias.all())
 
     tareas_response = []
 
@@ -185,9 +228,6 @@ async def get_tareas(
                 "id_empleado": emp.id_empleado,
                 "nombre": f"{emp.nombre} {emp.apellido}",
             }
-
-        if id_tecnico and (not tecnico or tecnico["id_empleado"] != id_tecnico):
-            continue
 
         tareas_response.append(
             TareaResponse(

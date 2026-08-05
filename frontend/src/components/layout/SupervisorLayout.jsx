@@ -54,13 +54,6 @@ const IconInventario = () => (
   </svg>
 )
 
-const IconAsistencia = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <polyline points="12 7 12 12 15 14" />
-  </svg>
-)
-
 const IconHistorialTareas = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 11l3 3L22 4" />
@@ -75,7 +68,10 @@ const NAV_ITEMS = [
   // Historial de lo cerrado por día, con evidencia. Antes el panel solo
   // mostraba las últimas cinco tareas y no había forma de auditar un día.
   { to: '/supervisor/historial-tareas', label: 'Realizadas', Icon: IconHistorialTareas },
-  { to: '/supervisor/asistencia',       label: 'Asistencia', Icon: IconAsistencia },
+  // El historial de asistencia no tiene entrada propia: vive como tab dentro
+  // de Empleados. Tener las dos puertas a la misma tabla obligaba al
+  // supervisor a recordar cuál de las dos usar, y la ruta suelta se quedaba
+  // sin el contexto del empleado que estaba consultando.
   { to: '/supervisor/empleados',        label: 'Empleados',  Icon: IconEmpleados },
   { to: '/supervisor/inventario',       label: 'Inventario', Icon: IconInventario },
 ]

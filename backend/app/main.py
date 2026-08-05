@@ -70,7 +70,11 @@ app.include_router(asistencia_router)  # POST /asistencia/entrada | salida | GET
 app.include_router(descanso_router)    # POST /descanso/iniciar | finalizar | GET /activo
 app.include_router(empleados_router)   # GET/POST/PATCH /empleados/*
 app.include_router(metricas_router)    # GET /metricas/supervisor | /empleados/tecnicos/disponibles
-# inventario y carros antes que activos: /activos/{id} debe evaluarse al final
+# Los tres routers comparten el prefijo /activos. Antes lo único que evitaba
+# que /activos/{id} se tragara /activos/carros era este orden de registro, así
+# que reordenar estas líneas rompía el inventario en silencio. Ahora activos.py
+# declara /{id:int}, que no puede casar con una ruta de texto; el orden se
+# mantiene por claridad, pero ya no es lo que sostiene el enrutamiento.
 app.include_router(inventario_router)
 app.include_router(carros_router)
 app.include_router(activos_router)     # GET/POST/DELETE /activos/* (inventario, herramientas, asignaciones)

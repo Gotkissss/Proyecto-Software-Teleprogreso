@@ -19,20 +19,42 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.asistencia import Asistencia, Descanso
+from app.models.pausa import TipoPausa
 from app.routers.descanso import (
     DescansoIniciar,
-    TIPOS_PAUSA,
     _serializar_descanso,
-    _tipo_valido,
     finalizar_descanso,
     get_descanso_activo,
     get_descansos_hoy,
     get_tipos_pausa,
     iniciar_descanso,
 )
+from app.services.pausas import tipo_valido
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+# El catálogo ya no está escrito en el router: vive en la tabla `tipo_pausa`.
+# Estos son los mismos valores que siembra la migración 0005, para que las
+# pruebas sigan comprobando las duraciones reales de la normativa.
+TIPOS_PAUSA_BD = [
+    TipoPausa(id_tipo_pausa="almuerzo", label="Pausa de Almuerzo",
+              duracion_max_min=60, orden=1, activo=True),
+    TipoPausa(id_tipo_pausa="tecnica", label="Pausa Técnica (Soporte)",
+              duracion_max_min=15, orden=2, activo=True),
+    TipoPausa(id_tipo_pausa="personal", label="Pausa Personal",
+              duracion_max_min=10, orden=3, activo=True),
+]
+
+CATALOGO = {
+    t.id_tipo_pausa: {
+        "label": t.label,
+        "duracion_max_min": t.duracion_max_min,
+        "orden": t.orden,
+    }
+    for t in TIPOS_PAUSA_BD
+}
+
 
 def _empleado(id_empleado=2):
     return SimpleNamespace(
@@ -73,9 +95,30 @@ def _resultado(valor, *, lista=False):
     return res
 
 
+def _resultado_catalogo():
+    res = MagicMock()
+    res.scalars.return_value.all.return_value = TIPOS_PAUSA_BD
+    return res
+
+
 def _db(resultados):
+    """
+    AsyncSession simulada que va devolviendo `resultados` en orden.
+
+    Las consultas al catálogo de pausas se responden aparte y no consumen la
+    lista: el router lo lee cuando le hace falta, y obligar a cada test a
+    intercalar ese resultado en la posición correcta los volvía ilegibles y
+    frágiles ante cualquier reordenamiento del código.
+    """
+    pendientes = list(resultados)
+
+    async def _execute(statement, *args, **kwargs):
+        if "tipo_pausa" in str(statement):
+            return _resultado_catalogo()
+        return pendientes.pop(0)
+
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=resultados)
+    db.execute = AsyncMock(side_effect=_execute)
     db.add = MagicMock()
     db.flush = AsyncMock()
     return db
@@ -85,25 +128,25 @@ def _db(resultados):
 
 @pytest.mark.asyncio
 async def test_catalogo_de_tipos_trae_id_label_y_maximo():
-    tipos = await get_tipos_pausa()
+    tipos = await get_tipos_pausa(_db([]))
 
-    assert {t["id"] for t in tipos} == set(TIPOS_PAUSA)
+    assert {t["id"] for t in tipos} == set(CATALOGO)
     for tipo in tipos:
         assert tipo["label"]
         assert tipo["duracion_max_min"] > 0
 
 
 def test_tipo_desconocido_cae_en_el_generico():
-    assert _tipo_valido("almuerzo") == "almuerzo"
-    assert _tipo_valido(None) == "personal"
-    assert _tipo_valido("siesta") == "personal"
+    assert tipo_valido(CATALOGO, "almuerzo") == "almuerzo"
+    assert tipo_valido(CATALOGO, None) == "personal"
+    assert tipo_valido(CATALOGO, "siesta") == "personal"
 
 
 # ─── Serialización (lo que alimenta el cronómetro del navegador) ─────────────
 
 def test_una_pausa_cerrada_reporta_su_duracion_real():
     serializado = _serializar_descanso(
-        _descanso(inicio=time(12, 0), fin=time(12, 30)), ahora=time(15, 0)
+        _descanso(inicio=time(12, 0), fin=time(12, 30)), time(15, 0), CATALOGO
     )
 
     assert serializado["duracion_segundos"] == 30 * 60
@@ -117,7 +160,7 @@ def test_una_pausa_en_curso_se_mide_contra_la_hora_actual():
     en los segundos que la pausa lleva realmente corriendo según la BD.
     """
     serializado = _serializar_descanso(
-        _descanso(tipo="tecnica", inicio=time(12, 0), fin=None), ahora=time(12, 5)
+        _descanso(tipo="tecnica", inicio=time(12, 0), fin=None), time(12, 5), CATALOGO
     )
 
     assert serializado["en_curso"] is True
@@ -128,7 +171,7 @@ def test_una_pausa_en_curso_se_mide_contra_la_hora_actual():
 
 def test_una_pausa_pasada_de_tiempo_se_marca_como_excedida():
     serializado = _serializar_descanso(
-        _descanso(tipo="personal", inicio=time(12, 0), fin=None), ahora=time(12, 25)
+        _descanso(tipo="personal", inicio=time(12, 0), fin=None), time(12, 25), CATALOGO
     )
 
     assert serializado["excedida"] is True

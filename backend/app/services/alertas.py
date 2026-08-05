@@ -3,6 +3,7 @@
 from datetime import date, datetime, time
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -114,7 +115,27 @@ async def generar_alertas(db: AsyncSession) -> int:
         )
 
     if nuevas_alertas:
-        db.add_all(nuevas_alertas)
+        # ON CONFLICT DO NOTHING en lugar de add_all(): la detección corre
+        # dentro de un GET, así que dos supervisores abriendo la pantalla a la
+        # vez leen el mismo "no existe todavía" y ambos intentan insertar. El
+        # índice único uq_alerta_tipo_referencia_dia lo impide, y sin esta
+        # cláusula el segundo se llevaría un IntegrityError que tumbaría la
+        # generación entera en vez de simplemente saltarse el duplicado.
+        await db.execute(
+            pg_insert(Alerta)
+            .values(
+                [
+                    {
+                        "tipo": alerta.tipo,
+                        "severidad": alerta.severidad,
+                        "estado": alerta.estado,
+                        "referencia": alerta.referencia,
+                    }
+                    for alerta in nuevas_alertas
+                ]
+            )
+            .on_conflict_do_nothing()
+        )
         # El flush deja los registros preparados dentro de la transacción
         # actual; el commit continúa siendo responsabilidad de get_db().
         await db.flush()

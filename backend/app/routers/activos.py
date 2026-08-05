@@ -153,7 +153,7 @@ async def crear_activo(
 
 # ─── GET /activos/{id} ───────────────────────────────────────────────────
 @router.get(
-    "/{id}",
+    "/{id:int}",
     response_model=ActivoDetalleResponse,
     summary="Obtener un activo por ID",
     status_code=status.HTTP_200_OK,
@@ -185,7 +185,7 @@ async def get_activo_by_id(
 
 # ─── PATCH /activos/{id} ─────────────────────────────────────────────────
 @router.patch(
-    "/{id}",
+    "/{id:int}",
     response_model=ActivoDetalleResponse,
     summary="Editar un activo",
     status_code=status.HTTP_200_OK,
@@ -257,7 +257,7 @@ async def actualizar_activo(
 
 # ─── DELETE /activos/{id} ────────────────────────────────────────────────
 @router.delete(
-    "/{id}",
+    "/{id:int}",
     summary="Eliminar un activo",
     status_code=status.HTTP_200_OK,
 )
@@ -321,7 +321,7 @@ from app.services.uploads import (
 
 
 @router.post(
-    "/{id}/imagen",
+    "/{id:int}/imagen",
     summary="Subir o reemplazar la imagen de un activo",
     status_code=status.HTTP_200_OK,
 )

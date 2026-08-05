@@ -84,5 +84,51 @@ Credenciales de prueba (seed automático):
 | Rol | Correo | Contraseña |
 |---|---|---|
 | Admin | admin@teleprogreso.com | Admin1234! |
+| Supervisor | supervisor@teleprogreso.com | Super1234! |
+| Gerente | gerente@teleprogreso.com | Gerente1234! |
 | Técnico | tecnico@teleprogreso.com | Tecnico1234! |
+
+El seed crea además tres técnicos más (`maria.lopez@`, `diego.morales@`,
+`ana.castillo@`, todos con `Tecnico1234!`) y uno inactivo
+(`pedro.hernandez@`) para poder probar el filtro de estado.
+
+## 🗄️ Repoblar la base de datos
+
+`seed.py` corre en cada arranque del backend, pero es **idempotente**: si ya
+hay empleados no toca nada, para no pisar datos de trabajo.
+
+Para borrar todo y volver a sembrar el escenario completo (empleados, tareas
+con coordenadas, vehículos, herramientas, inventario, asistencia de 14 días,
+pausas, ubicaciones GPS y evidencias):
+
+```bash
+docker compose exec backend python seed.py --reset
+```
+
+En local también sirve tirar el volumen:
+
+```bash
+docker compose down -v
+```
+
+El reset hace `TRUNCATE ... RESTART IDENTITY CASCADE` sobre todas las tablas
+de datos y **no toca `alembic_version`**: el esquema lo siguen gobernando las
+migraciones.
+
+### En Railway
+
+Railway no deja borrar el volumen de Postgres, así que el reset se dispara con
+una variable de entorno:
+
+1. En el servicio del **backend** → *Variables* → agregar `SEED_RESET=true`.
+2. Hacer push a la rama que Railway despliega. Al arrancar, el contenedor
+   corre `alembic upgrade head` y luego `python seed.py`, que ve la variable,
+   vacía la base y la resiembra.
+3. Revisar los *Deploy Logs*: debe aparecer `🗑️ SEED_RESET activo` seguido de
+   `🎉 Seed completado exitosamente`.
+4. **Volver a poner `SEED_RESET=false`** (o eliminar la variable). Si se queda
+   en `true`, cada reinicio del contenedor borrará la base otra vez.
+
+> Alternativa sin tocar variables: `railway run python seed.py --reset` desde
+> el directorio `backend/`.
  

@@ -27,7 +27,7 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, token_esta_revocado
 from app.db.session import get_db
 from app.models.empleado import Empleado
 
@@ -57,6 +57,12 @@ async def get_current_empleado(
         if id_empleado is None:
             raise credentials_exception
     except JWTError:
+        raise credentials_exception
+
+    # La revocación se consulta en la BD (tabla token_revocado) y no en memoria
+    # del proceso, para que un logout siga valiendo tras un redeploy y sea
+    # visible desde cualquier worker.
+    if await token_esta_revocado(db, payload):
         raise credentials_exception
 
     result = await db.execute(

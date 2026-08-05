@@ -35,6 +35,11 @@ services:
       ALGORITHM: ${ALGORITHM}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
+      TIMEZONE: ${TIMEZONE:-America/Guatemala}
+      ALERTA_HORA_LIMITE: ${ALERTA_HORA_LIMITE:-08:00}
+      # ⚠️ En true, seed.py vacía todas las tablas al arrancar y resiembra.
+      # Por defecto false para no borrar datos de desarrollo sin querer.
+      SEED_RESET: ${SEED_RESET:-false}
     ports:
       - "8000:8000"
     depends_on:

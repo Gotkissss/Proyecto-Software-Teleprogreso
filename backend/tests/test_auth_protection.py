@@ -48,13 +48,28 @@ def mock_empleado(rol="tecnico", estado="activo"):
     return emp
 
 
-def override_db_con_empleado(empleado):
-    """Devuelve una dependencia get_db falsa cuyo execute() encuentra al empleado."""
+def override_db_con_empleado(empleado, token_revocado=False):
+    """
+    Dependencia get_db falsa cuyo execute() encuentra al empleado.
+
+    Distingue la consulta por tabla: `get_current_empleado` lanza dos, primero
+    la de tokens revocados y luego la del empleado. Devolver el empleado a las
+    dos hacía que el token pareciera revocado siempre y todo respondiera 401.
+    """
     async def _fake_db():
         db = AsyncMock()
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = empleado
-        db.execute = AsyncMock(return_value=result)
+
+        async def _execute(statement, *args, **kwargs):
+            result = MagicMock()
+            if "token_revocado" in str(statement):
+                result.scalar_one_or_none.return_value = (
+                    "jti-revocado" if token_revocado else None
+                )
+            else:
+                result.scalar_one_or_none.return_value = empleado
+            return result
+
+        db.execute = AsyncMock(side_effect=_execute)
         yield db
     return _fake_db
 
@@ -122,7 +137,21 @@ def test_token_valido_acceso():
         app.dependency_overrides.clear()
 
 
-# 6. CUENTA INACTIVA = 403
+# 6. TOKEN REVOCADO (LOGOUT) = 401
+
+def test_token_revocado_no_da_acceso():
+    """Un token con logout hecho debe rebotar aunque no haya expirado."""
+    app.dependency_overrides[get_db] = override_db_con_empleado(
+        mock_empleado("tecnico"), token_revocado=True
+    )
+    try:
+        res = client.get("/auth/me", headers=auth(make_token("tecnico")))
+        assert res.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+# 7. CUENTA INACTIVA = 403
 
 def test_cuenta_inactiva():
     app.dependency_overrides[get_db] = override_db_con_empleado(

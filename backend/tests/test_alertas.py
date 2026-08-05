@@ -91,7 +91,8 @@ async def test_generar_alertas_crea_las_tres_condiciones():
     tecnicos.all.return_value = [(20,)]
     materiales = MagicMock()
     materiales.all.return_value = [(30,)]
-    db.execute.side_effect = [referencias, tareas, tecnicos, materiales]
+    # El quinto execute es el INSERT de las alertas nuevas.
+    db.execute.side_effect = [referencias, tareas, tecnicos, materiales, MagicMock()]
 
     from app.core import config
 
@@ -103,10 +104,20 @@ async def test_generar_alertas_crea_las_tres_condiciones():
         config.settings.ALERTA_HORA_LIMITE = hora_original
 
     assert creadas == 3
-    nuevas = db.add_all.call_args.args[0]
-    assert {(alerta.tipo, alerta.referencia) for alerta in nuevas} == {
+
+    insert = db.execute.await_args_list[-1].args[0]
+    sql = str(insert.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "INSERT INTO alerta" in sql
+    for tipo, referencia in (
         ("tarea_vencida", "tarea:10"),
         ("tecnico_sin_entrada", "empleado:20"),
         ("stock_critico", "material:30"),
-    }
+    ):
+        assert tipo in sql
+        assert referencia in sql
+
+    # Sin ON CONFLICT, dos supervisores abriendo la pantalla a la vez chocan
+    # contra el índice único y se cae la generación entera.
+    assert "ON CONFLICT DO NOTHING" in sql
     db.flush.assert_awaited_once()
