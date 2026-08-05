@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import ModalFinalizarTarea from '../components/tareas/ModalFinalizarTarea'
+import { describirVencimiento } from '../utils/vencimiento'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -143,6 +144,12 @@ function ServicioCard({ servicio, onVerDetalle }) {
             {servicio.prioridad === 'alta' && servicio.estado !== 'completado' && (
               <Badge label="Alta" variant="alta" />
             )}
+            {/* Cuánto queda para la fecha límite. El técnico veía la lista sin
+                ninguna señal de qué vence hoy y qué ya se pasó. */}
+            {(() => {
+              const v = describirVencimiento(servicio)
+              return v ? <Badge label={v.texto} variant={v.variant} /> : null
+            })()}
           </div>
           <h3 className={styles.nombre}>{servicio.nombre}</h3>
           <p className={styles.direccion}>

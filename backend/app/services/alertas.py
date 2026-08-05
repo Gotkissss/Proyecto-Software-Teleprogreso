@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.activo import Material
+from app.models.activo import Activo, Material
 from app.models.alerta import Alerta
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado
@@ -121,6 +121,13 @@ async def generar_alertas(db: AsyncSession) -> int:
         # índice único uq_alerta_tipo_referencia_dia lo impide, y sin esta
         # cláusula el segundo se llevaría un IntegrityError que tumbaría la
         # generación entera en vez de simplemente saltarse el duplicado.
+        # La fecha se manda explícita en hora de Guatemala. La columna tiene
+        # server_default=now(), que es la hora del servidor de PostgreSQL: en
+        # UTC. Eso dejaba toda alerta recién creada 6 horas en el futuro, así
+        # que la pantalla mostraba "Hace un momento" para alertas viejas y la
+        # deduplicación por día empezaba a fallar cada tarde a partir de las
+        # 18:00 locales, cuando en UTC ya es el día siguiente.
+        creada = ahora_local()
         await db.execute(
             pg_insert(Alerta)
             .values(
@@ -130,6 +137,7 @@ async def generar_alertas(db: AsyncSession) -> int:
                         "severidad": alerta.severidad,
                         "estado": alerta.estado,
                         "referencia": alerta.referencia,
+                        "fecha": creada,
                     }
                     for alerta in nuevas_alertas
                 ]
@@ -141,6 +149,61 @@ async def generar_alertas(db: AsyncSession) -> int:
         await db.flush()
 
     return len(nuevas_alertas)
+
+
+async def describir_referencias(
+    db: AsyncSession,
+    alertas: list[Alerta],
+) -> dict[str, str]:
+    """
+    Traduce las referencias "entidad:id" al nombre real de esa entidad.
+
+    Devuelve {referencia: etiqueta}, p. ej.
+        {"tarea:7": "Cambio de poste dañado — Callejón San José"}
+
+    Sin esto la pantalla del supervisor mostraba "La tarea #7 venció", que
+    obliga a ir a buscar a mano cuál es la tarea 7. Se resuelven todas las
+    referencias en tres consultas (una por tipo de entidad) en vez de una por
+    alerta.
+    """
+    ids_por_entidad: dict[str, set[int]] = {}
+
+    for alerta in alertas:
+        if not alerta.referencia or ":" not in alerta.referencia:
+            continue
+        entidad, _, id_txt = alerta.referencia.partition(":")
+        if id_txt.isdigit():
+            ids_por_entidad.setdefault(entidad, set()).add(int(id_txt))
+
+    etiquetas: dict[str, str] = {}
+
+    if ids_tarea := ids_por_entidad.get("tarea"):
+        result = await db.execute(
+            select(Tarea.id_tarea, Tarea.titulo).where(Tarea.id_tarea.in_(ids_tarea))
+        )
+        for id_tarea, titulo in result.all():
+            etiquetas[f"tarea:{id_tarea}"] = titulo
+
+    if ids_empleado := ids_por_entidad.get("empleado"):
+        result = await db.execute(
+            select(Empleado.id_empleado, Empleado.nombre, Empleado.apellido).where(
+                Empleado.id_empleado.in_(ids_empleado)
+            )
+        )
+        for id_empleado, nombre, apellido in result.all():
+            etiquetas[f"empleado:{id_empleado}"] = f"{nombre} {apellido}"
+
+    if ids_material := ids_por_entidad.get("material"):
+        # El nombre del material vive en `activo`, no en `material`.
+        result = await db.execute(
+            select(Activo.id_activo, Activo.nombre_activo).where(
+                Activo.id_activo.in_(ids_material)
+            )
+        )
+        for id_activo, nombre in result.all():
+            etiquetas[f"material:{id_activo}"] = nombre
+
+    return etiquetas
 
 
 async def _obtener_referencias_existentes(

@@ -11,12 +11,14 @@ cada tipo por jornada" y la reconstrucción del día vía GET /descanso/hoy.
 Se usan mocks de AsyncSession, igual que en test_incidencias.py.
 """
 
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+
+from app.core.tiempo import hora_actual as hora_local
 
 from app.models.asistencia import Asistencia, Descanso
 from app.models.pausa import TipoPausa
@@ -60,6 +62,12 @@ def _empleado(id_empleado=2):
     return SimpleNamespace(
         id_empleado=id_empleado, nombre="Juan", apellido="Pérez", rol="tecnico"
     )
+
+
+def _restar_minutos(referencia: time, minutos: int) -> time:
+    """Hora `minutos` antes de `referencia`, dentro del mismo día."""
+    base = datetime.combine(date.today(), referencia) - timedelta(minutes=minutos)
+    return base.time()
 
 
 def _jornada(hora_entrada=time(8, 0), hora_salida=None, descansos=None):
@@ -317,12 +325,23 @@ async def test_hoy_reconstruye_el_dia_completo():
     """
     Con esto la pantalla se puede repintar entera tras un reinicio: entrada,
     pausas cerradas, pausa en curso y tipos ya consumidos.
+
+    Las horas se construyen relativas al reloj real y no fijas (08:00, 15:00):
+    la jornada y la pausa abierta se miden contra "ahora", así que con horas
+    fijas el resultado dependía de a qué hora del día se corrieran las pruebas
+    y el test fallaba solo por las mañanas.
     """
+    ahora = hora_local()
+    entrada = _restar_minutos(ahora, 180)          # entró hace 3 horas
+    almuerzo_ini = _restar_minutos(ahora, 120)     # almorzó hace 2 horas
+    almuerzo_fin = _restar_minutos(ahora, 90)      # 30 minutos de almuerzo
+    tecnica_ini = _restar_minutos(ahora, 10)       # pausa técnica en curso
+
     jornada = _jornada(
-        hora_entrada=time(8, 0),
+        hora_entrada=entrada,
         descansos=[
-            _descanso(1, "almuerzo", time(12, 0), time(12, 30)),
-            _descanso(2, "tecnica", time(15, 0), None),
+            _descanso(1, "almuerzo", almuerzo_ini, almuerzo_fin),
+            _descanso(2, "tecnica", tecnica_ini, None),
         ],
     )
     db = _db([_resultado(jornada)])
@@ -330,15 +349,18 @@ async def test_hoy_reconstruye_el_dia_completo():
     respuesta = await get_descansos_hoy(db, _empleado())
 
     assert respuesta["jornada_activa"] is True
-    assert respuesta["hora_entrada"] == "08:00:00"
+    assert respuesta["hora_entrada"] == entrada.strftime("%H:%M:%S")
     assert len(respuesta["descansos"]) == 2
     assert sorted(respuesta["tipos_usados"]) == ["almuerzo", "tecnica"]
     assert respuesta["pausa_activa"]["tipo"] == "tecnica"
-    # El acumulado incluye la pausa aún abierta.
+    # El acumulado incluye la pausa aún abierta: 30 min de almuerzo + ~10 de
+    # la técnica que sigue corriendo.
     assert respuesta["segundos_en_pausa"] >= 30 * 60
-    assert respuesta["segundos_trabajados"] == (
-        respuesta["segundos_brutos"] - respuesta["segundos_en_pausa"]
+    # Lo trabajado es el bruto menos las pausas, nunca negativo.
+    assert respuesta["segundos_trabajados"] == max(
+        0, respuesta["segundos_brutos"] - respuesta["segundos_en_pausa"]
     )
+    assert respuesta["segundos_trabajados"] > 0
 
 
 @pytest.mark.asyncio

@@ -53,15 +53,18 @@ const formatHora = (isoString) => {
 const TIPO_ALERTA_INFO = {
   tarea_vencida: {
     label: 'Tarea vencida',
-    describir: (id) => `La tarea #${id} venció su fecha de finalización y sigue activa.`,
+    describir: (nombre) => `«${nombre}» venció su fecha de finalización y sigue activa.`,
+    sinNombre: (id) => `La tarea #${id} venció su fecha de finalización y sigue activa.`,
   },
   tecnico_sin_entrada: {
     label: 'Técnico sin entrada',
-    describir: (id) => `El empleado #${id} no ha marcado su entrada el día de hoy.`,
+    describir: (nombre) => `${nombre} no ha marcado su entrada el día de hoy.`,
+    sinNombre: (id) => `El empleado #${id} no ha marcado su entrada el día de hoy.`,
   },
   stock_critico: {
     label: 'Stock crítico',
-    describir: (id) => `El material #${id} está por debajo del stock mínimo.`,
+    describir: (nombre) => `«${nombre}» está por debajo del stock mínimo.`,
+    sinNombre: (id) => `El material #${id} está por debajo del stock mínimo.`,
   },
 }
 
@@ -94,11 +97,22 @@ function parseReferencia(referencia) {
   return { entidad, id }
 }
 
+/**
+ * Mensaje de la alerta.
+ *
+ * El backend ya resuelve `referencia_label` al nombre real (título de la
+ * tarea, nombre del técnico o del material). Si por alguna razón no viniera
+ * —la entidad se borró, por ejemplo— se cae al id crudo en vez de dejar la
+ * tarjeta sin texto.
+ */
 function describirAlerta(alerta) {
   const info = TIPO_ALERTA_INFO[alerta.tipo]
-  const { id } = parseReferencia(alerta.referencia)
   if (!info) return `Alerta: ${alerta.tipo}`
-  return id ? info.describir(id) : info.label
+
+  if (alerta.referencia_label) return info.describir(alerta.referencia_label)
+
+  const { id } = parseReferencia(alerta.referencia)
+  return id ? info.sinNombre(id) : info.label
 }
 
 /*
@@ -263,6 +277,15 @@ export default function AlertasPage() {
   const criticos       = materiales.filter((m) => m.cantidad_disponible === 0).length
   const stockBadge     = materiales.length  // total materiales bajo mínimo
 
+  /* El badge del tab cuenta SIEMPRE las pendientes, no lo que devuelve el
+     filtro activo. Antes mostraba el total del filtro, así que al pararse en
+     "Atendidas" el badge decía "1" como si quedara una alerta por atender. */
+  const pendientes = alertas.filter((a) => a.estado === ESTADO_ALERTA.PENDIENTE).length
+  const badgeOperativas =
+    filtroEstado === ESTADO_ALERTA.PENDIENTE || filtroEstado === 'todas'
+      ? pendientes
+      : null
+
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>Alertas del sistema</h1>
@@ -274,9 +297,12 @@ export default function AlertasPage() {
           onClick={() => setTabActiva('operativas')}
         >
           Alertas operativas
-          {alertasActivas.length > 0 && (
-            <span className={`${styles.tabBadge} ${styles.tabBadgeDanger}`}>
-              {alertasActivas.length}
+          {badgeOperativas > 0 && (
+            <span
+              className={`${styles.tabBadge} ${styles.tabBadgeDanger}`}
+              title={`${badgeOperativas} alerta(s) pendiente(s)`}
+            >
+              {badgeOperativas}
             </span>
           )}
         </button>

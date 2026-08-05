@@ -40,7 +40,10 @@ async def test_get_alertas_devuelve_alertas_filtradas():
 
     assert len(alertas) == 1
     assert alertas[0].estado == "pendiente"
-    db.execute.assert_awaited_once()
+    # Dos consultas: la de alertas y la que resuelve las referencias a nombres
+    # ("tarea:7" → "Cambio de poste dañado"). Antes se exigía una sola, pero
+    # sin la segunda la pantalla solo puede mostrar el id crudo.
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio

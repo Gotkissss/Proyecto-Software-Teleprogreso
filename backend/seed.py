@@ -601,7 +601,8 @@ async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
     ]
     for carro, tecnico in zip(disponibles, tecnicos):
         db.add(EmpleadoCarro(id_empleado=tecnico.id_empleado, id_carro=carro.id_activo))
-        carro.estado_vehiculo = "asignado"
+        # Igual que arriba: el endpoint de asignación usa "en_uso".
+        carro.estado_vehiculo = "en_uso"
 
     # ── Herramientas cargadas en los vehículos ───────────────────────────────
     herramientas_libres = [
@@ -620,7 +621,11 @@ async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
                 comentario="Entregada en la asignación semanal de equipo.",
             )
         )
-        herramienta.estado = "asignada"
+        # "en_uso" es el estado que escribe POST /activos/carros/{id}/herramientas.
+        # El seed ponía "asignada", un cuarto valor que el frontend no sabe
+        # traducir: las herramientas sembradas salían con el badge en crudo y
+        # parecía que asignar una desde la app "no actualizaba" nada.
+        herramienta.estado = "en_uso"
 
     await db.flush()
 

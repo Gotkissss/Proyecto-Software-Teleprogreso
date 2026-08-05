@@ -43,6 +43,10 @@ export const getMiRuta = async (idTecnico) => {
       tipo:             _inferirTipo(t.titulo, t.descripcion),
       fecha_completado: t.fecha_completado ?? null,
       total_incidencias: t.total_incidencias ?? 0,
+      // Fecha límite: la pantalla la usa para avisar al técnico de lo que
+      // vence hoy o ya venció, en vez de dejarle deducirlo de la lista.
+      fecha_finalizacion: t.fecha_finalizacion ?? null,
+      estado_tarea: t.estado_tarea,
     }))
     // La ruta del día es eso: el día. Se muestran todas las tareas abiertas
     // más las que el técnico cerró hoy (para que vea su avance), pero no el

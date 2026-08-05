@@ -179,6 +179,29 @@
   min-width: 0;
 }
 
+/* Zona que abre la ficha de la tarea. Se marca con cursor y realce al pasar
+   por encima para que se note que es clicable y no solo texto. */
+.tareaInfoClickable {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
+  transition: var(--transition);
+}
+
+.tareaInfoClickable:hover {
+  background: var(--color-bg-alt);
+}
+
+.tareaInfoClickable:hover .tareaTitulo {
+  color: var(--color-primary-dark);
+}
+
+.tareaInfoClickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .tareaTitulo {
   font-size: 0.9375rem;
   font-weight: 700;

@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.models.alerta import Alerta
 from app.models.empleado import Empleado
 from app.schemas.alerta import AlertaResponse, AlertaUpdate
-from app.services.alertas import generar_alertas
+from app.services.alertas import describir_referencias, generar_alertas
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,24 @@ async def get_alertas(
         query = query.where(Alerta.estado == estado)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    alertas = result.scalars().all()
+
+    # Se resuelve el nombre de lo referenciado para que la pantalla pueda
+    # decir "Cambio de poste dañado" en lugar de "tarea #7".
+    etiquetas = await describir_referencias(db, list(alertas))
+
+    return [
+        AlertaResponse(
+            id_alerta=alerta.id_alerta,
+            tipo=alerta.tipo,
+            severidad=alerta.severidad,
+            estado=alerta.estado,
+            referencia=alerta.referencia,
+            referencia_label=etiquetas.get(alerta.referencia or ""),
+            fecha=alerta.fecha,
+        )
+        for alerta in alertas
+    ]
 
 
 @router.patch(
@@ -91,4 +108,18 @@ async def update_alerta(
         )
 
     alerta.estado = data.estado.value
-    return alerta
+
+    # Se devuelve con la etiqueta ya resuelta: el frontend fusiona esta
+    # respuesta en su lista y, sin ella, la tarjeta perdía el nombre y volvía
+    # a mostrar el id crudo justo después de atender la alerta.
+    etiquetas = await describir_referencias(db, [alerta])
+
+    return AlertaResponse(
+        id_alerta=alerta.id_alerta,
+        tipo=alerta.tipo,
+        severidad=alerta.severidad,
+        estado=alerta.estado,
+        referencia=alerta.referencia,
+        referencia_label=etiquetas.get(alerta.referencia or ""),
+        fecha=alerta.fecha,
+    )

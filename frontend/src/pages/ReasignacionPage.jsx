@@ -8,9 +8,11 @@ import Badge from '../components/ui/Badge'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
+import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { getTareas, getTecnicosDisponibles, reasignarTarea } from '../api/tareaService'
+import { describirVencimiento } from '../utils/vencimiento'
 import styles from './ReasignacionPage.module.css'
 
 
@@ -36,6 +38,9 @@ export default function ReasignacionPage() {
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null)
   const [tareaEditando, setTareaEditando] = useState(null)
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
+  // Ficha de solo lectura: se abre al hacer clic en la tarjeta, sin tener que
+  // entrar al modal de edición solo para consultar los datos.
+  const [tareaDetalle, setTareaDetalle] = useState(null)
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
@@ -206,6 +211,16 @@ export default function ReasignacionPage() {
   return (
     <div className={styles.page}>
 
+      {/* Ficha de solo lectura. Desde aquí se puede saltar a editar, reasignar
+          o ver evidencias sin volver a la lista. */}
+      <ModalDetalleTarea
+        tarea={tareaDetalle}
+        onClose={() => setTareaDetalle(null)}
+        onEditar={(t) => { setTareaDetalle(null); setTareaEditando(t) }}
+        onReasignar={(t) => { setTareaDetalle(null); abrirPanel(t) }}
+        onVerEvidencias={(t) => { setTareaDetalle(null); setTareaEvidencias(t) }}
+      />
+
       {/* Modal de edición de una tarea existente */}
       <ModalEditarTarea
         open={Boolean(tareaEditando)}
@@ -281,10 +296,26 @@ export default function ReasignacionPage() {
         <ul className={styles.tareasList}>
           {tareasActivas.map((tarea) => {
             const id = tarea.id_tarea ?? tarea.id
+            const vencimiento = describirVencimiento(tarea)
 
             return (
               <li key={id} className={styles.tareaItem}>
-                <div className={styles.tareaInfo}>
+                {/* Toda la zona de información abre la ficha. Los botones de
+                    la derecha detienen la propagación para que "Editar" no
+                    dispare además el detalle. */}
+                <div
+                  className={`${styles.tareaInfo} ${styles.tareaInfoClickable}`}
+                  role="button"
+                  tabIndex={0}
+                  title="Ver detalle de la tarea"
+                  onClick={() => setTareaDetalle(tarea)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setTareaDetalle(tarea)
+                    }
+                  }}
+                >
                   <span className={styles.tareaTitulo}>
                     {tarea.titulo}
                   </span>
@@ -294,10 +325,17 @@ export default function ReasignacionPage() {
                         Antes se leía `nombre_completo`, que no existe, y todas
                         las tareas aparecían como "Sin asignar". */}
                     {tarea.tecnico?.nombre ?? 'Sin asignar'}
+                    {tarea.direccion_servicio && ` · ${tarea.direccion_servicio}`}
                   </span>
                 </div>
 
-                <div className={styles.tareaAcciones}>
+                <div className={styles.tareaAcciones} onClick={(e) => e.stopPropagation()}>
+                  {/* Cuánto queda para la fecha límite, para no tener que
+                      calcularlo mentalmente a partir de una fecha suelta. */}
+                  {vencimiento && (
+                    <Badge label={vencimiento.texto} variant={vencimiento.variant} />
+                  )}
+
                   <Badge
                     label={tarea.estado_tarea ?? tarea.estado}
                     variant={

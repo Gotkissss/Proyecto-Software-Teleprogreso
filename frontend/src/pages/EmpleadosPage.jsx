@@ -730,7 +730,7 @@ export default function EmpleadosPage() {
                       </div>
                     </td>
                     {/* SCRUM-74: Correo */}
-                    <td className={styles.td}>
+                    <td className={`${styles.td} ${styles.tdCorreo}`} title={emp.correo}>
                       <span className={styles.empleadoCorreo}>{emp.correo}</span>
                     </td>
                     {/* SCRUM-74: Rol */}

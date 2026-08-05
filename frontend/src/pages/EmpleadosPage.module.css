@@ -443,7 +443,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xs);
-  overflow: hidden;
+  /* `overflow: hidden` recortaba la tabla: con las 7 columnas mide ~1320px y
+     el contenedor ~1190px, así que la columna de acciones quedaba cortada y
+     los botones Activar/Desactivar eran inalcanzables. Con auto se puede
+     desplazar; el ancho se sigue conteniendo con el radio de las esquinas. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .table {
@@ -459,7 +464,7 @@
 }
 
 .th {
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   text-align: left;
   vertical-align: middle;
   font-size: 0.6875rem;
@@ -541,14 +546,25 @@
 }
 
 .td {
-  padding: var(--space-4) var(--space-5);
+  /* Padding horizontal reducido: con var(--space-5) las 7 columnas no cabían
+     en 1280px y la tabla se desbordaba del contenedor. */
+  padding: var(--space-4) var(--space-4);
   color: var(--color-text);
   vertical-align: middle;
 }
 
 .tdAcciones {
   text-align: right;
-  padding-right: var(--space-6);
+  padding-right: var(--space-4);
+  white-space: nowrap;
+}
+
+/* El correo es la columna que más crece y la que menos se necesita leer
+   entera: se recorta para que no se coma el espacio de las acciones. */
+.tdCorreo {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -557,7 +573,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-width: 220px;
+  /* 220px hacía que la tabla no cupiera y la columna de acciones se saliera
+     del contenedor. Con 190px entra el nombre completo más largo del seed. */
+  min-width: 190px;
 }
 
 .avatar {
@@ -653,8 +671,8 @@
 .btnEditar {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 5px;
+  padding: 7px 11px;
   background: var(--color-bg-alt);
   color: var(--color-text);
   border: 1.5px solid transparent;
@@ -664,7 +682,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
-  margin-right: var(--space-2);
+  margin-right: var(--space-1);
 }
 
 .btnEditar:hover {
@@ -676,8 +694,8 @@
 .btnToggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 5px;
+  padding: 7px 11px;
   border: 1.5px solid transparent;
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
