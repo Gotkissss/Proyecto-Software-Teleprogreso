@@ -1,6 +1,22 @@
-# Entorno 
+# Entorno
 .env
 *.env
+.env.*
+!.env.example
+
+# Credenciales, llaves y volcados de la base. Un dump commiteado por error es
+# la forma más común de que se filtre una base entera: no depende de que nadie
+# ataque nada, basta con que el repositorio se haga público.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+*.sql.gz
+*.dump
+*.bak
+backups/
 
 # Python 
 __pycache__/

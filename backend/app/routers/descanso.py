@@ -130,10 +130,17 @@ async def _descanso_activo(db: AsyncSession, id_asistencia: int) -> Optional[Des
 )
 async def get_tipos_pausa(
     db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
     Retorna la lista de tipos de pausa permitidos según la normativa operativa,
     leída de la tabla `tipo_pausa`.
+
+    Requiere sesión iniciada. Era el único endpoint que consultaba la base sin
+    pedir token: cualquiera desde internet podía hacer que el backend abriera
+    una conexión y ejecutara una consulta, sin identificarse. El frontend ya lo
+    llamaba con el token puesto (lo añade el interceptor de api/client.js), así
+    que la aplicación no nota el cambio.
 
     Campos:
       - id:               identificador interno usado al iniciar la pausa

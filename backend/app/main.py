@@ -4,17 +4,29 @@ Punto de entrada de la aplicacion FastAPI — Teleprogreso S.A.
 -------
 este archivo configura:
   - CORS para el frontend React
+  - Middlewares de seguridad (frecuencia, tamaño de body, cabeceras, Host)
   - Manejadores globales de errores de autenticacion
   - Registro de todos los routers de la API
+
+Nota de seguridad: el contenedor de PostgreSQL no publica ningun puerto y vive
+en una red Docker sin salida a internet (ver docker-compose.yml). Es decir,
+este proceso es el UNICO camino hacia los datos, y por eso todo lo que entra
+por aqui pasa antes por los filtros de abajo.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.core.middleware_seguridad import (
+    CabecerasSeguridad,
+    LimiteFrecuencia,
+    LimiteTamanoBody,
+)
 
 # Importar todos los modelos para que SQLAlchemy los registre correctamente
 import app.models  # noqa: F401
@@ -29,8 +41,15 @@ from app.routers.empleados  import router as empleados_router
 from app.routers.metricas   import router as metricas_router
 from app.routers.inventario import router as inventario_router
 from app.routers.carros     import router as carros_router
-from app.routers.activos    import router as activos_router 
+from app.routers.activos    import router as activos_router
 from app.routers.alertas    import router as alertas_router
+
+# En produccion no se publica la documentacion interactiva: es un mapa completo
+# de la superficie de ataque (rutas, parametros, esquemas) servido a cualquiera
+# que pase por ahi. En desarrollo sigue disponible igual que siempre.
+_docs = None if settings.es_produccion else "/docs"
+_redoc = None if settings.es_produccion else "/redoc"
+_openapi = None if settings.es_produccion else "/openapi.json"
 
 app = FastAPI(
     title="Teleprogreso S.A. — API",
@@ -42,16 +61,46 @@ app = FastAPI(
         "Los endpoints bajo /empleados requieren rol admin.\n\n"
     ),
     version="1.0.0",
+    docs_url=_docs,
+    redoc_url=_redoc,
+    openapi_url=_openapi,
 )
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+# ── Middlewares ──────────────────────────────────────────────────────────────
+# En Starlette el ultimo middleware registrado es el PRIMERO en ejecutarse, asi
+# que se registran del mas interno al mas externo: lo mas barato de evaluar
+# (tamaño y frecuencia) queda arriba y descarta el trafico abusivo antes de que
+# llegue a tocar la base de datos.
+
+# 1. Cabeceras de seguridad en la respuesta (el mas interno).
+app.add_middleware(CabecerasSeguridad)
+
+# 2. CORS. Los origenes se validan en config.py: nunca puede ser "*".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Antes era ["*"] en ambos. Se enumeran los que la aplicacion usa de verdad
+    # para no anunciar permisos que nadie necesita.
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    max_age=600,
 )
+
+# 3. Solo se atienden peticiones dirigidas a un Host conocido. Con la lista
+#    vacia (desarrollo) se acepta cualquiera; en produccion config.py exige
+#    que ALLOWED_HOSTS este definido.
+if settings.ALLOWED_HOSTS:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(settings.ALLOWED_HOSTS),
+    )
+
+# 4. Tope de peticiones por minuto y por IP.
+app.add_middleware(LimiteFrecuencia)
+
+# 5. Corte por tamaño de cuerpo (el mas externo: se decide sin leer nada).
+app.add_middleware(LimiteTamanoBody)
 
 # ── Archivos estaticos para imagenes de activos ───────────────────────
 # Crea el directorio si no existe para no fallar en arranque

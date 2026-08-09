@@ -14,7 +14,14 @@ from app.core.config import settings
 from app.models.token import TokenRevocado
 
 # ── Hashing de contraseñas ─────────────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt con 12 rondas: cada verificación cuesta unos 200-300 ms de CPU, que es
+# imperceptible al iniciar sesión pero hace inviable probar millones de
+# contraseñas si algún día se filtrara la tabla de empleados.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+
+# Hash de una contraseña cualquiera, calculado una sola vez al importar el
+# módulo. Se usa para gastar el mismo tiempo cuando el correo no existe.
+_HASH_SENUELO = pwd_context.hash("contrasena-que-nadie-usa-jamas")
 
 
 def hash_password(plain: str) -> str:
@@ -25,6 +32,19 @@ def hash_password(plain: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     """Compara la contraseña en texto plano con el hash almacenado."""
     return pwd_context.verify(plain, hashed)
+
+
+def consumir_tiempo_de_hash() -> None:
+    """
+    Verifica un hash señuelo y descarta el resultado.
+
+    Sirve para igualar el tiempo de respuesta del login cuando el correo no
+    existe en la base. Sin esto, la diferencia de tiempo entre "correo
+    desconocido" (respuesta inmediata) y "correo válido, contraseña incorrecta"
+    (hay que verificar un bcrypt) permite enumerar qué cuentas existen, que es
+    el primer paso de cualquier ataque de contraseñas dirigido.
+    """
+    pwd_context.verify("contrasena-incorrecta", _HASH_SENUELO)
 
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
@@ -68,8 +88,24 @@ def decode_access_token(token: str) -> dict[str, Any]:
     se comprueba aquí: vive en la base de datos y esta función es síncrona.
     Para validar un token de una petición real usa `token_esta_revocado`, que
     es lo que hace la dependencia `get_current_empleado`.
+
+    `algorithms` se pasa siempre como lista blanca de un solo elemento: es lo
+    que impide el ataque clásico de mandar un token con `alg: none` (o cambiar
+    HS256 por RS256) para que la librería lo dé por bueno sin comprobar la
+    firma. Las opciones `require_*` rechazan además tokens sin expiración o sin
+    sujeto, que de otro modo serían válidos para siempre.
     """
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    return jwt.decode(
+        token,
+        settings.SECRET_KEY,
+        algorithms=[settings.ALGORITHM],
+        options={
+            "verify_signature": True,
+            "verify_exp": True,
+            "require_exp": True,
+            "require_sub": True,
+        },
+    )
 
 
 # ── Revocación (logout) ──────────────────────────────────────────────────────
