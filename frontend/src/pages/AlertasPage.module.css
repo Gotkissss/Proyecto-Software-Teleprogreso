@@ -699,3 +699,25 @@
   font-weight: 600;
   color: var(--color-text-secondary);
 }
+
+/* Salida desde el aviso hacia la tarea que lo provoca.
+   Atender o descartar solo cierra el aviso; para resolver el problema hay que
+   ir a la tarea, y antes no había ningún camino desde aquí. */
+.irATareaBtn {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.irATareaBtn:hover {
+  color: var(--color-primary-deep);
+}

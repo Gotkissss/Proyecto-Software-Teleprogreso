@@ -161,8 +161,9 @@ export const getHistorialAsistencia = async (filtros = {}) => {
 
 /**
  * Lista de empleados para el filtro del historial.
- * Devuelve [] si el rol no tiene permiso (el endpoint es solo-admin), para que
- * el supervisor siga viendo el historial completo aunque sin el selector.
+ * El endpoint lo admiten admin y supervisor. Devuelve [] si el rol no tiene
+ * permiso (p. ej. un gerente), para que siga viendo el historial completo
+ * aunque sin el selector, en vez de romper la pantalla entera.
  */
 export const getEmpleadosParaFiltro = async () => {
   try {

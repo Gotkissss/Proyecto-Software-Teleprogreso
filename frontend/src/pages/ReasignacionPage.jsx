@@ -239,7 +239,22 @@ export default function ReasignacionPage() {
     () => tareas.filter((t) => !estaCerrada(t)),
     [tareas]
   )
-  const totalCerradas = tareas.length - tareasActivas.length
+
+  // Se cuentan por separado y no como un total de "cerradas".
+  //
+  // El aviso decía "3 tareas ya cerradas... Ver tareas realizadas", pero
+  // sumaba completadas y canceladas, mientras que la pantalla de Realizadas
+  // solo muestra las completadas. Con los datos de ejemplo (2 completadas y 1
+  // cancelada) el supervisor leía 3, entraba, y encontraba 2 sin explicación.
+  const totalCompletadas = useMemo(
+    () => tareas.filter((t) => estadoDe(t) === 'completado').length,
+    [tareas]
+  )
+  const totalCanceladas = useMemo(
+    () => tareas.filter((t) => estadoDe(t) === 'cancelado').length,
+    [tareas]
+  )
+  const totalCerradas = totalCompletadas + totalCanceladas
 
   /** Técnico que ya tiene la tarea abierta en el modal. */
   const idTecnicoActual =
@@ -319,16 +334,32 @@ export default function ReasignacionPage() {
           si no, parecería que las tareas cerradas se perdieron. */}
       {totalCerradas > 0 && (
         <p className={styles.cerradasNota}>
-          {totalCerradas} tarea{totalCerradas === 1 ? '' : 's'} ya cerrada
-          {totalCerradas === 1 ? '' : 's'} no aparece
-          {totalCerradas === 1 ? '' : 'n'} aquí.{' '}
-          <button
-            type="button"
-            className={styles.verRealizadasBtn}
-            onClick={() => navigate('/supervisor/historial-tareas')}
-          >
-            Ver tareas realizadas
-          </button>
+          {/* Cada cifra dice exactamente qué es y a dónde lleva. Las
+              canceladas no tienen pantalla propia, así que se nombran pero no
+              se enlazan: prometer un enlace que no existe es peor que no
+              mencionarlas. */}
+          {totalCompletadas > 0 && (
+            <>
+              {totalCompletadas} realizada{totalCompletadas === 1 ? '' : 's'}
+              {totalCanceladas > 0 && ` y ${totalCanceladas} cancelada${totalCanceladas === 1 ? '' : 's'}`}
+            </>
+          )}
+          {totalCompletadas === 0 && (
+            <>{totalCanceladas} cancelada{totalCanceladas === 1 ? '' : 's'}</>
+          )}
+          {' '}no aparece{totalCerradas === 1 ? '' : 'n'} aquí.
+          {totalCompletadas > 0 && (
+            <>
+              {' '}
+              <button
+                type="button"
+                className={styles.verRealizadasBtn}
+                onClick={() => navigate('/supervisor/historial-tareas')}
+              >
+                Ver tareas realizadas
+              </button>
+            </>
+          )}
         </p>
       )}
 

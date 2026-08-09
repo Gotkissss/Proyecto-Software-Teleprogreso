@@ -16,12 +16,14 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
 import StockBadge from '../components/ui/StockBadge'
 import { useToast } from '../components/ui/Toast'
 import {
   ESTADO_ALERTA,
+  TIPO_ALERTA,
   actualizarEstadoAlerta,
   describirErrorAlertas,
   getAlertas,
@@ -87,6 +89,7 @@ const IconStock = () => (
 const FILTROS_ESTADO = [
   { value: ESTADO_ALERTA.PENDIENTE,  label: 'Pendientes' },
   { value: ESTADO_ALERTA.ATENDIDA,   label: 'Atendidas' },
+  { value: ESTADO_ALERTA.RESUELTA,   label: 'Resueltas solas' },
   { value: ESTADO_ALERTA.DESCARTADA, label: 'Descartadas' },
   { value: 'todas',                  label: 'Todas' },
 ]
@@ -188,6 +191,7 @@ function MaterialStockCard({ material }) {
   */
 export default function AlertasPage() {
   const toast = useToast()
+  const navigate = useNavigate()
 
   /* Alertas operativas (persistentes, backend real) */
   const [alertas,      setAlertas]      = useState([])
@@ -395,6 +399,20 @@ export default function AlertasPage() {
 
                     <p className={styles.alertaMensaje}>{describirAlerta(alerta)}</p>
 
+                    {/* Atender o descartar solo cambia el estado de ESTE aviso;
+                        la tarea no se entera. Sin una salida hacia ella, el
+                        supervisor descartaba el aviso creyendo que resolvia el
+                        problema y la tarea seguia igual, asignada y vencida. */}
+                    {alerta.tipo === TIPO_ALERTA.TAREA_VENCIDA && (
+                      <button
+                        type="button"
+                        className={styles.irATareaBtn}
+                        onClick={() => navigate('/supervisor/reasignacion')}
+                      >
+                        Ir a la tarea para resolverla &rarr;
+                      </button>
+                    )}
+
                     {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
                       <div className={styles.alertaHeader}>
                         <button
@@ -402,19 +420,22 @@ export default function AlertasPage() {
                           onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
                           disabled={enProceso}
                         >
-                          {enProceso ? 'Guardando...' : 'Marcar como atendida'}
+                          {enProceso ? 'Guardando...' : 'Marcar aviso como atendido'}
                         </button>
                         <button
                           className={styles.resolverBtn}
                           onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
                           disabled={enProceso}
                         >
-                          Descartar
+                          Descartar aviso
                         </button>
                       </div>
                     ) : (
                       <span className={styles.alertaEstado}>
-                        {alerta.estado === ESTADO_ALERTA.ATENDIDA ? '✓ Atendida' : '✕ Descartada'}
+                        {alerta.estado === ESTADO_ALERTA.ATENDIDA && '✓ Atendida'}
+                        {alerta.estado === ESTADO_ALERTA.DESCARTADA && '✕ Descartada'}
+                        {alerta.estado === ESTADO_ALERTA.RESUELTA &&
+                          '✓ Resuelta sola — la causa ya no existe'}
                       </span>
                     )}
                   </li>

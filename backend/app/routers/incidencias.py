@@ -46,7 +46,11 @@ from app.schemas.incidencia import (
     IncidenciaCreate,
     IncidenciaResponse,
 )
-from app.services.tareas import marcar_completada, validar_cierre_permitido
+from app.services.tareas import (
+    marcar_completada,
+    validar_cierre_permitido,
+    validar_tarea_abierta,
+)
 from app.services.uploads import eliminar_imagen, guardar_imagen
 
 # El prefijo cuelga de /tareas para respetar la jerarquía del recurso.
@@ -194,6 +198,10 @@ async def crear_incidencia(
     Roles: el técnico asignado, admin o supervisor.
     """
     tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    # Una tarea cerrada no recibe trabajo nuevo. Sin esta comprobación, un
+    # técnico con la pantalla ya cargada podía seguir documentando una tarea
+    # que el supervisor acababa de cancelar.
+    validar_tarea_abierta(tarea)
 
     incidencia = Incidencia(
         id_tarea=tarea.id_tarea,
@@ -289,6 +297,7 @@ async def upload_foto_evidencia(
     Roles: el técnico asignado, admin o supervisor.
     """
     tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    validar_tarea_abierta(tarea)
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
 
     incidencia.foto_evidencia = await guardar_imagen(

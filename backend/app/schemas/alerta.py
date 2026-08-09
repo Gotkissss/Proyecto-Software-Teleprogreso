@@ -9,6 +9,11 @@ class EstadoAlerta(str, Enum):
     pendiente = "pendiente"
     atendida = "atendida"
     descartada = "descartada"
+    # La puso el sistema, no una persona: la condición que originó la alerta
+    # dejó de cumplirse (se cerró la tarea, se repuso el material, el técnico
+    # marcó entrada). Se distingue de 'atendida' a propósito, para que el
+    # supervisor pueda separar lo que resolvió él de lo que se arregló solo.
+    resuelta = "resuelta"
 
 
 class AlertaResponse(BaseModel):

@@ -23,6 +23,37 @@ from fastapi import HTTPException, status
 from app.core.tiempo import ahora, hoy
 
 
+def validar_tarea_abierta(tarea) -> None:
+    """
+    Exige que la tarea siga abierta para poder registrarle trabajo.
+
+    Se aplica al registrar evidencias. Sin esto, una tarea cancelada seguía
+    aceptando descripciones y fotos: el técnico que tuviera la pantalla ya
+    cargada podía documentar —y dar por hecho— un trabajo que el supervisor
+    acababa de anular, y la evidencia quedaba colgando de una tarea muerta.
+
+    Para corregir una tarea ya cerrada hay que reabrirla primero; así queda
+    constancia de que alguien decidió reabrirla.
+    """
+    if tarea.estado_tarea == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Esta tarea fue cancelada y ya no admite evidencias. "
+                "Consulta con tu supervisor."
+            ),
+        )
+
+    if tarea.estado_tarea == "completado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Esta tarea ya está completada y no admite evidencias nuevas. "
+                "Si falta algo, pide a tu supervisor que la reabra."
+            ),
+        )
+
+
 def validar_cierre_permitido(tarea) -> None:
     """
     Comprueba que la tarea esté en un estado desde el que se pueda cerrar.
