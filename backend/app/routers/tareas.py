@@ -509,6 +509,31 @@ async def update_tarea(
     if "id_tecnico" in cambios:
         nuevo_tecnico = cambios["id_tecnico"]
 
+        # Una tarea cerrada no cambia de técnico. `PATCH /tareas/{id}/reasignar`
+        # ya lo impedía, pero este endpoint hacía exactamente lo mismo sin
+        # ninguna comprobación: dos caminos para la misma acción y solo uno
+        # vigilado.
+        #
+        # No es un detalle formal. Quién hizo el trabajo se deduce de quién
+        # tiene la tarea asignada —la evidencia no guarda autor—, así que
+        # cambiar el técnico de una tarea ya completada reescribe la historia:
+        # el trabajo y las fotos que dejó una persona pasan a figurar a nombre
+        # de otra, sin rastro de que hubo un cambio.
+        #
+        # Se mira el estado DESPUÉS de aplicar el cambio de estado de esta
+        # misma petición, para que reabrir y reasignar en una sola operación
+        # siga funcionando: ahí sí queda constancia de que se reabrió.
+        if tarea.estado_tarea in ESTADOS_TAREA_CERRADOS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"La tarea está en estado '{tarea.estado_tarea}' y ya no "
+                    "puede cambiar de técnico: la evidencia registrada quedaría "
+                    "atribuida a alguien que no hizo el trabajo. Reábrela "
+                    "primero si necesitas reasignarla."
+                ),
+            )
+
         if nuevo_tecnico is None:
             await db.execute(
                 delete(EmpleadoTarea).where(EmpleadoTarea.id_tarea == id)

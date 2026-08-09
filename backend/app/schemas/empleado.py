@@ -182,6 +182,20 @@ class EmpleadoResponse(BaseModel):
         from_attributes = True
 
 
+class EmpleadoEstadoResponse(EmpleadoResponse):
+    """
+    Respuesta de PATCH /empleados/{id}/estado.
+
+    Añade lo que ocurrió en cascada al desactivar. Importa sobre todo
+    `tareas_activas_sin_reasignar`: esas tareas siguen asignadas a alguien que
+    ya no puede entrar al sistema, y si nadie lo dice se quedan ahí sin que se
+    entere ninguna persona.
+    """
+    vehiculo_liberado: Optional[str] = None
+    jornadas_cerradas: int = 0
+    tareas_activas_sin_reasignar: int = 0
+
+
 class EmpleadoListResponse(BaseModel):
     """Respuesta paginada/filtrada de la lista de empleados."""
     total:     int

@@ -685,8 +685,38 @@ export default function EmpleadosPage() {
     setToggleCargando(true)
     try {
       const { data } = await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
-      setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: data.estado } : e))
-      toast.success(`Empleado ${nuevoEstado === 'activo' ? 'activado' : 'desactivado'} correctamente.`)
+      // Al desactivar, el backend suelta el vehículo y cierra la jornada
+      // abierta, pero NO desasigna las tareas: hacerlo borraría a quién se le
+      // habían dado. Devuelve cuántas quedaron para que se avise aquí; si no,
+      // ese trabajo se queda en manos de alguien que ya no puede entrar y
+      // nadie se entera.
+      setEmpleados(prev => prev.map(e =>
+        e.id_empleado === id
+          ? { ...e, estado: data.estado, placa_vehiculo: data.vehiculo_liberado ? null : e.placa_vehiculo }
+          : e
+      ))
+
+      if (nuevoEstado === 'activo') {
+        toast.success('Empleado activado correctamente.')
+      } else {
+        const sueltos = []
+        if (data.vehiculo_liberado) sueltos.push(`se liberó el vehículo ${data.vehiculo_liberado}`)
+        if (data.jornadas_cerradas > 0) sueltos.push('se cerró su jornada abierta')
+
+        toast.success(
+          `Empleado desactivado${sueltos.length ? `; ${sueltos.join(' y ')}` : ''}.`
+        )
+
+        if (data.tareas_activas_sin_reasignar > 0) {
+          toast.error(
+            `Atención: quedan ${data.tareas_activas_sin_reasignar} tarea` +
+            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} activa` +
+            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} asignada` +
+            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} a este empleado. ` +
+            'Reasígnalas desde Reasignación de servicios.'
+          )
+        }
+      }
       setEmpleadoToggle(null)
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo cambiar el estado del empleado.')

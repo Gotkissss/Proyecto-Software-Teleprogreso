@@ -33,10 +33,12 @@ from app.core.deps import get_current_empleado, require_admin, require_superviso
 from app.core.reglas import ESTADO_EMPLEADO_ACTIVO, ROL_ADMIN, ROLES_VALIDOS
 from app.core.security import hash_password
 from app.db.session import get_db
+from app.services.empleados import desvincular_recursos
 from app.models.empleado import Empleado, EmpleadoCarro
 from app.models.activo import Carro
 from app.schemas.empleado import (
     EmpleadoCreate,
+    EmpleadoEstadoResponse,
     EmpleadoEstadoUpdate,
     EmpleadoListResponse,
     EmpleadoPasswordUpdate,
@@ -320,7 +322,7 @@ async def update_empleado(
 
 @router.patch(
     "/{id}/estado",
-    response_model=EmpleadoResponse,
+    response_model=EmpleadoEstadoResponse,
     summary="Activar o desactivar la cuenta de un empleado",
     status_code=status.HTTP_200_OK,
 )
@@ -388,7 +390,36 @@ async def update_estado_empleado(
     # Aplicar el cambio de estado
     empleado.estado = data.estado
 
-    return empleado
+    # Al desactivar hay que soltar lo que el empleado retiene. Antes esto solo
+    # cambiaba una columna: su vehículo quedaba bloqueado en 'en_uso' para
+    # siempre y su jornada abierta no se cerraba nunca, porque ya no puede
+    # entrar a marcar salida.
+    efectos = None
+    if data.estado != ESTADO_EMPLEADO_ACTIVO:
+        efectos = await desvincular_recursos(db, empleado)
+        logger.info(
+            "Empleado %s (id=%s) desactivado: vehiculo=%s, jornadas cerradas=%s, "
+            "tareas activas sin reasignar=%s",
+            empleado.correo, empleado.id_empleado,
+            efectos.vehiculo_liberado, efectos.jornadas_cerradas,
+            efectos.tareas_activas,
+        )
+
+    return EmpleadoEstadoResponse(
+        id_empleado=empleado.id_empleado,
+        nombre=empleado.nombre,
+        apellido=empleado.apellido,
+        correo=empleado.correo,
+        rol=empleado.rol,
+        estado=empleado.estado,
+        telefono=empleado.telefono,
+        fecha_contratacion=empleado.fecha_contratacion,
+        fecha_registro=empleado.fecha_registro,
+        ultimo_acceso=empleado.ultimo_acceso,
+        vehiculo_liberado=efectos.vehiculo_liberado if efectos else None,
+        jornadas_cerradas=efectos.jornadas_cerradas if efectos else 0,
+        tareas_activas_sin_reasignar=efectos.tareas_activas if efectos else 0,
+    )
 
 # ─── PATCH /empleados/{id}/contrasena ─────────────────────────────────────
 # Como admin o supervisor, quiero poder restablecer la contraseña de cualquier

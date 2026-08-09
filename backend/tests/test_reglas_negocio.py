@@ -183,3 +183,28 @@ def test_las_pausas_nunca_superan_la_jornada():
     )
     assert resumen.minutos_trabajados == 0
     assert resumen.minutos_trabajados >= 0
+
+
+# ─── 5. La autoría del trabajo no se puede reescribir ────────────────────────
+#
+# La evidencia no guarda quién la registró: se deduce de quién tiene la tarea
+# asignada. Eso funciona mientras el técnico de una tarea cerrada no pueda
+# cambiar — si cambia, el trabajo de una persona pasa a figurar a nombre de
+# otra sin ningún rastro.
+
+def test_los_dos_caminos_de_reasignacion_usan_la_misma_regla():
+    """
+    `PATCH /tareas/{id}` y `PATCH /tareas/{id}/reasignar` hacen lo mismo. El
+    segundo bloqueaba las tareas cerradas y el primero no, así que bastaba con
+    usar el otro endpoint para saltarse la regla.
+    """
+    import inspect
+
+    from app.routers import tareas
+
+    fuente_patch = inspect.getsource(tareas.update_tarea)
+    fuente_reasignar = inspect.getsource(tareas.reasignar_tarea)
+
+    # Ambos consultan los estados cerrados antes de tocar la asignación.
+    assert "ESTADOS_TAREA_CERRADOS" in fuente_patch
+    assert "completado" in fuente_reasignar or "ESTADOS_TAREA_CERRADOS" in fuente_reasignar

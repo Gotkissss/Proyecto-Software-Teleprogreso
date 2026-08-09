@@ -368,9 +368,15 @@ async def eliminar_activo(
         raise HTTPException(status_code=404, detail=f"Activo id={id} no encontrado.")
 
     # Validación: carro con técnico asignado
+    #
+    # `.scalars().first()` y no `scalar_one_or_none()`: ese método lanza
+    # MultipleResultsFound si hay más de una fila, y estas dos tablas admiten
+    # varias por diseño (sus claves primarias son compuestas). Con dos filas,
+    # lo que debía ser un 400 explicando que hay que liberar primero se
+    # convertía en un 500 sin mensaje.
     if activo.tipo == "carro":
         r = await db.execute(select(EmpleadoCarro).where(EmpleadoCarro.id_carro == id))
-        if r.scalar_one_or_none():
+        if r.scalars().first():
             raise HTTPException(
                 status_code=400,
                 detail="No se puede eliminar un vehículo que tiene un técnico asignado. Libera la asignación primero.",
@@ -381,13 +387,22 @@ async def eliminar_activo(
         r = await db.execute(
             select(CarroHerramienta).where(CarroHerramienta.id_herramienta == id)
         )
-        if r.scalar_one_or_none():
+        if r.scalars().first():
             raise HTTPException(
                 status_code=400,
                 detail="No se puede eliminar una herramienta que está asignada a un vehículo. Libérala primero.",
             )
 
+    # La fila se borra en cascada, pero el archivo de la imagen no lo toca
+    # nadie: sin esto, cada activo eliminado dejaba su foto ocupando disco sin
+    # ninguna referencia que permitiera encontrarla después.
+    foto = activo.foto_url
+
     await db.delete(activo)
+    await db.flush()
+
+    eliminar_imagen(foto)
+
     return {"detail": f"Activo id={id} eliminado correctamente.", "id_activo": id}
 
 
@@ -403,6 +418,7 @@ from fastapi import UploadFile, File
 from app.services.uploads import (
     ALLOWED_EXTENSIONS,
     MAX_FILE_SIZE_MB,
+    eliminar_imagen,
     guardar_imagen,
 )
 

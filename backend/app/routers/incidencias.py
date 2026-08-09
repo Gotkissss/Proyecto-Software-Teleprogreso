@@ -33,7 +33,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado, require_supervisor
@@ -337,8 +337,34 @@ async def eliminar_incidencia(
 
     Restringido a admin y supervisor: una evidencia es el respaldo del trabajo
     hecho, el técnico no debería poder borrar la suya.
+
+    No se permite borrar la ÚLTIMA evidencia de una tarea ya completada: para
+    cerrarla se exigió tener al menos una, y dejarla en cero contradice la
+    regla que se aplicó al cerrarla. Quedaría una tarea "completada" sin
+    ninguna constancia de qué se hizo, que es justo lo que la evidencia
+    obligatoria trata de evitar.
     """
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
+
+    result_tarea = await db.execute(select(Tarea).where(Tarea.id_tarea == id))
+    tarea = result_tarea.scalar_one_or_none()
+
+    if tarea is not None and tarea.estado_tarea == "completado":
+        result_total = await db.execute(
+            select(func.count())
+            .select_from(Incidencia)
+            .where(Incidencia.id_tarea == id)
+        )
+        if (result_total.scalar() or 0) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Es la única evidencia de una tarea completada y no se puede "
+                    "eliminar: la tarea quedaría cerrada sin ninguna constancia "
+                    "de lo que se hizo. Reabre la tarea si necesitas rehacer el "
+                    "registro."
+                ),
+            )
 
     eliminar_imagen(incidencia.foto_evidencia)
     await db.delete(incidencia)
