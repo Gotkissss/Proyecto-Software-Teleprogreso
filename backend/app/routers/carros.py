@@ -6,13 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_empleado, require_supervisor
+from app.core.deps import (
+    get_current_empleado,
+    require_admin_supervisor_gerente,
+    require_supervisor,
+)
 from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
     ESTADO_EN_USO,
 )
 from app.db.session import get_db
+from app.services.inventario import exigir_acceso_a_carro
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
 from app.models.empleado import Empleado, EmpleadoCarro
 from app.schemas.activo import (
@@ -40,11 +45,13 @@ router = APIRouter(prefix="/activos", tags=["Carros"])
 )
 async def get_carros(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
     Lista todos los vehiculos del inventario con su tecnico asignado (si aplica).
-    Roles: cualquier empleado autenticado.
+
+    Roles: admin, supervisor y gerente. Un tecnico ve su propio vehiculo en
+    GET /empleados/mi-equipo, no la flota entera.
     """
     result = await db.execute(
         select(Activo, Carro)
@@ -103,11 +110,11 @@ async def get_carros(
 async def get_carro_by_id(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
     Devuelve el detalle de un vehiculo por su id_activo.
-    Roles: cualquier empleado autenticado.
+    Roles: admin, supervisor y gerente.
     """
     result = await db.execute(
         select(Activo, Carro)
@@ -166,12 +173,15 @@ async def get_carro_by_id(
 async def get_herramientas_de_carro(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
     Lista todas las herramientas actualmente asignadas al vehiculo indicado.
     Incluye datos de la tabla CarroHerramienta (fecha_asignacion, estado_entrega, comentario).
-    Roles: cualquier empleado autenticado.
+
+    Roles: admin, supervisor y gerente sobre cualquier vehiculo. Un tecnico
+    solo sobre el suyo: es la unica parte del inventario que le corresponde
+    ver, porque son las herramientas que lleva encima.
     """
     # Verificar que el carro existe
     result_carro = await db.execute(
@@ -184,6 +194,8 @@ async def get_herramientas_de_carro(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontro ningun vehiculo con id={id}.",
         )
+
+    await exigir_acceso_a_carro(db, current_user, id)
 
     # Join CarroHerramienta → Herramienta → Activo
     result = await db.execute(

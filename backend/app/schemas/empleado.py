@@ -123,6 +123,41 @@ class EmpleadoEstadoUpdate(BaseModel):
         use_enum_values = True
 
 
+class EmpleadoPasswordUpdate(BaseModel):
+    """
+    Payload para PATCH /empleados/{id}/contrasena.
+
+    No pide la contrasena actual: quien la cambia es un administrador o un
+    supervisor asignando una nueva a otra persona, no el propio usuario. El
+    caso tipico es "se me olvido la clave" y el empleado no puede aportarla.
+
+    Se pide dos veces para evitar el error mas caro de este flujo: escribir mal
+    la clave nueva y dejar al empleado sin poder entrar, sin que nadie sepa
+    cual quedo guardada.
+    """
+    contrasena:         str
+    contrasena_confirmacion: str
+
+    @field_validator("contrasena")
+    @classmethod
+    def contrasena_minima(cls, v: str) -> str:
+        # Mismo minimo que al crear el empleado, para que no haya dos reglas
+        # distintas segun por donde se establezca la clave.
+        if len(v) < 8:
+            raise ValueError("La contrasena debe tener al menos 8 caracteres.")
+        if v.strip() != v:
+            raise ValueError("La contrasena no puede empezar ni terminar con espacios.")
+        if not v.strip():
+            raise ValueError("La contrasena no puede estar vacia.")
+        return v
+
+    @model_validator(mode="after")
+    def contrasenas_coinciden(self) -> "EmpleadoPasswordUpdate":
+        if self.contrasena != self.contrasena_confirmacion:
+            raise ValueError("Las contrasenas no coinciden.")
+        return self
+
+
 # ------- Schemas de Respuesta (salida) -------
 
 class EmpleadoResponse(BaseModel):

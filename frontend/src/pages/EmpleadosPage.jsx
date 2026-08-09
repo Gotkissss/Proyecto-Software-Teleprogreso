@@ -94,6 +94,13 @@ const IconPlus = () => (
     <line x1="5" y1="12" x2="19" y2="12"/>
   </svg>
 )
+const IconKey = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7.5" cy="15.5" r="4.5"/>
+    <path d="M10.7 12.3 21 2"/>
+    <path d="m16.5 6.5 3 3"/>
+  </svg>
+)
 const IconEye = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -446,7 +453,165 @@ function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
             </button>
           </ModalActions>
         </form>
+
+        <SeccionContrasena empleado={empleado} bloqueado={cargando} />
     </Modal>
+  )
+}
+
+
+/**
+ * Bloque de restablecimiento de contraseña dentro del modal de edición.
+ *
+ * Va en su propio formulario y con su propia llamada al backend
+ * (PATCH /empleados/{id}/contrasena) en vez de mezclarse con los demás campos:
+ * cambiar una contraseña es una acción que no debe ocurrir "de paso" al
+ * guardar un teléfono. Empieza plegado por la misma razón.
+ */
+function SeccionContrasena({ empleado, bloqueado }) {
+  const toast = useToast()
+  const [abierto,     setAbierto]     = useState(false)
+  const [clave,       setClave]       = useState('')
+  const [confirmar,   setConfirmar]   = useState('')
+  const [visible,     setVisible]     = useState(false)
+  const [guardando,   setGuardando]   = useState(false)
+  const [error,       setError]       = useState(null)
+
+  const limpiar = () => { setClave(''); setConfirmar(''); setError(null); setVisible(false) }
+
+  const cerrar = () => { setAbierto(false); limpiar() }
+
+  // Se valida aquí lo mismo que valida el backend, para dar el aviso sin
+  // gastar una petición. El backend vuelve a comprobarlo igualmente.
+  const problema = () => {
+    if (clave.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+    if (clave !== clave.trim()) return 'No puede empezar ni terminar con espacios.'
+    if (clave !== confirmar) return 'Las contraseñas no coinciden.'
+    return null
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const fallo = problema()
+    if (fallo) { setError(fallo); return }
+
+    setGuardando(true); setError(null)
+    try {
+      const { data } = await apiClient.patch(
+        `/empleados/${empleado.id_empleado}/contrasena`,
+        { contrasena: clave, contrasena_confirmacion: confirmar },
+      )
+      toast.success(data?.detail || 'Contraseña actualizada correctamente.')
+      cerrar()
+    } catch (err) {
+      const detail = err?.response?.data?.detail
+      setError(
+        Array.isArray(detail)
+          ? detail.map(d => d.message || d.msg).join(', ')
+          : detail || 'No se pudo actualizar la contraseña.'
+      )
+    } finally { setGuardando(false) }
+  }
+
+  // Mismo medidor que usa el modal "Nuevo empleado", para que la clave se
+  // evalúe igual se cree o se restablezca.
+  const fuerza = getPasswordStrength(clave)
+
+  return (
+    <div className={styles.pwdSection}>
+      {!abierto ? (
+        <button
+          type="button"
+          className={styles.pwdToggleBtn}
+          onClick={() => setAbierto(true)}
+          disabled={bloqueado}
+        >
+          <IconKey />
+          <span>Restablecer contraseña</span>
+        </button>
+      ) : (
+        <form className={styles.pwdForm} onSubmit={handleSubmit} noValidate>
+          <div className={styles.pwdHeader}>
+            <IconKey />
+            <div>
+              <p className={styles.pwdTitle}>Restablecer contraseña</p>
+              <p className={styles.pwdHint}>
+                Se asigna una clave nueva a {empleado.nombre}. Entrégasela en persona
+                o por un medio seguro; el sistema no se la envía.
+              </p>
+            </div>
+          </div>
+
+          {error && <div className={styles.pwdError}><IconAlert /><span>{error}</span></div>}
+
+          <div className={styles.editFormGrid}>
+            <div className={styles.editField}>
+              <label className={styles.editLabel}>Contraseña nueva <span className={styles.required}>*</span></label>
+              <div className={styles.passWrap}>
+                <input
+                  type={visible ? 'text' : 'password'}
+                  className={`${styles.editInput} ${styles.editInputWithIcon}`}
+                  value={clave}
+                  onChange={e => { setClave(e.target.value); setError(null) }}
+                  disabled={guardando}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres"
+                />
+                <button
+                  type="button"
+                  className={styles.passEyeBtn}
+                  onClick={() => setVisible(v => !v)}
+                  tabIndex={-1}
+                  aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {visible ? <IconEyeOff /> : <IconEye />}
+                </button>
+              </div>
+              {clave && (
+                <div className={styles.strengthBar}>
+                  <div className={styles.strengthSegments}>
+                    {[1, 2, 3].map(lvl => (
+                      <div
+                        key={lvl}
+                        className={styles.strengthSegment}
+                        style={{ background: fuerza.level >= lvl ? fuerza.color : '#e2e8f0' }}
+                      />
+                    ))}
+                  </div>
+                  <span className={styles.strengthLabel} style={{ color: fuerza.color }}>
+                    {fuerza.label}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className={styles.editField}>
+              <label className={styles.editLabel}>Repetir contraseña <span className={styles.required}>*</span></label>
+              <input
+                type={visible ? 'text' : 'password'}
+                className={`${styles.editInput} ${confirmar && clave !== confirmar ? styles.editInputError : ''}`}
+                value={confirmar}
+                onChange={e => { setConfirmar(e.target.value); setError(null) }}
+                disabled={guardando}
+                autoComplete="new-password"
+                placeholder="Vuelve a escribirla"
+              />
+              {confirmar && clave !== confirmar && (
+                <p className={styles.editFieldError}>Las contraseñas no coinciden.</p>
+              )}
+            </div>
+          </div>
+
+          <ModalActions>
+            <button type="button" className={styles.editCancelBtn} onClick={cerrar} disabled={guardando}>
+              Cancelar
+            </button>
+            <button type="submit" className={styles.pwdSaveBtn} disabled={guardando || !clave || !confirmar}>
+              {guardando ? <><Spinner size="sm" color="white" /> Guardando...</> : 'Actualizar contraseña'}
+            </button>
+          </ModalActions>
+        </form>
+      )}
+    </div>
   )
 }
 

@@ -22,13 +22,14 @@ Importate:
   - El admin no puede desactivarse a si mismo (guard en PATCH /{id}/estado).
 """
 
+import logging
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_empleado, require_admin
+from app.core.deps import get_current_empleado, require_admin, require_supervisor
 from app.core.reglas import ESTADO_EMPLEADO_ACTIVO, ROL_ADMIN, ROLES_VALIDOS
 from app.core.security import hash_password
 from app.db.session import get_db
@@ -38,9 +39,12 @@ from app.schemas.empleado import (
     EmpleadoCreate,
     EmpleadoEstadoUpdate,
     EmpleadoListResponse,
+    EmpleadoPasswordUpdate,
     EmpleadoResponse,
     EmpleadoUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/empleados", tags=["Empleados"])
 
@@ -56,8 +60,13 @@ router = APIRouter(prefix="/empleados", tags=["Empleados"])
 )
 async def get_empleados( # Endpoint para listar empleados con filtros opcionales.
     db: Annotated[AsyncSession, Depends(get_db)],
-    # Solo el admin puede ver la lista completa de empleados
-    _current_user: Annotated[Empleado, Depends(require_admin)],
+    # Leer la lista: admin y supervisor.
+    #
+    # Era solo-admin. Se abre al supervisor porque ahora también puede
+    # restablecer contraseñas (PATCH /{id}/contrasena) y sin ver la lista no
+    # tiene forma de llegar al empleado. Crear, editar y activar/desactivar
+    # siguen siendo exclusivos del admin.
+    _current_user: Annotated[Empleado, Depends(require_supervisor)],
     # Filtros opcionales
     rol: Optional[str] = Query(
         None,
@@ -380,6 +389,69 @@ async def update_estado_empleado(
     empleado.estado = data.estado
 
     return empleado
+
+# ─── PATCH /empleados/{id}/contrasena ─────────────────────────────────────
+# Como admin o supervisor, quiero poder restablecer la contraseña de cualquier
+# empleado que la haya olvidado.
+
+@router.patch(
+    "/{id}/contrasena",
+    summary="Restablecer la contraseña de un empleado",
+    status_code=status.HTTP_200_OK,
+)
+async def update_contrasena_empleado(
+    id: int,
+    data: EmpleadoPasswordUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(require_supervisor)],
+):
+    """
+    Asigna una contraseña nueva a un empleado.
+
+    Hasta ahora la contraseña se fijaba al crear el empleado y no había forma
+    de volver a cambiarla: ni el propio usuario ni un administrador. Un
+    empleado que la olvidara quedaba sin acceso de forma permanente.
+
+    Reglas:
+    - Solo admin y supervisor (`require_supervisor`).
+    - Mínimo 8 caracteres y hay que escribirla dos veces (la valida el schema).
+    - Se guarda hasheada con bcrypt; nunca en texto plano y nunca se devuelve.
+    - No se pide la contraseña anterior: quien la restablece es un
+      administrador, no el dueño de la cuenta.
+    """
+    result = await db.execute(
+        select(Empleado).where(Empleado.id_empleado == id)
+    )
+    empleado = result.scalar_one_or_none()
+
+    if not empleado:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún empleado con id={id}.",
+        )
+
+    empleado.hash_contrasena = hash_password(data.contrasena)
+
+    logger.warning(
+        "Contraseña restablecida para %s (id=%s) por %s (id=%s, rol=%s)",
+        empleado.correo, empleado.id_empleado,
+        current_user.correo, current_user.id_empleado, current_user.rol,
+    )
+
+    # ⚠️ Las sesiones que el empleado ya tuviera abiertas siguen siendo válidas
+    # hasta que su token expire por su cuenta (ACCESS_TOKEN_EXPIRE_MINUTES).
+    # Invalidarlas al cambiar la contraseña exige guardar el momento del cambio
+    # y compararlo contra el `iat` del token, lo que requiere una migración.
+    # Está anotado como pendiente en SEGURIDAD.md.
+    return {
+        "detail": (
+            f"Contraseña actualizada para {empleado.nombre} {empleado.apellido}. "
+            "Comunícasela por un medio seguro y pídele que la cambie contigo "
+            "si sospecha que alguien más la vio."
+        ),
+        "id_empleado": empleado.id_empleado,
+    }
+
 
 # ─── GET /empleados/mi-equipo ─────────────────────────────────────────────
 # T5.1: Endpoint para que el técnico autenticado vea su vehículo + herramientas

@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_empleado, require_supervisor
 from app.core.reglas import ESTADO_DISPONIBLE
+from app.services.inventario import exigir_acceso_a_activo
 from app.db.session import get_db
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
 from app.models.empleado import Empleado, EmpleadoCarro
@@ -228,11 +229,19 @@ async def get_activo_by_id(
     db: Annotated[AsyncSession, Depends(get_db)],
     _current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
-    """Devuelve el detalle de cualquier activo independientemente de su tipo."""
+    """
+    Devuelve el detalle de cualquier activo independientemente de su tipo.
+
+    Roles: admin, supervisor y gerente sobre cualquier activo. Un tecnico solo
+    sobre su vehiculo y las herramientas cargadas en el; para todo lo demas
+    recibe 403 y debe pedirlo a su supervisor.
+    """
     activo_result = await db.execute(select(Activo).where(Activo.id_activo == id))
     activo = activo_result.scalar_one_or_none()
     if not activo:
         raise HTTPException(status_code=404, detail=f"Activo id={id} no encontrado.")
+
+    await exigir_acceso_a_activo(db, _current_user, id)
 
     subtipo = None
     if activo.tipo == "carro":

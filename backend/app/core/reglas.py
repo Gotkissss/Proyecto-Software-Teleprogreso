@@ -49,10 +49,20 @@ ESTADO_EN_USO = "en_uso"
 
 ROLES_VALIDOS = ("admin", "supervisor", "tecnico", "gerente")
 
-# Roles que ven el trabajo de toda la operación y no solo el propio.
+# Roles que VEN el trabajo de toda la operación y no solo el propio.
 ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 
+# Roles que además de ver, OPERAN: asignan, registran y modifican.
+#
+# La diferencia con ROLES_SUPERVISION es el gerente, que es un rol de consulta:
+# revisa la operación y se comunica con el supervisor, pero no registra
+# evidencias ni toca el inventario. Antes iba en el mismo saco que admin y
+# supervisor, así que podía subir fotos de evidencia a cualquier tarea.
+ROLES_GESTION = ("admin", "supervisor")
+
 ROL_ADMIN = "admin"
+ROL_SUPERVISOR = "supervisor"
+ROL_GERENTE = "gerente"
 ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"

@@ -1531,3 +1531,148 @@
   letter-spacing: 0.04em;
   border: 1px solid var(--color-border);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Restablecer contraseña — bloque dentro del modal "Editar empleado"
+   -----------------------------------------------------------------------
+   Va separado del formulario de datos por una línea y con fondo propio:
+   cambiar una contraseña no debe parecer un campo más que se guarda "de
+   paso" junto al teléfono. Empieza plegado detrás de un botón.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.pwdSection {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.pwdToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 16px;
+  height: 38px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pwdToggleBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pwdToggleBtn:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  background: var(--color-bg);
+}
+
+.pwdToggleBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pwdForm {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.pwdHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.pwdHeader svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-primary);
+}
+
+.pwdTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pwdHint {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.pwdError {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-light);
+  color: var(--color-danger-dark);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.pwdError svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+
+
+
+
+
+
+
+.pwdSaveBtn {
+  padding: 8px 18px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.pwdSaveBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-primary);
+}
+
+.pwdSaveBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
