@@ -29,6 +29,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado, require_admin
+from app.core.reglas import ESTADO_EMPLEADO_ACTIVO, ROL_ADMIN, ROLES_VALIDOS
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoCarro
@@ -81,7 +82,7 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
 
     # Aplicar filtro por rol si se proporciono
     if rol:
-        roles_validos = {"admin", "supervisor", "tecnico", "gerente"}
+        roles_validos = set(ROLES_VALIDOS)
         if rol not in roles_validos:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -122,6 +123,19 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
     result = await db.execute(query)
     rows = result.all()  # lista de (Empleado, placa | None)
 
+    # El LEFT JOIN a empleado_carro devuelve una fila por vehículo asignado.
+    # La API impide asignar dos vehículos al mismo empleado, pero la tabla sí
+    # lo admite (su índice por empleado no es único), y si alguna vez ocurriera
+    # el empleado saldría duplicado en la lista y `total` contaría de más. Se
+    # deduplica por id, quedándose con el primer vehículo encontrado.
+    vistos: set[int] = set()
+    unicos = []
+    for emp, placa in rows:
+        if emp.id_empleado in vistos:
+            continue
+        vistos.add(emp.id_empleado)
+        unicos.append((emp, placa))
+
     # Construir respuestas incluyendo placa_vehiculo del JOIN
     empleados_response = [
         EmpleadoResponse(
@@ -137,7 +151,7 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
             ultimo_acceso=emp.ultimo_acceso,
             placa_vehiculo=placa,
         )
-        for emp, placa in rows
+        for emp, placa in unicos
     ]
 
     return EmpleadoListResponse(
@@ -219,7 +233,7 @@ async def update_empleado(
     id: int,
     data: EmpleadoUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(require_admin)],
+    current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     #Buscar el empleado que se quiere editar
     result = await db.execute(
@@ -232,6 +246,40 @@ async def update_empleado(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontró ningún empleado con id={id}.",
         )
+
+    # ── Protección del rol admin ────────────────────────────────────────────
+    # Ya existía un guard para que un admin no se desactivara a sí mismo
+    # (PATCH /{id}/estado), pero no para el ROL: bastaba con quitarse el rol
+    # admin, o quitárselo al último que quedaba, para dejar el sistema sin
+    # nadie que pueda administrarlo. Y como la creación de empleados también
+    # exige ser admin, no había forma de recuperarse desde la aplicación.
+    if data.rol is not None and data.rol != empleado.rol:
+        if id == current_user.id_empleado:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "No puedes cambiar tu propio rol. "
+                    "Pide a otro administrador que lo haga."
+                ),
+            )
+
+        if empleado.rol == ROL_ADMIN:
+            result_admins = await db.execute(
+                select(func.count(Empleado.id_empleado)).where(
+                    Empleado.rol == ROL_ADMIN,
+                    Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+                    Empleado.id_empleado != id,
+                )
+            )
+            if (result_admins.scalar() or 0) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "No se puede quitar el rol de administrador: es el "
+                        "único admin activo que queda. Asigna primero el rol "
+                        "'admin' a otro empleado."
+                    ),
+                )
 
     # Si se esta cambiando el correo, verificar que no este en uso
     if data.correo and data.correo != empleado.correo:
@@ -306,6 +354,27 @@ async def update_estado_empleado(
                 f"ya tiene el estado '{accion}'."
             ),
         )
+
+    # Mismo razonamiento que en PATCH /{id}: desactivar al último admin activo
+    # deja el sistema sin nadie que pueda administrarlo, y como crear empleados
+    # también exige ser admin, no habría forma de recuperarse desde la app.
+    if empleado.rol == ROL_ADMIN and data.estado != ESTADO_EMPLEADO_ACTIVO:
+        result_admins = await db.execute(
+            select(func.count(Empleado.id_empleado)).where(
+                Empleado.rol == ROL_ADMIN,
+                Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+                Empleado.id_empleado != id,
+            )
+        )
+        if (result_admins.scalar() or 0) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "No se puede desactivar: es el único administrador activo "
+                    "que queda. Activa o crea otro admin antes de desactivar "
+                    "este."
+                ),
+            )
 
     # Aplicar el cambio de estado
     empleado.estado = data.estado

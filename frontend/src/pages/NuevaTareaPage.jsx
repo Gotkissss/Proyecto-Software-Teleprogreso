@@ -3,14 +3,20 @@
  * ---------------------------------------------------------------------------
  * Formulario para crear una nueva tarea/orden de servicio.
  * - Muestra cuántas tareas activas tiene cada técnico
- * - Deshabilita técnicos con 3 o más tareas activas
+ * - Deshabilita a los que ya alcanzaron el límite de carga. El límite lo envía
+ *   el backend en `limite_tareas` (backend/app/core/reglas.py); aquí solo hay
+ *   un valor de respaldo por si la respuesta no lo trae.
  * - Maneja errores del backend con mensajes claros
  * ---------------------------------------------------------------------------
  */
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { crearTarea, getTecnicosDisponibles } from '../api/tareaService'
+import {
+  LIMITE_TAREAS_FALLBACK,
+  crearTarea,
+  getTecnicosDisponibles,
+} from '../api/tareaService'
 import Spinner from '../components/ui/Spinner'
 import styles from './NuevaTareaPage.module.css'
 
@@ -21,7 +27,9 @@ const PRIORIDADES = [
   { value: 'urgente', label: 'Urgente' },
 ]
 
-const LIMITE_TAREAS = 3
+// Respaldo. El límite real llega en `limite_tareas` de cada técnico
+// (lo publica GET /empleados/tecnicos/disponibles).
+const LIMITE_TAREAS = LIMITE_TAREAS_FALLBACK
 
 const FORM_INICIAL = {
   titulo:             '',
@@ -117,10 +125,11 @@ export default function NuevaTareaPage() {
     // Validación del límite antes de llamar al backend
     if (form.id_tecnico) {
       const tec = tecnicos.find((t) => t.id === Number(form.id_tecnico))
-      if (tec && tec.tareas_activas >= LIMITE_TAREAS) {
+      const limite = tec?.limite_tareas ?? LIMITE_TAREAS
+      if (tec && tec.tareas_activas >= limite) {
         setErrorServidor(
           `${tec.nombre_completo} ya tiene ${tec.tareas_activas} tareas activas. ` +
-          `El límite es ${LIMITE_TAREAS}. Selecciona otro técnico.`
+          `El límite es ${limite}. Selecciona otro técnico.`
         )
         return
       }
@@ -353,7 +362,8 @@ export default function NuevaTareaPage() {
               >
                 <option value="">Sin asignar por ahora</option>
                 {tecnicos.map((tec) => {
-                  const alLimite = (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
+                  const alLimite =
+                    (tec.tareas_activas ?? 0) >= (tec.limite_tareas ?? LIMITE_TAREAS)
                   return (
                     <option
                       key={tec.id}
@@ -373,23 +383,24 @@ export default function NuevaTareaPage() {
             {/* Info del técnico seleccionado */}
             {tecnicoSeleccionado && (() => {
               const activas = tecnicoSeleccionado.tareas_activas ?? 0
-              if (activas >= LIMITE_TAREAS) {
+              const limite = tecnicoSeleccionado.limite_tareas ?? LIMITE_TAREAS
+              if (activas >= limite) {
                 return (
                   <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoLimite}`}>
                     <span>⚠</span>
                     <span>
-                      {tecnicoSeleccionado.nombre_completo} ya alcanzó el límite de {LIMITE_TAREAS} tareas activas.
+                      {tecnicoSeleccionado.nombre_completo} ya alcanzó el límite de {limite} tareas activas.
                       Selecciona otro técnico.
                     </span>
                   </div>
                 )
               }
-              if (activas === LIMITE_TAREAS - 1) {
+              if (activas === limite - 1) {
                 return (
                   <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoAdvertencia}`}>
                     <span>ℹ</span>
                     <span>
-                      {tecnicoSeleccionado.nombre_completo} tendrá {activas + 1} de {LIMITE_TAREAS} tareas activas
+                      {tecnicoSeleccionado.nombre_completo} tendrá {activas + 1} de {limite} tareas activas
                       tras esta asignación.
                     </span>
                   </div>
@@ -422,7 +433,9 @@ export default function NuevaTareaPage() {
               className={styles.submitBtn}
               disabled={
                 cargando ||
-                (tecnicoSeleccionado && (tecnicoSeleccionado.tareas_activas ?? 0) >= LIMITE_TAREAS)
+                (tecnicoSeleccionado &&
+                  (tecnicoSeleccionado.tareas_activas ?? 0) >=
+                    (tecnicoSeleccionado.limite_tareas ?? LIMITE_TAREAS))
               }
             >
               {cargando

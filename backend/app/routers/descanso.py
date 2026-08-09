@@ -302,6 +302,14 @@ async def finalizar_descanso(
 
     catalogo = await cargar_catalogo(db)
 
+    # La duración real se registra tal cual, sin recortarla al máximo permitido:
+    # falsear el dato dejaría al supervisor sin forma de ver que la pausa se
+    # excedió, que es justo lo que necesita saber. Lo que sí se devuelve es el
+    # exceso ya calculado, para que la pantalla y el historial puedan marcarlo.
+    duracion_segundos = segundos_entre(descanso_activo.hora_inicio, now.time())
+    maximo_segundos = duracion_max_min(catalogo, descanso_activo.tipo) * 60
+    exceso = max(0, duracion_segundos - maximo_segundos)
+
     return {
         "message": "Descanso finalizado correctamente",
         "id_descanso": descanso_activo.id_descanso,
@@ -309,7 +317,10 @@ async def finalizar_descanso(
         "label": label(catalogo, descanso_activo.tipo),
         "hora_inicio": descanso_activo.hora_inicio.strftime("%H:%M:%S"),
         "hora_fin": now.time().strftime("%H:%M:%S"),
-        "duracion_segundos": segundos_entre(descanso_activo.hora_inicio, now.time()),
+        "duracion_segundos": duracion_segundos,
+        "duracion_max_seg": maximo_segundos,
+        "excedida": exceso > 0,
+        "segundos_excedidos": exceso,
     }
 
 

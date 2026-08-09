@@ -21,6 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.reglas import (
+    ESTADOS_TAREA_ACTIVOS,
+    ESTADO_EMPLEADO_ACTIVO,
+    LIMITE_TAREAS_ACTIVAS,
+    ROL_TECNICO,
+)
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado, EmpleadoTarea
@@ -28,8 +34,9 @@ from app.models.tarea import Tarea
 
 router = APIRouter(tags=["Métricas"])
 
-# Estados que cuentan como "tareas activas" para el límite de carga
-ESTADOS_ACTIVOS = ("pendiente", "en_progreso")
+# Antes este módulo tenía su propia copia del límite de carga y de la lista de
+# estados activos. Ahora se leen de app/core/reglas.py, que es la única fuente.
+ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
 
 
 # ─── GET /metricas/supervisor ─────────────────────────────────────────────────
@@ -65,15 +72,20 @@ async def get_metricas_supervisor(
     # ── 1. Técnicos con jornada activa hoy ──────────────────────────────────
     # Un técnico está "activo" si tiene asistencia de hoy con hora_entrada
     # y sin hora_salida aún.
+    #
+    # Se cuentan EMPLEADOS DISTINTOS, no filas de asistencia. Antes esto era
+    # `count(Asistencia.id_asistencia)`: un técnico con dos jornadas abiertas
+    # el mismo día se contaba dos veces y el panel llegaba a mostrar cosas como
+    # "6 de 5 técnicos en jornada".
     result_tecnicos = await db.execute(
-        select(func.count(Asistencia.id_asistencia))
+        select(func.count(func.distinct(Asistencia.id_empleado)))
         .join(Empleado, Empleado.id_empleado == Asistencia.id_empleado)
         .where(
             Asistencia.fecha == hoy,
             Asistencia.hora_entrada.isnot(None),
             Asistencia.hora_salida.is_(None),
-            Empleado.rol == "tecnico",
-            Empleado.estado == "activo",
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
         )
     )
     tecnicos_en_jornada: int = result_tecnicos.scalar() or 0
@@ -81,8 +93,8 @@ async def get_metricas_supervisor(
     # Plantilla total de técnicos, para poder mostrar "2 de 5" en el panel.
     result_plantilla = await db.execute(
         select(func.count(Empleado.id_empleado)).where(
-            Empleado.rol == "tecnico",
-            Empleado.estado == "activo",
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
         )
     )
     tecnicos_total: int = result_plantilla.scalar() or 0
@@ -165,7 +177,8 @@ async def get_tecnicos_disponibles(
         "correo": "tecnico@teleprogreso.com",
         "telefono": "5550-0002",
         "tareas_activas": 2,
-        "disponible": true        // false si tareas_activas >= 3
+        "disponible": true,       // false si tareas_activas >= limite_tareas
+        "limite_tareas": 5        // política vigente, para no duplicarla en la UI
       },
       ...
     ]
@@ -176,13 +189,17 @@ async def get_tecnicos_disponibles(
 
     Roles: admin | supervisor.
     """
-    LIMITE = 3
+    # Fuente única del límite (app/core/reglas.py). Además se devuelve dentro
+    # de cada elemento como `limite_tareas`, para que el frontend no tenga que
+    # guardar su propia copia del número: tenía dos, y al subir el tope se
+    # habrían quedado desfasadas marcando técnicos como llenos sin estarlo.
+    LIMITE = LIMITE_TAREAS_ACTIVAS
 
     # Traer todos los técnicos activos
     result_tecnicos = await db.execute(
         select(Empleado).where(
-            Empleado.rol == "tecnico",
-            Empleado.estado == "activo",
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
         ).order_by(Empleado.nombre, Empleado.apellido)
     )
     tecnicos = result_tecnicos.scalars().all()
@@ -238,6 +255,7 @@ async def get_tecnicos_disponibles(
             "telefono":       tec.telefono,
             "tareas_activas": conteos.get(tec.id_empleado, 0),
             "disponible":     conteos.get(tec.id_empleado, 0) < LIMITE,
+            "limite_tareas":  LIMITE,
             # Marcó entrada hoy (haya salido o no).
             "marco_entrada":  tec.id_empleado in jornadas,
             # Está trabajando ahora mismo: entrada marcada y sin salida.

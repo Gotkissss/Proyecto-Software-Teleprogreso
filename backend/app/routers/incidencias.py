@@ -43,7 +43,7 @@ from app.schemas.incidencia import (
     IncidenciaCreate,
     IncidenciaResponse,
 )
-from app.services.tareas import marcar_completada
+from app.services.tareas import marcar_completada, validar_cierre_permitido
 from app.services.uploads import eliminar_imagen, guardar_imagen
 
 # El prefijo cuelga de /tareas para respetar la jerarquía del recurso.
@@ -106,12 +106,13 @@ def _finalizar_tarea(tarea: Tarea) -> None:
     Delega en `marcar_completada` para que el cierre deje siempre puesta la
     `fecha_completado`; antes esta función solo cambiaba el estado y la tarea
     no llegaba nunca al historial diario.
+
+    Las reglas de "¿se puede cerrar esta tarea?" viven en
+    `app.services.tareas.validar_cierre_permitido`, compartidas con
+    `PATCH /tareas/{id}/finalizar`. Son dos caminos de cierre distintos y
+    ninguno debe poder saltarse lo que exige el otro.
     """
-    if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se puede finalizar una tarea cancelada.",
-        )
+    validar_cierre_permitido(tarea)
     marcar_completada(tarea)
 
 

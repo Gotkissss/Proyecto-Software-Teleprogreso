@@ -14,7 +14,7 @@ Endpoints que se tieneen:
   GET  /asistencia/historial  = Historial de jornadas con filtros y paginación
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from math import ceil
 from typing import Annotated, Optional
 
@@ -28,7 +28,7 @@ from sqlalchemy.orm import selectinload
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import get_current_empleado
 from app.db.session import get_db
-from app.models.asistencia import Asistencia
+from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado
 from app.schemas.asistencia import (
     DescansoResumen,
@@ -44,6 +44,34 @@ router = APIRouter(prefix="/asistencia", tags=["Asistencia"])
 # El resto (tecnicos) solo puede ver su propio historial.
 ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 
+# Hora con la que se cierra una jornada que el empleado dejó abierta y ya no
+# corresponde al turno en curso. No pretende afirmar que trabajó hasta esa
+# hora: es una marca de "esta jornada quedó sin cerrar" que además permite
+# seguir operando. La alternativa (dejarla abierta) bloqueaba al empleado.
+HORA_CIERRE_FORZADO = time(23, 59, 59)
+
+
+async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> None:
+    """
+    Cierra una jornada que quedó abierta de un día anterior, junto con sus
+    pausas.
+
+    Los descansos hay que cerrarlos también. Antes solo se cerraba la jornada
+    y sus pausas quedaban sin `hora_fin`: al calcular el historial, una pausa
+    abierta dentro de una jornada ya cerrada se contabiliza desde su inicio
+    hasta la hora de salida, así que una pausa olvidada a las 10:00 pasaba a
+    figurar como casi catorce horas de descanso.
+    """
+    jornada.hora_salida = jornada.hora_salida or HORA_CIERRE_FORZADO
+
+    result = await db.execute(
+        select(Descanso).where(
+            Descanso.id_asistencia == jornada.id_asistencia,
+            Descanso.hora_fin.is_(None),
+        )
+    )
+    for pausa in result.scalars().all():
+        pausa.hora_fin = jornada.hora_salida
 
 
 #-------- POST /asistencia/entrada-----------------
@@ -94,7 +122,7 @@ async def registrar_entrada(
         # Jornada de un día anterior que nunca se cerró: el técnico se fue sin
         # marcar salida. Bloquear la entrada de hoy por eso lo dejaba atrapado
         # sin forma de trabajar. Se cierra al final de aquel día y se sigue.
-        jornada.hora_salida = jornada.hora_salida or time(23, 59, 59)
+        await _cerrar_jornada_abandonada(db, jornada)
 
     await db.flush()
 
@@ -132,18 +160,51 @@ async def registrar_salida(
     """
     Registra la hora de salida del empleado autenticado.
 
-    - Busca la jornada activa (entrada sin salida) del empleado.
-    - Si no existe jornada activa, retorna 400.
+    - Cierra la jornada del turno en curso (la de hoy, o la de ayer si se trata
+      de un turno nocturno que cruzó la medianoche).
+    - Si no hay ninguna jornada del turno en curso, retorna 400.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
-    # 1. Buscar la jornada activa del empleado
+    now = ahora_local()
+    hoy = now.date()
+    ayer = hoy - timedelta(days=1)
+
+    # 1. Todas las jornadas abiertas del empleado, de la más reciente a la más
+    #    antigua.
+    #
+    #    Antes esto usaba `scalar_one_or_none()`, que lanza MultipleResultsFound
+    #    si hay más de una fila: bastaba con que quedaran dos jornadas abiertas
+    #    (un doble clic en "Entrada" las crea) para que este endpoint devolviera
+    #    500 y el empleado no pudiera marcar salida NUNCA MÁS. El endpoint de
+    #    entrada ya contemplaba ese caso; este no.
     result = await db.execute(
-        select(Asistencia).where(
+        select(Asistencia)
+        .where(
             Asistencia.id_empleado == current_user.id_empleado,
             Asistencia.hora_salida.is_(None),
         )
+        .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
     )
-    asistencia_activa = result.scalar_one_or_none()
+    abiertas = list(result.scalars().all())
+
+    def _es_del_turno_en_curso(jornada: Asistencia) -> bool:
+        """
+        ¿Esta jornada abierta corresponde al turno que se está cerrando ahora?
+
+        Es la de hoy, o bien una de ayer que todavía no ha terminado porque el
+        turno cruzó la medianoche. Ese segundo caso se reconoce porque la hora
+        actual es ANTERIOR a la hora de entrada (se entró a las 22:00 y se sale
+        a las 02:00). Sin esa condición, una jornada de ayer simplemente
+        olvidada se cerraría con la hora de hoy: el registro de ayer terminaba
+        mostrando una salida a las 09:00 de la mañana siguiente.
+        """
+        if jornada.fecha == hoy:
+            return True
+        return jornada.fecha == ayer and now.time() < jornada.hora_entrada
+
+    asistencia_activa = next(
+        (j for j in abiertas if _es_del_turno_en_curso(j)), None
+    )
 
     if not asistencia_activa:
         raise HTTPException(
@@ -153,8 +214,29 @@ async def registrar_salida(
         )
 
     # 2. Registrar la hora de salida
-    now = ahora_local()
     asistencia_activa.hora_salida = now.time()
+
+    # 3. Cerrar también el descanso que hubiera quedado en curso: si no, la
+    #    pausa seguiría "abierta" dentro de una jornada ya cerrada y el
+    #    historial la contaría hasta la hora de salida.
+    result_pausas = await db.execute(
+        select(Descanso).where(
+            Descanso.id_asistencia == asistencia_activa.id_asistencia,
+            Descanso.hora_fin.is_(None),
+        )
+    )
+    for pausa in result_pausas.scalars().all():
+        pausa.hora_fin = now.time()
+
+    # 4. Cualquier otra jornada que siguiera abierta de días pasados se cierra
+    #    aquí para que no vuelva a estorbar. Se hace en la rama de éxito a
+    #    propósito: si esta petición terminara en error, el rollback de la
+    #    sesión descartaría también esta limpieza.
+    for jornada in abiertas:
+        if jornada is not asistencia_activa:
+            await _cerrar_jornada_abandonada(db, jornada)
+
+    await db.flush()
 
     return {
         "message": "Salida registrada correctamente",

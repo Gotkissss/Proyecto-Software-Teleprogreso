@@ -15,10 +15,45 @@ ORM) para poder probarlas sin PostgreSQL.
 
 from datetime import date, datetime
 
+from fastapi import HTTPException, status
+
 # Reloj de la operación (America/Guatemala). Con datetime.now() en un
 # contenedor UTC, una tarea cerrada a las 19:00 hora local se guardaba con la
 # fecha del día siguiente y desaparecía del historial diario.
 from app.core.tiempo import ahora, hoy
+
+
+def validar_cierre_permitido(tarea) -> None:
+    """
+    Comprueba que la tarea esté en un estado desde el que se pueda cerrar.
+
+    Reglas:
+      - 'cancelado'   → no se cierra: primero hay que reactivarla.
+      - 'pendiente'   → no se cierra: una tarea que nunca se inició no puede
+                        darse por terminada. Antes sí se podía, y quedaba una
+                        tarea "completada" sin ninguna traza de cuándo empezó,
+                        lo que descuadra cualquier medición de duración.
+      - 'en_progreso' → caso normal.
+      - 'completado'  → se acepta y no cambia nada: cerrar dos veces tiene que
+                        ser inofensivo, porque el frontend reintenta el cierre
+                        si la primera respuesta se pierde.
+
+    Lanza HTTPException 400 en los dos primeros casos.
+    """
+    if tarea.estado_tarea == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede finalizar una tarea cancelada.",
+        )
+
+    if tarea.estado_tarea == "pendiente":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "La tarea todavía no se ha iniciado. Pulsa 'Iniciar tarea' "
+                "antes de finalizarla."
+            ),
+        )
 
 
 def marcar_completada(tarea, *, momento: datetime | None = None) -> None:
