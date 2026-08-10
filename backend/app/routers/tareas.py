@@ -52,6 +52,7 @@ from app.schemas.tarea import (
     TareaCreate,
     TareaReasignar,
     TareaResponse,
+    TareaRutaResponse,
     TareaUpdate,
     TareaUpdateEstado,
 )
@@ -344,6 +345,50 @@ async def get_tareas(
         )
 
     return tareas_response
+
+
+# ─── GET /tareas/mi-ruta ──────────────────────────────────────────────────────
+# Acceso: el empleado autenticado (solo ve sus propias tareas del día).
+
+@router.get(
+    "/mi-ruta",
+    response_model=List[TareaRutaResponse],
+    summary="Ruta diaria del técnico: tareas de hoy con coordenadas para el mapa",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mi_ruta(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Devuelve solo las tareas de HOY asignadas al técnico autenticado, con sus
+    coordenadas (lat/lng) y estado, listas para pintar en el mapa.
+
+    "Hoy" se calcula con la hora de Guatemala (hoy_local), no en UTC.
+    """
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+
+    query = (
+        select(
+            Tarea.id_tarea,
+            Tarea.estado_tarea,
+            func.ST_Y(coord).label("lat"),
+            func.ST_X(coord).label("lng"),
+        )
+        .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+        .where(
+            EmpleadoTarea.id_empleado == current_user.id_empleado,
+            Tarea.fecha_inicio == hoy_local(),
+        )
+        .order_by(Tarea.id_tarea)
+    )
+
+    result = await db.execute(query)
+
+    return [
+        TareaRutaResponse(id_tarea=id_tarea, estado_tarea=estado_tarea, lat=lat, lng=lng)
+        for id_tarea, estado_tarea, lat, lng in result.all()
+    ]
 
 
 # ─── POST /tareas/ ────────────────────────────────────────────────────────────
