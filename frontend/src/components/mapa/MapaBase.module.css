@@ -1,4 +1,3 @@
-cat > src/components/mapa/MapaBase.module.css << 'EOF'
 /* components/mapa/MapaBase.module.css
    Contenedor visual del mapa, alineado a la identidad de Teleprogreso
    (mismos radios/bordes/sombras que el resto de tarjetas de la app). */
@@ -26,4 +25,3 @@ cat > src/components/mapa/MapaBase.module.css << 'EOF'
   background: var(--color-bg-alt);
   font-family: var(--font-sans);
 }
-EOF

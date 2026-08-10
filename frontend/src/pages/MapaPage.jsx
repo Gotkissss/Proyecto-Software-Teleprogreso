@@ -13,8 +13,10 @@ import { useAuth } from '../context/AuthContext'
 import { getServiciosMapa } from '../api/rutaService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTarea from '../components/mapa/MarcadorTarea'
+import MarcadorMiUbicacion from '../components/mapa/MarcadorMiUbicacion'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
 import PageState from '../components/ui/PageState'
+import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
 import styles from './MapaPage.module.css'
 
 const IconMapa = () => (
@@ -35,12 +37,23 @@ const LEYENDA = [
   { color: 'var(--color-success)', label: 'Completado' },
 ]
 
+/** Texto de aviso cuando la ubicación del técnico no está disponible. */
+const AVISO_UBICACION = {
+  denegado:     'No podemos mostrar tu ubicación: el permiso de ubicación está denegado. Actívalo en los ajustes del navegador para verte en el mapa.',
+  no_soportado: 'Tu dispositivo o navegador no soporta geolocalización, así que no podemos mostrar tu ubicación en el mapa.',
+  error:        'No se pudo obtener tu ubicación en este momento.',
+}
+
 export default function MapaPage() {
   const { user } = useAuth()
 
   const [servicios, setServicios] = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
+
+  // SCRUM-163: ubicación en vivo del técnico (Geolocation API), con manejo
+  // propio de permiso denegado / sin soporte / sin lectura disponible.
+  const { posicion: miUbicacion, estado: estadoUbicacion } = useGeolocalizacionTecnico()
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -102,6 +115,10 @@ export default function MapaPage() {
             {conUbicacion.map((s) => (
               <MarcadorTarea key={s.id_servicio} servicio={s} />
             ))}
+            {/* SCRUM-163: no participa del fitBounds de las tareas (arriba)
+                para no reacomodar el zoom del técnico en cada lectura del
+                GPS; solo se superpone como referencia. */}
+            <MarcadorMiUbicacion posicion={miUbicacion} />
           </MapaBase>
         </div>
       ) : (
@@ -118,6 +135,13 @@ export default function MapaPage() {
           {sinUbicacion} {sinUbicacion === 1 ? 'tarea' : 'tareas'} de hoy sin ubicación registrada
           {sinUbicacion === 1 ? ' no aparece' : ' no aparecen'} en el mapa.
         </p>
+      )}
+
+      {/* SCRUM-163: aviso cuando no se puede mostrar el punto del técnico
+          (permiso denegado, sin soporte, o sin lectura por ahora). No
+          bloquea el resto del mapa: las tareas se siguen viendo igual. */}
+      {AVISO_UBICACION[estadoUbicacion] && (
+        <p className={styles.avisoUbicacion}>{AVISO_UBICACION[estadoUbicacion]}</p>
       )}
 
       <section className={styles.legend}>

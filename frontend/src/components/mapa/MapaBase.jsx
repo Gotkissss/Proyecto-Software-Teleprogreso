@@ -1,4 +1,3 @@
-cat > src/components/mapa/MapaBase.jsx << 'EOF'
 /**
  * components/mapa/MapaBase.jsx
  * Componente base reutilizable para renderizar un mapa con Leaflet +
@@ -88,4 +87,3 @@ export default function MapaBase({
     </div>
   )
 }
-EOF
