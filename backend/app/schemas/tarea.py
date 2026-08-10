@@ -93,7 +93,7 @@ class TareaResponse(BaseModel):
         from_attributes = True
 
 
-# 🔹 RUTA DIARIA — respuesta liviana solo con lo que el mapa necesita pintar
+# Ruta diaria: respuesta liviana solo con lo que el mapa necesita pintar
 class TareaRutaResponse(BaseModel):
     id_tarea:     int
     estado_tarea: str
