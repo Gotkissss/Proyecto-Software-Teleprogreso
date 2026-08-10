@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import DateTime, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from geoalchemy2 import Geometry
 
 from app.core.deps import (
     get_current_empleado,
@@ -255,8 +256,14 @@ async def get_tareas(
         ),
     ] = 500,
 ):
+    # coordenada_servicio es Geography; ST_X/ST_Y solo operan sobre geometry,
+    # por eso se castea. Con SRID 4326: ST_Y es latitud y ST_X es longitud.
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
     query = (
-        select(Tarea)
+        select(Tarea, lat_col, lng_col)
         .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
     )
 
@@ -288,9 +295,9 @@ async def get_tareas(
     query = query.order_by(Tarea.id_tarea.desc()).limit(limite)
 
     result = await db.execute(query)
-    tareas = result.scalars().all()
+    filas = result.all()
 
-    ids = [t.id_tarea for t in tareas]
+    ids = [tarea.id_tarea for tarea, _lat, _lng in filas]
 
     # Conteo de evidencias en una sola consulta agrupada, para no lanzar un
     # COUNT por tarea (N+1) al construir la respuesta. Se restringe a las
@@ -307,7 +314,7 @@ async def get_tareas(
 
     tareas_response = []
 
-    for tarea in tareas:
+    for tarea, lat, lng in filas:
         tecnico = None
 
         if tarea.empleados:
@@ -329,6 +336,8 @@ async def get_tareas(
                 fecha_finalizacion=tarea.fecha_finalizacion,
                 fecha_asignacion=tarea.fecha_asignacion,
                 fecha_completado=tarea.fecha_completado,
+                lat=lat,
+                lng=lng,
                 tecnico=tecnico,
                 total_incidencias=incidencias_por_tarea.get(tarea.id_tarea, 0),
             )
