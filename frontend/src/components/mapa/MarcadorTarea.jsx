@@ -12,7 +12,12 @@
  *
  * `servicio` sigue la misma forma que ya usa RutaDiariaPage (rutaService):
  * { id_servicio, estado, prioridad, nombre, direccion, tipo, lat, lng }
+ *
+ * SCRUM-158: `autoAbrir` abre el popup de este marcador automáticamente al
+ * montarse — se usa cuando el técnico llega desde el botón "Ver en mapa" de
+ * RutaDiariaPage con una tarea puntual seleccionada.
  */
+import { useEffect, useRef } from 'react'
 import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../ui/Badge'
@@ -75,11 +80,18 @@ function crearIcono(servicio) {
   })
 }
 
-export default function MarcadorTarea({ servicio }) {
+// REEMPLAZAR POR:
+export default function MarcadorTarea({ servicio, autoAbrir = false }) {
+  const markerRef = useRef(null)
+
+  useEffect(() => {
+    if (autoAbrir) markerRef.current?.openPopup()
+  }, [autoAbrir])
+
   if (servicio?.lat == null || servicio?.lng == null) return null
 
   return (
-    <Marker position={[servicio.lat, servicio.lng]} icon={crearIcono(servicio)}>
+    <Marker ref={markerRef} position={[servicio.lat, servicio.lng]} icon={crearIcono(servicio)}>
       <Popup>
         <div className={styles.popup}>
           <p className={styles.popupTitulo}>{servicio.nombre}</p>

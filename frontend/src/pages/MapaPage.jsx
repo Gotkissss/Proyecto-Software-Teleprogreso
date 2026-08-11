@@ -8,14 +8,17 @@
  * y getServiciosMapa (rutaService.js) para traer las tareas de hoy con
  * coordenadas.
  */
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getServiciosMapa } from '../api/rutaService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTarea from '../components/mapa/MarcadorTarea'
 import MarcadorMiUbicacion from '../components/mapa/MarcadorMiUbicacion'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
+import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSeleccionado'
 import PageState from '../components/ui/PageState'
+import { useToast } from '../components/ui/Toast'
 import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
 import styles from './MapaPage.module.css'
 
@@ -46,10 +49,21 @@ const AVISO_UBICACION = {
 
 export default function MapaPage() {
   const { user } = useAuth()
+  const toast = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [servicios, setServicios] = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
+
+  // SCRUM-158: id de la tarea que RutaDiariaPage pidió centrar/resaltar,
+  // recibido por `state` de navegación (no por query string). Se lee una
+  // sola vez al montar: si el técnico interactúa con el mapa después no
+  // queremos que un re-render lo vuelva a recentrar.
+  const servicioSeleccionadoIdRef = useRef(location.state?.servicioId ?? null)
+  const servicioSeleccionadoId = servicioSeleccionadoIdRef.current
+  const avisoSinUbicacionMostrado = useRef(false)
 
   // SCRUM-163: ubicación en vivo del técnico (Geolocation API), con manejo
   // propio de permiso denegado / sin soporte / sin lectura disponible.
@@ -72,6 +86,29 @@ export default function MapaPage() {
     fetchServicios()
   }, [fetchServicios])
 
+  // Limpia el `state` de navegación al consumirlo, para que recargar la
+  // página o volver con el botón "atrás" no vuelva a forzar el centrado.
+  useEffect(() => {
+    if (location.state?.servicioId != null) {
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // Solo debe correr una vez al montar la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // SCRUM-158: si la tarea pedida desde "Ver en mapa" existe pero no tiene
+  // coordenadas, se avisa una sola vez en vez de fallar en silencio — el
+  // resto del mapa se sigue mostrando igual.
+  useEffect(() => {
+    if (loading || !servicioSeleccionadoId || avisoSinUbicacionMostrado.current) return
+    const seleccionada = servicios.find((s) => s.id_servicio === servicioSeleccionadoId)
+    if (seleccionada && (seleccionada.lat == null || seleccionada.lng == null)) {
+      avisoSinUbicacionMostrado.current = true
+      toast.info('Esa tarea no tiene ubicación registrada, así que no se puede centrar en el mapa.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, servicios, servicioSeleccionadoId])
+
   if (loading || error) {
     return (
       <PageState
@@ -87,6 +124,11 @@ export default function MapaPage() {
   const conUbicacion = servicios.filter((s) => s.lat != null && s.lng != null)
   const sinUbicacion = servicios.length - conUbicacion.length
   const puntos = conUbicacion.map((s) => [s.lat, s.lng])
+
+  // SCRUM-158: tarea puntual a centrar/resaltar (si vino de "Ver en mapa").
+  const servicioSeleccionado = servicioSeleccionadoId
+    ? conUbicacion.find((s) => s.id_servicio === servicioSeleccionadoId)
+    : null
 
   if (servicios.length === 0) {
     return (
@@ -111,9 +153,20 @@ export default function MapaPage() {
       {conUbicacion.length > 0 ? (
         <div className={styles.mapWrap}>
           <MapaBase>
-            <AjustarVistaMarcadores puntos={puntos} />
+            {/* SCRUM-158: si venimos de "Ver en mapa" con una tarea puntual,
+                el mapa se centra en ella en vez de encuadrar todas las
+                paradas del día. */}
+            {servicioSeleccionado ? (
+              <CentrarMarcadorSeleccionado punto={[servicioSeleccionado.lat, servicioSeleccionado.lng]} />
+            ) : (
+              <AjustarVistaMarcadores puntos={puntos} />
+            )}
             {conUbicacion.map((s) => (
-              <MarcadorTarea key={s.id_servicio} servicio={s} />
+              <MarcadorTarea
+                key={s.id_servicio}
+                servicio={s}
+                autoAbrir={s.id_servicio === servicioSeleccionado?.id_servicio}
+              />
             ))}
             {/* SCRUM-163: no participa del fitBounds de las tareas (arriba)
                 para no reacomodar el zoom del técnico en cada lectura del
