@@ -8,7 +8,6 @@ la foto. Se usan mocks de AsyncSession, igual que en test_alertas.py.
 """
 
 import io
-from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -16,6 +15,7 @@ import pytest
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
+from app.core.tiempo import hoy as hoy_local
 from app.models.tarea import Incidencia, Tarea
 from app.routers.incidencias import (
     crear_incidencia,
@@ -127,7 +127,9 @@ async def test_finalizar_tarea_marca_completado_y_fecha_inicio():
     )
 
     assert tarea.estado_tarea == "completado"
-    assert tarea.fecha_inicio == date.today()
+    # hoy_local(), no date.today(): marcar_completada usa ahora() de
+    # app.core.tiempo, que es hora de Guatemala, no UTC.
+    assert tarea.fecha_inicio == hoy_local()
 
 
 @pytest.mark.asyncio
@@ -264,7 +266,9 @@ async def test_subir_foto_con_finalizar_cierra_la_tarea(tmp_path, monkeypatch):
     )
 
     assert tarea.estado_tarea == "completado"
-    assert tarea.fecha_inicio == date.today()
+    # hoy_local(), no date.today(): marcar_completada usa ahora() de
+    # app.core.tiempo, que es hora de Guatemala, no UTC.
+    assert tarea.fecha_inicio == hoy_local()
     assert incidencia.foto_evidencia is not None
 
 
