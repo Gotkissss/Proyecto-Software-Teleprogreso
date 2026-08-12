@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.core.tiempo import ahora as ahora_local, hoy as hoy_local
 from app.models.empleado import EmpleadoTarea
 from app.models.tarea import Tarea
 from app.routers.tareas import finalizar_tarea, iniciar_tarea, reasignar_tarea
@@ -84,7 +85,9 @@ def test_marcar_completada_rellena_fecha_inicio_si_falta():
 
     marcar_completada(tarea)
 
-    assert tarea.fecha_inicio == date.today()
+    # hoy_local(), no date.today(): marcar_completada usa ahora() de
+    # app.core.tiempo, que es hora de Guatemala, no UTC.
+    assert tarea.fecha_inicio == hoy_local()
 
 
 def test_marcar_completada_es_idempotente():
@@ -106,8 +109,10 @@ def test_reabrir_una_tarea_borra_la_marca_de_cierre():
 
 
 def test_es_de_hoy_distingue_el_dia():
-    assert es_de_hoy(datetime.now()) is True
-    assert es_de_hoy(datetime.now() - timedelta(days=1)) is False
+    # ahora_local(), no datetime.now(): es_de_hoy compara contra hoy() de
+    # app.core.tiempo, que es hora de Guatemala, no UTC.
+    assert es_de_hoy(ahora_local()) is True
+    assert es_de_hoy(ahora_local() - timedelta(days=1)) is False
     assert es_de_hoy(None) is False
 
 
@@ -137,7 +142,9 @@ async def test_iniciar_tarea_sin_fecha_registra_hoy():
 
     await iniciar_tarea(1, db, _empleado())
 
-    assert tarea.fecha_inicio == date.today()
+    # hoy_local(), no date.today(): iniciar_tarea usa hoy_local() de
+    # app.core.tiempo, que es hora de Guatemala, no UTC.
+    assert tarea.fecha_inicio == hoy_local()
 
 
 @pytest.mark.asyncio

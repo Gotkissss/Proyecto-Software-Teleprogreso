@@ -18,6 +18,13 @@ import {
 
 const HOY = new Date(2026, 7, 5) // 5 de agosto de 2026, hora local
 
+/** Date -> "YYYY-MM-DD" en hora local (toISOString desplazaría el día). */
+function aFechaLocalISO(fecha) {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${fecha.getFullYear()}-${mes}-${dia}`
+}
+
 describe('parsearFechaLocal', () => {
   it('interpreta la fecha en horario local, no en UTC', () => {
     const fecha = parsearFechaLocal('2026-08-07')
@@ -59,8 +66,10 @@ describe('describirVencimiento', () => {
 
   it('marca en rojo lo que vence hoy', () => {
     // Se usa la fecha real de hoy porque la función consulta el reloj.
-    const hoyISO = new Date().toISOString().slice(0, 10)
-    const v = describirVencimiento(tarea(hoyISO))
+    // toISOString() da la fecha en UTC: en Guatemala (UTC-6) puede caer un
+    // día antes o después de la fecha local que usa describirVencimiento.
+    const hoyLocal = aFechaLocalISO(new Date())
+    const v = describirVencimiento(tarea(hoyLocal))
 
     expect(v.texto).toBe('Vence hoy')
     expect(v.variant).toBe('danger')
@@ -70,7 +79,7 @@ describe('describirVencimiento', () => {
   it('marca como vencida lo que ya pasó', () => {
     const ayer = new Date()
     ayer.setDate(ayer.getDate() - 1)
-    const v = describirVencimiento(tarea(ayer.toISOString().slice(0, 10)))
+    const v = describirVencimiento(tarea(aFechaLocalISO(ayer)))
 
     expect(v.vencida).toBe(true)
     expect(v.texto).toBe('Vencida ayer')

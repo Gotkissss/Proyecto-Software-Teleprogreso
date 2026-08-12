@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.core.tiempo import hoy as hoy_local
 from app.services.empleados import HORA_CIERRE_FORZADO, desvincular_recursos
 
 
@@ -93,8 +94,10 @@ async def test_desactivar_a_quien_no_tiene_vehiculo_no_rompe():
 @pytest.mark.asyncio
 async def test_jornada_de_hoy_se_cierra_con_la_hora_actual():
     """Nunca va a marcar salida: si no se cierra aquí, queda abierta siempre."""
+    # hoy_local(), no date.today(): desvincular_recursos compara contra
+    # ahora_local(), que es hora de Guatemala, no UTC.
     jornada = SimpleNamespace(
-        id_asistencia=1, fecha=date.today(), hora_salida=None
+        id_asistencia=1, fecha=hoy_local(), hora_salida=None
     )
     db = _db({
         "from empleado_carro": [],
