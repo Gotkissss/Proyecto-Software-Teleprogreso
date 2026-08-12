@@ -1,0 +1,43 @@
+/* components/mapa/MarcadorMiUbicacion.module.css
+   Punto azul "estás aquí" para la ubicación en vivo del técnico
+   (SCRUM-163), con halo pulsante para diferenciarlo de los pines de
+   tareas de MarcadorTarea.module.css. */
+
+.icon {
+  background: transparent;
+  border: none;
+}
+
+.dot {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.45);
+}
+
+.dotPulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  opacity: 0.35;
+  animation: mi-ubicacion-pulse 2s ease-out infinite;
+}
+
+@keyframes mi-ubicacion-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.45;
+  }
+  70% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import DateTime, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from geoalchemy2 import Geometry
 
 from app.core.deps import (
     get_current_empleado,
@@ -51,6 +52,7 @@ from app.schemas.tarea import (
     TareaCreate,
     TareaReasignar,
     TareaResponse,
+    TareaRutaResponse,
     TareaUpdate,
     TareaUpdateEstado,
 )
@@ -255,8 +257,14 @@ async def get_tareas(
         ),
     ] = 500,
 ):
+    # coordenada_servicio es Geography; ST_X/ST_Y solo operan sobre geometry,
+    # por eso se castea. Con SRID 4326: ST_Y es latitud y ST_X es longitud.
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
     query = (
-        select(Tarea)
+        select(Tarea, lat_col, lng_col)
         .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
     )
 
@@ -288,9 +296,9 @@ async def get_tareas(
     query = query.order_by(Tarea.id_tarea.desc()).limit(limite)
 
     result = await db.execute(query)
-    tareas = result.scalars().all()
+    filas = result.all()
 
-    ids = [t.id_tarea for t in tareas]
+    ids = [tarea.id_tarea for tarea, _lat, _lng in filas]
 
     # Conteo de evidencias en una sola consulta agrupada, para no lanzar un
     # COUNT por tarea (N+1) al construir la respuesta. Se restringe a las
@@ -307,7 +315,7 @@ async def get_tareas(
 
     tareas_response = []
 
-    for tarea in tareas:
+    for tarea, lat, lng in filas:
         tecnico = None
 
         if tarea.empleados:
@@ -329,12 +337,58 @@ async def get_tareas(
                 fecha_finalizacion=tarea.fecha_finalizacion,
                 fecha_asignacion=tarea.fecha_asignacion,
                 fecha_completado=tarea.fecha_completado,
+                lat=lat,
+                lng=lng,
                 tecnico=tecnico,
                 total_incidencias=incidencias_por_tarea.get(tarea.id_tarea, 0),
             )
         )
 
     return tareas_response
+
+
+# ─── GET /tareas/mi-ruta ──────────────────────────────────────────────────────
+# Acceso: el empleado autenticado (solo ve sus propias tareas del día).
+
+@router.get(
+    "/mi-ruta",
+    response_model=List[TareaRutaResponse],
+    summary="Ruta diaria del técnico: tareas de hoy con coordenadas para el mapa",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mi_ruta(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Devuelve solo las tareas de HOY asignadas al técnico autenticado, con sus
+    coordenadas (lat/lng) y estado, listas para pintar en el mapa.
+
+    "Hoy" se calcula con la hora de Guatemala (hoy_local), no en UTC.
+    """
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+
+    query = (
+        select(
+            Tarea.id_tarea,
+            Tarea.estado_tarea,
+            func.ST_Y(coord).label("lat"),
+            func.ST_X(coord).label("lng"),
+        )
+        .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+        .where(
+            EmpleadoTarea.id_empleado == current_user.id_empleado,
+            Tarea.fecha_inicio == hoy_local(),
+        )
+        .order_by(Tarea.id_tarea)
+    )
+
+    result = await db.execute(query)
+
+    return [
+        TareaRutaResponse(id_tarea=id_tarea, estado_tarea=estado_tarea, lat=lat, lng=lng)
+        for id_tarea, estado_tarea, lat, lng in result.all()
+    ]
 
 
 # ─── POST /tareas/ ────────────────────────────────────────────────────────────

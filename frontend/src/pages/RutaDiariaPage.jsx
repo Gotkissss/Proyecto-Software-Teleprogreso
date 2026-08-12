@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
@@ -18,6 +19,8 @@ const IconCalendar = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconAlert    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 const IconPlay     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
 const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+// SCRUM-158: botón "Ver en mapa" en el panel de detalle
+const IconMap      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>
 
 const ESTADO_LABEL = {
   completado:  'Completado',
@@ -27,7 +30,7 @@ const ESTADO_LABEL = {
 }
 
 // Panel de detalle / modal de tarea
-function DetallePanel({ servicio, onClose, onIniciar, onTerminar }) {
+function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa }) {
   const isInProgress = servicio.estado === 'en_progreso'
   const isCompleted  = servicio.estado === 'completado'
 
@@ -81,6 +84,15 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar }) {
               </span>
             </div>
           </div>
+
+          {/* SCRUM-158: enlace directo al mapa, centrado en esta tarea */}
+          <button
+            className={styles.verMapaBtn}
+            onClick={() => onVerEnMapa(servicio.id_servicio)}
+          >
+            <IconMap />
+            <span>Ver en mapa</span>
+          </button>
 
           {/* Acciones */}
           {!isCompleted && (
@@ -186,6 +198,7 @@ function ServicioCard({ servicio, onVerDetalle }) {
 export default function RutaDiariaPage() {
   const { user } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
   const [ruta,           setRuta]           = useState(null)
   const [servicios,      setServicios]      = useState([])
   const [loading,        setLoading]        = useState(true)
@@ -303,6 +316,16 @@ export default function RutaDiariaPage() {
     setDetalleAbierto(actual)
   }
 
+  /**
+   * SCRUM-158: navega al Mapa de Ruta pasando el id de la tarea seleccionada
+   * por `state` (no por query string) para que MapaPage centre y resalte su
+   * marcador sin acoplar ambas pantallas a un formato de URL.
+   */
+  const handleVerEnMapa = (idServicio) => {
+    setDetalleAbierto(null)
+    navigate('/mapa', { state: { servicioId: idServicio } })
+  }
+
   // Sincroniza el panel si el estado cambió externamente
   const servicioEnPanel = detalleAbierto
     ? servicios.find((s) => s.id_servicio === detalleAbierto.id_servicio) ?? detalleAbierto
@@ -407,6 +430,7 @@ export default function RutaDiariaPage() {
           onClose={() => setDetalleAbierto(null)}
           onIniciar={handleIniciar}
           onTerminar={handleTerminar}
+          onVerEnMapa={handleVerEnMapa}
         />
       )}
 
