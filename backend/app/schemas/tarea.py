@@ -101,6 +101,16 @@ class TareaRutaResponse(BaseModel):
     lng:          Optional[float] = None
 
 
+# Mapa del supervisor: igual de liviana que TareaRutaResponse, pero con el
+# tecnico asignado para que el frontend pueda agrupar los marcadores por él.
+class TareaMapaSupervisorResponse(BaseModel):
+    id_tarea:     int
+    estado_tarea: str
+    lat:          Optional[float]           = None
+    lng:          Optional[float]           = None
+    tecnico:      Optional[TecnicoResponse] = None
+
+
 # 🔹 UPDATE ESTADO
 class TareaUpdateEstado(BaseModel):
     estado: EstadoServicio

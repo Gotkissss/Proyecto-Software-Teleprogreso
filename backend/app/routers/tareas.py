@@ -6,6 +6,7 @@ Este archivo gestiona el ciclo de vida de las tareas/ordenes de servicio.
 
 Se tiene el siguiente control de acceso por rol:
   - GET    /tareas/                   = admin, supervisor, gerente, tecnico (todos los autenticados)
+  - GET    /tareas/mapa-supervisor    = admin, supervisor, gerente
   - POST   /tareas/                   = admin, supervisor  (solo pueden crear tareas con permisos)
   - PATCH  /tareas/{id}/estado        = admin, supervisor
   - PATCH  /tareas/{id}/reasignar     = admin, supervisor
@@ -27,6 +28,7 @@ from geoalchemy2 import Geometry
 
 from app.core.deps import (
     get_current_empleado,
+    require_admin_supervisor_gerente,
     require_roles,
     require_supervisor,
     require_tecnico,
@@ -50,6 +52,7 @@ from app.schemas.tarea import (
     HistorialTareasResponse,
     TareaCompletadaResponse,
     TareaCreate,
+    TareaMapaSupervisorResponse,
     TareaReasignar,
     TareaResponse,
     TareaRutaResponse,
@@ -389,6 +392,83 @@ async def get_mi_ruta(
         TareaRutaResponse(id_tarea=id_tarea, estado_tarea=estado_tarea, lat=lat, lng=lng)
         for id_tarea, estado_tarea, lat, lng in result.all()
     ]
+
+
+# ─── GET /tareas/mapa-supervisor ──────────────────────────────────────────────
+# Acceso: admin, supervisor, gerente.
+
+@router.get(
+    "/mapa-supervisor",
+    response_model=List[TareaMapaSupervisorResponse],
+    summary="Mapa de tareas de un dia, con tecnico asignado, para el supervisor",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mapa_supervisor(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    fecha: Annotated[Optional[date], Query()] = None,
+    id_tecnico: Annotated[Optional[int], Query()] = None,
+):
+    """
+    Devuelve las tareas de una fecha (hoy en hora de Guatemala por defecto)
+    con sus coordenadas y el técnico asignado, para que el supervisor las
+    pinte en el mapa agrupadas por técnico.
+
+    Filtros:
+    - fecha: compara contra fecha_inicio. Si no se envía, usa hoy_local().
+    - id_tecnico: si se envía, solo devuelve las tareas de ese técnico.
+
+    Roles: admin | supervisor | gerente.
+    """
+    fecha_filtro = fecha or hoy_local()
+
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
+    query = (
+        select(Tarea, lat_col, lng_col)
+        .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
+        .where(Tarea.fecha_inicio == fecha_filtro)
+    )
+
+    if id_tecnico is not None:
+        query = query.where(
+            Tarea.id_tarea.in_(
+                select(EmpleadoTarea.id_tarea).where(
+                    EmpleadoTarea.id_empleado == id_tecnico
+                )
+            )
+        )
+
+    query = query.order_by(Tarea.id_tarea)
+
+    result = await db.execute(query)
+    filas = result.all()
+
+    tareas_response = []
+
+    for tarea, lat, lng in filas:
+        tecnico = None
+
+        if tarea.empleados:
+            emp = tarea.empleados[0].empleado
+            tecnico = {
+                "id_empleado": emp.id_empleado,
+                "nombre": f"{emp.nombre} {emp.apellido}",
+            }
+
+        tareas_response.append(
+            TareaMapaSupervisorResponse(
+                id_tarea=tarea.id_tarea,
+                estado_tarea=tarea.estado_tarea,
+                lat=lat,
+                lng=lng,
+                tecnico=tecnico,
+            )
+        )
+
+    return tareas_response
 
 
 # ─── POST /tareas/ ────────────────────────────────────────────────────────────
