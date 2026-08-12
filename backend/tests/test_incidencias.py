@@ -111,7 +111,9 @@ async def test_tecnico_asignado_registra_evidencia():
 
 @pytest.mark.asyncio
 async def test_finalizar_tarea_marca_completado_y_fecha_inicio():
-    tarea = _tarea(estado="pendiente", fecha_inicio=None)
+    # La tarea debe estar en curso para poder cerrarse: una 'pendiente' no se
+    # finaliza (validar_cierre_permitido exige que ya se haya iniciado).
+    tarea = _tarea(estado="en_progreso", fecha_inicio=None)
     db = _db([_resultado(tarea), _resultado(SimpleNamespace())])
 
     await crear_incidencia(
@@ -126,6 +128,21 @@ async def test_finalizar_tarea_marca_completado_y_fecha_inicio():
 
     assert tarea.estado_tarea == "completado"
     assert tarea.fecha_inicio == date.today()
+
+
+@pytest.mark.asyncio
+async def test_no_se_puede_finalizar_una_tarea_pendiente():
+    db = _db([_resultado(_tarea(estado="pendiente")), _resultado(SimpleNamespace())])
+
+    with pytest.raises(HTTPException) as error:
+        await crear_incidencia(
+            1,
+            IncidenciaCreate(descripcion="Intento de cierre.", finalizar_tarea=True),
+            db,
+            _empleado(),
+        )
+
+    assert error.value.status_code == 400
 
 
 @pytest.mark.asyncio

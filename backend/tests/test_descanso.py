@@ -136,7 +136,7 @@ def _db(resultados):
 
 @pytest.mark.asyncio
 async def test_catalogo_de_tipos_trae_id_label_y_maximo():
-    tipos = await get_tipos_pausa(_db([]))
+    tipos = await get_tipos_pausa(_db([]), _empleado())
 
     assert {t["id"] for t in tipos} == set(CATALOGO)
     for tipo in tipos:

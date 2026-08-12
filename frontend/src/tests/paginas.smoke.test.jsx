@@ -170,6 +170,7 @@ vi.mock('../api/tareaService', () => ({
   actualizarTarea: vi.fn(async () => ({})),
   crearTarea: vi.fn(async () => ({})),
   actualizarEstado: vi.fn(async () => ({})),
+  LIMITE_TAREAS_FALLBACK: 5,
 }))
 
 vi.mock('../api/incidenciaService', () => ({

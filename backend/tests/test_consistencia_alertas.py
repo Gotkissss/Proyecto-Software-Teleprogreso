@@ -147,7 +147,10 @@ async def test_antes_de_la_hora_limite_no_se_evalua_sin_entrada():
     de esa hora nadie figura como vigente, y dar por resueltos esos avisos
     borraría cada mañana los del día anterior.
     """
-    alerta = _alerta(TIPO_TECNICO_SIN_ENTRADA, "empleado:4")
+    # Antes de la hora límite no existen avisos "sin entrada" de hoy: los que
+    # hay son de días previos y no deben resolverse.
+    ayer = datetime(HOY.year, HOY.month, HOY.day, 9, 0) - timedelta(days=1)
+    alerta = _alerta(TIPO_TECNICO_SIN_ENTRADA, "empleado:4", fecha=ayer)
 
     resueltas = await _resolver([alerta], vigentes=set(), evaluar_sin_entrada=False)
 

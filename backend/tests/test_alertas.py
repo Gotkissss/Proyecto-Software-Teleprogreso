@@ -94,8 +94,13 @@ async def test_generar_alertas_crea_las_tres_condiciones():
     tecnicos.all.return_value = [(20,)]
     materiales = MagicMock()
     materiales.all.return_value = [(30,)]
-    # El quinto execute es el INSERT de las alertas nuevas.
-    db.execute.side_effect = [referencias, tareas, tecnicos, materiales, MagicMock()]
+    # El quinto execute es el INSERT de las alertas nuevas y el sexto es la
+    # consulta de _resolver_alertas_obsoletas, que no devuelve nada pendiente.
+    obsoletas = MagicMock()
+    obsoletas.scalars.return_value.all.return_value = []
+    db.execute.side_effect = [
+        referencias, tareas, tecnicos, materiales, MagicMock(), obsoletas
+    ]
 
     from app.core import config
 
@@ -108,7 +113,8 @@ async def test_generar_alertas_crea_las_tres_condiciones():
 
     assert creadas == 3
 
-    insert = db.execute.await_args_list[-1].args[0]
+    # El INSERT es la penúltima consulta: la última es la del resolutor.
+    insert = db.execute.await_args_list[-2].args[0]
     sql = str(insert.compile(compile_kwargs={"literal_binds": True}))
 
     assert "INSERT INTO alerta" in sql
