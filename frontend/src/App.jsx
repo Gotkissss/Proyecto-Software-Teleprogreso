@@ -17,6 +17,7 @@ import HistorialTareasPage from './pages/HistorialTareasPage'
 
 /* Páginas del supervisor */
 import DashboardPage    from './pages/DashboardPage'
+import MapaSupervisorPage from './pages/MapaSupervisorPage'
 import AlertasPage      from './pages/AlertasPage'
 import ReasignacionPage from './pages/ReasignacionPage'
 import EmpleadosPage    from './pages/EmpleadosPage'
@@ -61,6 +62,8 @@ export default function App() {
             <Route path="carros/:id" element={<CarroDetallePage />} />
             <Route index element={<Navigate to="/supervisor/dashboard" replace />} />
             <Route path="dashboard"    element={<DashboardPage />} />
+            {/* HU-165: mapa del equipo, con tareas agrupadas por técnico. */}
+            <Route path="mapa"         element={<MapaSupervisorPage />} />
             <Route path="alertas"      element={<AlertasPage />} />
             <Route path="reasignacion" element={<ReasignacionPage />} />
             <Route path="empleados"    element={<EmpleadosPage />} />
