@@ -1,0 +1,76 @@
+/* components/mapa/LeyendaMapaSupervisor.module.css
+   HU-166 — Panel flotante sobre el mapa: contador de tareas visibles +
+   leyenda de colores por estado.
+
+   Se posiciona absolute dentro de .mapWrap (MapaSupervisorPage.module.css),
+   que ya tiene position:relative. z-index alto porque los controles nativos
+   de Leaflet (zoom, LayersControl) también flotan sobre el mapa. */
+
+.panel {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 500;
+  max-width: 190px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3);
+  font-family: var(--font-sans);
+  pointer-events: none;
+}
+
+.contador {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.contador strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.leyenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.itemLabel {
+  white-space: nowrap;
+}
+
+.itemTotal {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    max-width: 150px;
+    padding: var(--space-2);
+  }
+}
