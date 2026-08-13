@@ -21,6 +21,15 @@ const IconDashboard = () => (
     <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
   </svg>
 )
+
+const IconMapa = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+    <line x1="9" y1="3" x2="9" y2="18" />
+    <line x1="15" y1="6" x2="15" y2="21" />
+  </svg>
+)
+
 const IconAlertas = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -63,6 +72,9 @@ const IconHistorialTareas = () => (
 
 const NAV_ITEMS = [
   { to: '/supervisor/dashboard',        label: 'Panel',      Icon: IconDashboard },
+  // HU-165: mapa del equipo, con tareas agrupadas por técnico.
+  { to: '/supervisor/mapa',             label: 'Mapa',       Icon: IconMapa },
+  { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
   { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
   { to: '/supervisor/reasignacion',     label: 'Reasignar',  Icon: IconReasignar },
   // Historial de lo cerrado por día, con evidencia. Antes el panel solo
