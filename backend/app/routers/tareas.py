@@ -76,6 +76,11 @@ ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
 ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 
 
+def _punto_servicio(lat: float, lng: float) -> str:
+    """WKT para PostGIS; un POINT almacena longitud antes que latitud."""
+    return f"SRID=4326;POINT({lng} {lat})"
+
+
 # ─── Utilidad interna ────────────────────────────────────────────────────────
 
 async def _contar_tareas_activas(
@@ -494,6 +499,7 @@ async def create_tarea(
       (el valor vive en app/core/reglas.py).
     - Si el límite se supera, se devuelve HTTP 400 con mensaje claro para
       que el frontend lo muestre al supervisor.
+    - Si se envía ubicación, lat y lng deben formar una coordenada válida.
 
     Roles: admin, supervisor.
     """
@@ -529,6 +535,11 @@ async def create_tarea(
         fecha_inicio=tarea.fecha_inicio,
         fecha_finalizacion=tarea.fecha_finalizacion,
         fecha_asignacion=hoy_local() if tarea.id_tecnico else None,
+        coordenada_servicio=(
+            _punto_servicio(tarea.lat, tarea.lng)
+            if tarea.lat is not None
+            else None
+        ),
     )
 
     db.add(nueva_tarea)
@@ -566,13 +577,14 @@ async def update_tarea(
     enviados en el body.
 
     Campos editables: nombre (título), descripción, dirección, prioridad,
-    estado, fecha_inicio, fecha_finalizacion e id_tecnico.
+    estado, fecha_inicio, fecha_finalizacion, id_tecnico, lat y lng.
 
     Reglas de negocio:
     - Cambiar el técnico respeta el límite de LIMITE_TAREAS_ACTIVAS tareas
       activas, sin contar esta misma tarea.
     - Reabrir una tarea cerrada vuelve a comprobar ese mismo límite.
     - Enviar `id_tecnico: null` desasigna la tarea.
+    - Enviar `lat` y `lng` actualiza la ubicación; ambos en null la elimina.
     - Al pasar a 'en_progreso' sin fecha_inicio se registra la fecha de hoy.
 
     Roles: admin, supervisor.
@@ -621,6 +633,12 @@ async def update_tarea(
         tarea.fecha_inicio = cambios["fecha_inicio"]
     if "fecha_finalizacion" in cambios:
         tarea.fecha_finalizacion = cambios["fecha_finalizacion"]
+    if "lat" in cambios:
+        tarea.coordenada_servicio = (
+            _punto_servicio(data.lat, data.lng)
+            if data.lat is not None
+            else None
+        )
 
     if "estado" in cambios and cambios["estado"] is not None:
         nuevo_estado = data.estado.value

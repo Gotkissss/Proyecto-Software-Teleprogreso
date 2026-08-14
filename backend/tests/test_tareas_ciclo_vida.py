@@ -25,8 +25,14 @@ from fastapi import HTTPException
 from app.core.tiempo import ahora as ahora_local, hoy as hoy_local
 from app.models.empleado import EmpleadoTarea
 from app.models.tarea import Tarea
-from app.routers.tareas import finalizar_tarea, iniciar_tarea, reasignar_tarea
-from app.schemas.tarea import TareaReasignar
+from app.routers.tareas import (
+    create_tarea,
+    finalizar_tarea,
+    iniciar_tarea,
+    reasignar_tarea,
+    update_tarea,
+)
+from app.schemas.tarea import TareaCreate, TareaReasignar, TareaUpdate
 from app.services.tareas import es_de_hoy, marcar_completada, marcar_reabierta
 
 
@@ -65,6 +71,65 @@ def _db(resultados):
 
 def _asignacion():
     return EmpleadoTarea(id_empleado=2, id_tarea=1)
+
+
+# ─── Coordenadas en POST/PATCH /tareas ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_crear_tarea_guarda_coordenada_servicio():
+    db = _db([_resultado(0), _resultado(None)])
+
+    def asignar_id(objeto):
+        if isinstance(objeto, Tarea):
+            objeto.id_tarea = 1
+
+    db.add.side_effect = asignar_id
+
+    await create_tarea(
+        TareaCreate(
+            nombre="Instalación en Fraijanes",
+            lat=14.4744,
+            lng=-90.4425,
+        ),
+        db,
+        _empleado("supervisor"),
+    )
+
+    tarea_guardada = db.add.call_args_list[0].args[0]
+    assert tarea_guardada.coordenada_servicio == (
+        "SRID=4326;POINT(-90.4425 14.4744)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_editar_tarea_actualiza_coordenada_servicio():
+    tarea = _tarea()
+    db = _db([_resultado(tarea), _resultado(0), _resultado(None)])
+
+    await update_tarea(
+        1,
+        TareaUpdate(lat=14.5, lng=-90.5),
+        db,
+        _empleado("supervisor"),
+    )
+
+    assert tarea.coordenada_servicio == "SRID=4326;POINT(-90.5 14.5)"
+
+
+@pytest.mark.asyncio
+async def test_editar_tarea_permite_eliminar_coordenada_servicio():
+    tarea = _tarea()
+    tarea.coordenada_servicio = "SRID=4326;POINT(-90.5 14.5)"
+    db = _db([_resultado(tarea), _resultado(0), _resultado(None)])
+
+    await update_tarea(
+        1,
+        TareaUpdate(lat=None, lng=None),
+        db,
+        _empleado("supervisor"),
+    )
+
+    assert tarea.coordenada_servicio is None
 
 
 # ─── marcar_completada / marcar_reabierta ────────────────────────────────────
