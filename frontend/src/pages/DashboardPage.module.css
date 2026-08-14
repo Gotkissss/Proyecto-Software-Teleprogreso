@@ -149,6 +149,15 @@
   letter-spacing: 0.06em;
 }
 
+/* Contexto del número ("de 5", "12 en total"): en minúscula y más tenue para
+   que no compita con la cifra principal. */
+.metricSuffix {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
 /* ── Secciones ────────────────────────────────────────────── */
 .section {
   background: var(--color-surface);

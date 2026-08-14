@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
-import { actualizarTarea } from '../../api/tareaService'
+import { LIMITE_TAREAS_FALLBACK, actualizarTarea } from '../../api/tareaService'
 import styles from './ModalEditarTarea.module.css'
 
 const PRIORIDADES = [
@@ -28,7 +28,8 @@ const ESTADOS = [
   { value: 'cancelado',   label: 'Cancelado' },
 ]
 
-const LIMITE_TAREAS = 3
+// Respaldo. El límite real llega en `limite_tareas` de cada técnico.
+const LIMITE_TAREAS = LIMITE_TAREAS_FALLBACK
 
 /** Convierte la tarea del backend al estado del formulario. */
 function tareaAFormulario(tarea) {
@@ -222,7 +223,9 @@ export default function ModalEditarTarea({
         <option value="">Sin asignar</option>
         {tecnicos.map((tec) => {
           const esActual = tec.id === inicial.id_tecnico
-          const alLimite = !esActual && (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
+          const alLimite =
+            !esActual &&
+            (tec.tareas_activas ?? 0) >= (tec.limite_tareas ?? LIMITE_TAREAS)
           return (
             <option key={tec.id} value={tec.id} disabled={alLimite}>
               {tec.nombre_completo} — {tec.tareas_activas ?? 0} activa

@@ -1,19 +1,86 @@
 services:
   # ── Base de datos PostgreSQL + PostGIS ────────────────────────────────
+  #
+  # Postura de seguridad de este servicio:
+  #   · NO publica ningún puerto al host. Antes exponía 5433 en todas las
+  #     interfaces, lo que significa que cualquiera en la misma red (wifi de
+  #     la U, cafetería, red de la empresa) podía llegar al motor y ponerse a
+  #     probar contraseñas. Ahora el único que puede abrir un socket contra
+  #     Postgres es el contenedor `backend`.
+  #     Para conectarte tú con psql/DBeaver/pgAdmin, mira docker-compose.admin.yml.
+  #   · Vive en una red `interna: true`, es decir sin ruta de salida a
+  #     internet. Aunque alguien lograra ejecutar código dentro del contenedor
+  #     de la base, no tiene por dónde sacar los datos ni traerse herramientas.
+  #   · Sus reglas de autenticación vienen de backend/db/pg_hba.conf, montado
+  #     de solo lectura: scram-sha-256 obligatorio y `reject` para todo lo que
+  #     venga de fuera de la red del contenedor.
   db:
     image: postgis/postgis:16-3.4
     container_name: teleprogreso_db
     restart: unless-stopped
-    env_file: .env
+    # Sin `env_file: .env` a propósito. Antes el contenedor de la base recibía
+    # TODAS las variables del proyecto, incluida SECRET_KEY (la llave con la que
+    # se firman los JWT). Cada contenedor recibe ahora solo lo que necesita: si
+    # uno cae, no entrega de regalo los secretos de los otros.
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # Fuerza scram-sha-256 en el initdb. Sin esto, según la versión de la
+      # imagen, las conexiones TCP podrían quedar en md5 (roto desde hace años)
+      # o incluso en trust si alguien define POSTGRES_HOST_AUTH_METHOD.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      # Rol de aplicación sin superusuario (opcional, ver .env.example).
+      APP_DB_USER: ${APP_DB_USER:-}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
+    command:
+      - postgres
+      # Reglas de autenticación fuera de PGDATA para que se apliquen en todos
+      # los arranques, no solo cuando el volumen se crea de cero.
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      # Las contraseñas se almacenan hasheadas con SCRAM, nunca con md5.
+      - -c
+      - password_encryption=scram-sha-256
+      # Registro de quién se conecta y desde dónde: sin esto un intento de
+      # acceso no deja rastro en ninguna parte.
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - log_line_prefix=%m [%p] %q%u@%d de %h
+      # Deja constancia de cualquier cambio de esquema (CREATE/ALTER/DROP).
+      - -c
+      - log_statement=ddl
+      # Una transacción abandonada no puede quedarse bloqueando tablas.
+      - -c
+      - idle_in_transaction_session_timeout=300000
+      # El motor no escucha en el host de todas formas, pero se deja explícito.
+      - -c
+      - listen_addresses=*
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
       - ./backend/app/init_postgis.sql:/docker-entrypoint-initdb.d/init_postgis.sql:ro
-    ports:
-       - "5433:5432"
+      # Solo se ejecuta con volumen nuevo. Para una base que ya existe está
+      # backend/db/aplicar_rol_aplicacion.sql.
+      - ./backend/db/init/10_rol_aplicacion.sh:/docker-entrypoint-initdb.d/10_rol_aplicacion.sh:ro
+    networks:
+      - datos
+    # Endurecimiento del contenedor: sin escalada de privilegios y solo con las
+    # capacidades que el entrypoint de Postgres necesita para preparar PGDATA y
+    # bajar del root al usuario `postgres`.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -21,25 +88,47 @@ services:
       retries: 5
 
   # ── Backend FastAPI ───────────────────────────────────────────────────
+  #
+  # Es el ÚNICO servicio conectado a las dos redes: habla con la base por la
+  # red interna y atiende al navegador por la red pública. Toda ruta hacia los
+  # datos pasa por su capa de autenticación.
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: teleprogreso_backend
     restart: unless-stopped
-    env_file: .env
+    # Igual que en `db`: nada de volcar el .env entero. El backend no necesita
+    # conocer la contraseña del superusuario de Postgres, así que no la recibe.
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
-      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      # Si defines APP_DB_USER/APP_DB_PASSWORD, el backend se conecta con el rol
+      # de privilegio mínimo. Si no, cae al usuario de siempre y nada cambia.
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER:-${POSTGRES_USER}}:${APP_DB_PASSWORD:-${POSTGRES_PASSWORD}}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL_SYNC: postgresql://${APP_DB_USER:-${POSTGRES_USER}}:${APP_DB_PASSWORD:-${POSTGRES_PASSWORD}}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
-      ALGORITHM: ${ALGORITHM}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
-      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      TIMEZONE: ${TIMEZONE:-America/Guatemala}
+      ALERTA_HORA_LIMITE: ${ALERTA_HORA_LIMITE:-08:00}
+      # ⚠️ En true, seed.py vacía todas las tablas al arrancar y resiembra.
+      # Por defecto false para no borrar datos de desarrollo sin querer.
+      SEED_RESET: ${SEED_RESET:-false}
     ports:
-      - "8000:8000"
+      # Por defecto solo accesible desde esta máquina. Si necesitas abrirlo a la
+      # red local (probar desde el celular, por ejemplo), pon BIND_HOST=0.0.0.0
+      # en el .env sabiendo lo que implica.
+      - "${BIND_HOST:-127.0.0.1}:8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - datos
+      - publica
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./backend:/app
     command: >
@@ -48,6 +137,9 @@ services:
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   # ── Frontend React ────────────────────────────────────────────────────
+  #
+  # No toca la base de datos: corre en el navegador y solo llama a la API.
+  # Se deja fuera de la red interna a propósito.
   frontend:
     build:
       context: ./frontend
@@ -55,16 +147,34 @@ services:
       target: development
     container_name: teleprogreso_frontend
     restart: unless-stopped
-    env_file: .env
+    # El frontend recibía el .env completo: la contraseña de Postgres y la
+    # SECRET_KEY quedaban dentro del contenedor de Node sin ninguna razón.
+    # Vite solo publica al navegador lo que empieza con VITE_, así que pasamos
+    # exactamente esas dos y nada más.
     environment:
       VITE_API_URL: http://localhost:8000
+      VITE_APP_TITLE: ${VITE_APP_TITLE:-Teleprogreso S.A.}
     ports:
-      - "5173:80"
+      - "${BIND_HOST:-127.0.0.1}:5173:80"
     depends_on:
       - backend
+    networks:
+      - publica
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./frontend:/app
       - /app/node_modules
+
+networks:
+  # Red sin salida a internet donde vive la base de datos. Solo la comparten
+  # `db` y `backend`.
+  datos:
+    name: teleprogreso_datos
+    internal: true
+  # Red normal, con acceso a internet, para lo que se expone al usuario.
+  publica:
+    name: teleprogreso_publica
 
 volumes:
   postgres_data:

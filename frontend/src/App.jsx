@@ -17,13 +17,13 @@ import HistorialTareasPage from './pages/HistorialTareasPage'
 
 /* Páginas del supervisor */
 import DashboardPage    from './pages/DashboardPage'
+import MapaSupervisorPage from './pages/MapaSupervisorPage'
 import AlertasPage      from './pages/AlertasPage'
 import ReasignacionPage from './pages/ReasignacionPage'
 import EmpleadosPage    from './pages/EmpleadosPage'
 import NuevaTareaPage from './pages/NuevaTareaPage'
 import InventarioPage from './pages/InventarioPage'
 import CarroDetallePage from './pages/CarroDetallePage'
-import HistorialAsistenciaPage from './pages/HistorialAsistenciaPage'
 
 export default function App() {
   return (
@@ -62,12 +62,20 @@ export default function App() {
             <Route path="carros/:id" element={<CarroDetallePage />} />
             <Route index element={<Navigate to="/supervisor/dashboard" replace />} />
             <Route path="dashboard"    element={<DashboardPage />} />
+            {/* HU-165: mapa del equipo, con tareas agrupadas por técnico. */}
+            <Route path="mapa"         element={<MapaSupervisorPage />} />
             <Route path="alertas"      element={<AlertasPage />} />
             <Route path="reasignacion" element={<ReasignacionPage />} />
             <Route path="empleados"    element={<EmpleadosPage />} />
             <Route path="nueva-tarea" element={<NuevaTareaPage />} />
             <Route path="inventario"   element={<InventarioPage />} />
-            <Route path="asistencia"   element={<HistorialAsistenciaPage />} />
+            {/* El historial de asistencia vive dentro de Empleados. Se deja
+                la redirección para que los enlaces y marcadores que apuntaban
+                a la pantalla suelta sigan funcionando. */}
+            <Route
+              path="asistencia"
+              element={<Navigate to="/supervisor/empleados?tab=historial" replace />}
+            />
             <Route path="historial-tareas" element={<HistorialTareasPage />} />
             
           </Route>

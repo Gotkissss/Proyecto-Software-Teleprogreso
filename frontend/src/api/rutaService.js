@@ -43,6 +43,10 @@ export const getMiRuta = async (idTecnico) => {
       tipo:             _inferirTipo(t.titulo, t.descripcion),
       fecha_completado: t.fecha_completado ?? null,
       total_incidencias: t.total_incidencias ?? 0,
+      // Fecha límite: la pantalla la usa para avisar al técnico de lo que
+      // vence hoy o ya venció, en vez de dejarle deducirlo de la lista.
+      fecha_finalizacion: t.fecha_finalizacion ?? null,
+      estado_tarea: t.estado_tarea,
     }))
     // La ruta del día es eso: el día. Se muestran todas las tareas abiertas
     // más las que el técnico cerró hoy (para que vea su avance), pero no el
@@ -152,4 +156,40 @@ function _inferirTipo(titulo = '', descripcion = '') {
   if (text.includes('inspecc'))    return 'Inspección'
   if (text.includes('configur'))   return 'Configuración'
   return 'Servicio'
+}
+
+/**
+ * Servicios de la ruta de HOY con coordenadas (lat/lng) para pintarlos en
+ * el mapa (SCRUM-162).
+ *
+ * Reutiliza el mismo endpoint (/tareas) y el mismo filtro "hoy" que
+ * getMiRuta — la única diferencia es que este sí incluye lat/lng, que el
+ * backend ya expone en cada tarea (ver TareaResponse) pero que getMiRuta no
+ * necesitaba para la vista de lista. Se agrega esta función nueva en vez de
+ * tocar getMiRuta para no arriesgar la pantalla "Mi Ruta", que ya funciona
+ * en producción.
+ *
+ * @param {number} idTecnico - ID del empleado autenticado (de useAuth)
+ * @returns {Promise<Array>} servicios del día (con y sin coordenadas; el
+ *   consumidor decide si descarta los que no se pueden ubicar en el mapa)
+ */
+export const getServiciosMapa = async (idTecnico) => {
+  const params = {}
+  if (idTecnico) params.id_tecnico = idTecnico
+
+  const { data: tareas } = await apiClient.get('/tareas', { params })
+
+  return tareas
+    .map((t) => ({
+      id_servicio:      t.id_tarea,
+      estado:           t.estado_tarea,
+      prioridad:        t.prioridad ?? 'media',
+      nombre:           t.titulo,
+      direccion:        t.direccion_servicio ?? 'Dirección no especificada',
+      tipo:             _inferirTipo(t.titulo, t.descripcion),
+      lat:              t.lat ?? null,
+      lng:              t.lng ?? null,
+      fecha_completado: t.fecha_completado ?? null,
+    }))
+    .filter((s) => esTareaDeHoy(s))
 }

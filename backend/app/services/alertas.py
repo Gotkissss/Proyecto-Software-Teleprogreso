@@ -3,10 +3,11 @@
 from datetime import date, datetime, time
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.activo import Material
+from app.models.activo import Activo, Material
 from app.models.alerta import Alerta
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado
@@ -19,6 +20,9 @@ from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy
 TIPO_TAREA_VENCIDA = "tarea_vencida"
 TIPO_TECNICO_SIN_ENTRADA = "tecnico_sin_entrada"
 TIPO_STOCK_CRITICO = "stock_critico"
+
+# Estado que pone el propio sistema cuando la causa de la alerta desaparece.
+ESTADO_RESUELTA = "resuelta"
 
 
 async def generar_alertas(db: AsyncSession) -> int:
@@ -45,6 +49,12 @@ async def generar_alertas(db: AsyncSession) -> int:
     referencias_existentes = await _obtener_referencias_existentes(db, hoy)
     nuevas_alertas: list[Alerta] = []
 
+    # Condiciones que se cumplen AHORA MISMO, se hayan detectado antes o no.
+    # Sirve para lo contrario que `referencias_existentes`: saber cuales de las
+    # alertas ya guardadas siguen teniendo motivo. Sin esto una alerta se
+    # quedaba pendiente para siempre aunque el problema estuviera resuelto.
+    vigentes: set[tuple[str, str]] = set()
+
     # Una tarea se considera vencida solamente si sigue activa. Las tareas
     # completadas o canceladas ya no deben generar una nueva alerta operativa.
     result_tareas = await db.execute(
@@ -60,6 +70,7 @@ async def generar_alertas(db: AsyncSession) -> int:
         )
     )
     for (id_tarea,) in result_tareas.all():
+        vigentes.add((TIPO_TAREA_VENCIDA, f"tarea:{id_tarea}"))
         _agregar_alerta_si_nueva(
             nuevas_alertas,
             referencias_existentes,
@@ -88,6 +99,7 @@ async def generar_alertas(db: AsyncSession) -> int:
             )
         )
         for (id_empleado,) in result_tecnicos.all():
+            vigentes.add((TIPO_TECNICO_SIN_ENTRADA, f"empleado:{id_empleado}"))
             _agregar_alerta_si_nueva(
                 nuevas_alertas,
                 referencias_existentes,
@@ -105,6 +117,7 @@ async def generar_alertas(db: AsyncSession) -> int:
         )
     )
     for (id_material,) in result_materiales.all():
+        vigentes.add((TIPO_STOCK_CRITICO, f"material:{id_material}"))
         _agregar_alerta_si_nueva(
             nuevas_alertas,
             referencias_existentes,
@@ -114,12 +127,170 @@ async def generar_alertas(db: AsyncSession) -> int:
         )
 
     if nuevas_alertas:
-        db.add_all(nuevas_alertas)
+        # ON CONFLICT DO NOTHING en lugar de add_all(): la detección corre
+        # dentro de un GET, así que dos supervisores abriendo la pantalla a la
+        # vez leen el mismo "no existe todavía" y ambos intentan insertar. El
+        # índice único uq_alerta_tipo_referencia_dia lo impide, y sin esta
+        # cláusula el segundo se llevaría un IntegrityError que tumbaría la
+        # generación entera en vez de simplemente saltarse el duplicado.
+        # La fecha se manda explícita en hora de Guatemala. La columna tiene
+        # server_default=now(), que es la hora del servidor de PostgreSQL: en
+        # UTC. Eso dejaba toda alerta recién creada 6 horas en el futuro, así
+        # que la pantalla mostraba "Hace un momento" para alertas viejas y la
+        # deduplicación por día empezaba a fallar cada tarde a partir de las
+        # 18:00 locales, cuando en UTC ya es el día siguiente.
+        creada = ahora_local()
+        await db.execute(
+            pg_insert(Alerta)
+            .values(
+                [
+                    {
+                        "tipo": alerta.tipo,
+                        "severidad": alerta.severidad,
+                        "estado": alerta.estado,
+                        "referencia": alerta.referencia,
+                        "fecha": creada,
+                    }
+                    for alerta in nuevas_alertas
+                ]
+            )
+            .on_conflict_do_nothing()
+        )
         # El flush deja los registros preparados dentro de la transacción
         # actual; el commit continúa siendo responsabilidad de get_db().
         await db.flush()
 
+    # El detector solo sabía crear. Ahora también cierra lo que ya no aplica.
+    await _resolver_alertas_obsoletas(
+        db,
+        vigentes,
+        hoy=hoy,
+        # La detección de "técnico sin entrada" solo corre pasada la hora
+        # límite. Antes de esa hora `vigentes` no contiene ninguna referencia
+        # de ese tipo, y darlas por resueltas borraría cada mañana los avisos
+        # legítimos del día anterior.
+        evaluar_sin_entrada=hora_local() >= _hora_limite(),
+    )
+
     return len(nuevas_alertas)
+
+
+async def describir_referencias(
+    db: AsyncSession,
+    alertas: list[Alerta],
+) -> dict[str, str]:
+    """
+    Traduce las referencias "entidad:id" al nombre real de esa entidad.
+
+    Devuelve {referencia: etiqueta}, p. ej.
+        {"tarea:7": "Cambio de poste dañado — Callejón San José"}
+
+    Sin esto la pantalla del supervisor mostraba "La tarea #7 venció", que
+    obliga a ir a buscar a mano cuál es la tarea 7. Se resuelven todas las
+    referencias en tres consultas (una por tipo de entidad) en vez de una por
+    alerta.
+    """
+    ids_por_entidad: dict[str, set[int]] = {}
+
+    for alerta in alertas:
+        if not alerta.referencia or ":" not in alerta.referencia:
+            continue
+        entidad, _, id_txt = alerta.referencia.partition(":")
+        if id_txt.isdigit():
+            ids_por_entidad.setdefault(entidad, set()).add(int(id_txt))
+
+    etiquetas: dict[str, str] = {}
+
+    if ids_tarea := ids_por_entidad.get("tarea"):
+        result = await db.execute(
+            select(Tarea.id_tarea, Tarea.titulo).where(Tarea.id_tarea.in_(ids_tarea))
+        )
+        for id_tarea, titulo in result.all():
+            etiquetas[f"tarea:{id_tarea}"] = titulo
+
+    if ids_empleado := ids_por_entidad.get("empleado"):
+        result = await db.execute(
+            select(Empleado.id_empleado, Empleado.nombre, Empleado.apellido).where(
+                Empleado.id_empleado.in_(ids_empleado)
+            )
+        )
+        for id_empleado, nombre, apellido in result.all():
+            etiquetas[f"empleado:{id_empleado}"] = f"{nombre} {apellido}"
+
+    if ids_material := ids_por_entidad.get("material"):
+        # El nombre del material vive en `activo`, no en `material`.
+        result = await db.execute(
+            select(Activo.id_activo, Activo.nombre_activo).where(
+                Activo.id_activo.in_(ids_material)
+            )
+        )
+        for id_activo, nombre in result.all():
+            etiquetas[f"material:{id_activo}"] = nombre
+
+    return etiquetas
+
+
+async def _resolver_alertas_obsoletas(
+    db: AsyncSession,
+    vigentes: set[tuple[str, str]],
+    *,
+    hoy: date,
+    evaluar_sin_entrada: bool,
+) -> int:
+    """
+    Cierra como 'resuelta' las alertas pendientes cuya causa ya no existe.
+
+    Es la mitad que le faltaba al detector. Antes solo sabía crear alertas: una
+    vez levantada, la alerta se quedaba pendiente aunque el problema estuviera
+    arreglado. En la práctica eso significaba que el panel avisaba de una tarea
+    vencida que el técnico ya había cerrado, o de un material bajo mínimos que
+    ya se había repuesto, y la única forma de quitarla de en medio era
+    descartarla a mano — lo que además borraba la única señal de que ese aviso
+    había existido.
+
+    `vigentes` son las condiciones que se cumplen en este mismo instante, tal
+    como las acaba de calcular la detección. Todo lo pendiente que no esté ahí
+    es un aviso sin motivo.
+
+    Las alertas 'atendida' y 'descartada' no se tocan: ya las cerró una persona
+    y su estado es parte del registro de lo que hizo.
+
+    Devuelve cuántas se cerraron.
+    """
+    tipos_evaluados = [TIPO_TAREA_VENCIDA, TIPO_STOCK_CRITICO]
+    if evaluar_sin_entrada:
+        tipos_evaluados.append(TIPO_TECNICO_SIN_ENTRADA)
+
+    result = await db.execute(
+        select(Alerta).where(
+            Alerta.estado == "pendiente",
+            Alerta.tipo.in_(tipos_evaluados),
+        )
+    )
+
+    resueltas = 0
+    for alerta in result.scalars().all():
+        if alerta.referencia is None:
+            continue
+        if (alerta.tipo, alerta.referencia) in vigentes:
+            continue
+
+        # Los avisos de "no marcó entrada" son de un día concreto: que hoy sí
+        # haya marcado no borra que ayer no lo hizo. Solo se cierran los del
+        # propio día.
+        if (
+            alerta.tipo == TIPO_TECNICO_SIN_ENTRADA
+            and alerta.fecha.date() != hoy
+        ):
+            continue
+
+        alerta.estado = ESTADO_RESUELTA
+        resueltas += 1
+
+    if resueltas:
+        await db.flush()
+
+    return resueltas
 
 
 async def _obtener_referencias_existentes(

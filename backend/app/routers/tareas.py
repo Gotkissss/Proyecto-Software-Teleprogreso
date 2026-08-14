@@ -6,6 +6,7 @@ Este archivo gestiona el ciclo de vida de las tareas/ordenes de servicio.
 
 Se tiene el siguiente control de acceso por rol:
   - GET    /tareas/                   = admin, supervisor, gerente, tecnico (todos los autenticados)
+  - GET    /tareas/mapa-supervisor    = admin, supervisor, gerente
   - POST   /tareas/                   = admin, supervisor  (solo pueden crear tareas con permisos)
   - PATCH  /tareas/{id}/estado        = admin, supervisor
   - PATCH  /tareas/{id}/reasignar     = admin, supervisor
@@ -23,12 +24,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import DateTime, cast, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from geoalchemy2 import Geometry
 
 from app.core.deps import (
     get_current_empleado,
+    require_admin_supervisor_gerente,
     require_roles,
     require_supervisor,
     require_tecnico,
+)
+from app.core.reglas import (
+    ESTADOS_TAREA_ACTIVOS,
+    ESTADOS_TAREA_CERRADOS,
+    ESTADO_EMPLEADO_ACTIVO,
+    LIMITE_TAREAS_ACTIVAS,
+    ROL_TECNICO,
 )
 # Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
@@ -42,18 +52,25 @@ from app.schemas.tarea import (
     HistorialTareasResponse,
     TareaCompletadaResponse,
     TareaCreate,
+    TareaMapaSupervisorResponse,
     TareaReasignar,
     TareaResponse,
+    TareaRutaResponse,
     TareaUpdate,
     TareaUpdateEstado,
 )
-from app.services.tareas import marcar_completada, marcar_reabierta
+from app.services.tareas import (
+    marcar_completada,
+    marcar_reabierta,
+    validar_cierre_permitido,
+)
 
 router = APIRouter(prefix="/tareas", tags=["Tareas"])
 
-# Estados que cuentan como "tareas activas" para el límite de carga
-ESTADOS_ACTIVOS = ("pendiente", "en_progreso")
-LIMITE_TAREAS_ACTIVAS = 3
+# El límite de carga y los estados viven en app/core/reglas.py: antes estaban
+# duplicados aquí, en metricas.py y en dos pantallas del frontend, y bastaba
+# con cambiar uno para que el selector y el backend dejaran de coincidir.
+ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
 
 # Roles que ven el trabajo de todos los técnicos, no solo el propio.
 ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
@@ -117,6 +134,82 @@ async def _contar_incidencias(db: AsyncSession, id_tarea: int) -> int:
     return result.scalar() or 0
 
 
+async def _buscar_tecnico_asignable(db: AsyncSession, id_empleado: int) -> Empleado:
+    """
+    Devuelve el empleado si puede recibir tareas; lanza 404 si no.
+
+    Comprueba TRES cosas: que exista, que su cuenta esté activa y que su rol
+    sea 'tecnico'. Antes solo se miraba el estado, así que una tarea se podía
+    asignar a un admin, a un supervisor o a un gerente aunque el mensaje de
+    error hablara de "técnico activo". El selector del frontend ya solo ofrece
+    técnicos, pero la regla tiene que vivir también aquí: una llamada directa
+    a la API se saltaba el filtro de la pantalla.
+    """
+    result = await db.execute(
+        select(Empleado).where(
+            Empleado.id_empleado == id_empleado,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+            Empleado.rol == ROL_TECNICO,
+        )
+    )
+    tecnico = result.scalar_one_or_none()
+
+    if tecnico is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No se encontró ningún técnico activo con id={id_empleado}. "
+                "Las tareas solo pueden asignarse a empleados con rol 'tecnico' "
+                "y cuenta activa."
+            ),
+        )
+
+    return tecnico
+
+
+async def _validar_limite_al_reabrir(
+    db: AsyncSession,
+    tarea: Tarea,
+    nuevo_estado: str,
+) -> None:
+    """
+    Impide que reabrir una tarea cerrada deje al técnico por encima del límite.
+
+    El tope de carga se validaba únicamente al asignar. Devolver una tarea
+    'completado' o 'cancelado' a un estado activo no pasaba por ninguna
+    comprobación, así que bastaba con reabrir tareas viejas para dejar a un
+    técnico con muchas más tareas activas de las permitidas: el límite era
+    real al asignar y decorativo después.
+
+    No hace nada si la tarea ya estaba abierta o si no tiene técnico asignado.
+    """
+    if tarea.estado_tarea not in ESTADOS_TAREA_CERRADOS:
+        return
+    if nuevo_estado not in ESTADOS_TAREA_ACTIVOS:
+        return
+
+    asignado = await _obtener_tecnico_de_tarea(db, tarea.id_tarea)
+    if asignado is None:
+        return
+
+    # Se excluye esta misma tarea del conteo: todavía figura como cerrada, así
+    # que no consume cupo, pero sumarla dos veces daría un error engañoso.
+    activas = await _contar_tareas_activas(
+        db, asignado["id_empleado"], excluir_tarea=tarea.id_tarea
+    )
+
+    if activas >= LIMITE_TAREAS_ACTIVAS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"No se puede reabrir la tarea: el técnico '{asignado['nombre']}' "
+                f"ya tiene {activas} tareas activas y el límite es "
+                f"{LIMITE_TAREAS_ACTIVAS}. Reasigna la tarea a otro técnico o "
+                f"cierra alguna de las suyas primero."
+            ),
+        )
+
+
 async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
     """
     Construye la respuesta de una tarea incluyendo su técnico asignado.
@@ -151,32 +244,81 @@ async def _tarea_a_response(db: AsyncSession, tarea: Tarea) -> TareaResponse:
 )
 async def get_tareas(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    estado: Optional[str] = Query(None),
-    id_tecnico: Optional[int] = Query(None),
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    # Estilo Annotated a propósito: con `estado: str = Query(None)` el valor
+    # por defecto es el objeto Query, no None, y cualquier llamada directa a
+    # la función (los tests, u otro router que la reutilice) acaba armando
+    # filtros con basura porque un Query() siempre es truthy.
+    estado: Annotated[Optional[str], Query()] = None,
+    id_tecnico: Annotated[Optional[int], Query()] = None,
+    limite: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=2000,
+            description="Máximo de tareas devueltas, de la más reciente hacia atrás.",
+        ),
+    ] = 500,
 ):
+    # coordenada_servicio es Geography; ST_X/ST_Y solo operan sobre geometry,
+    # por eso se castea. Con SRID 4326: ST_Y es latitud y ST_X es longitud.
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
     query = (
-        select(Tarea)
+        select(Tarea, lat_col, lng_col)
         .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
     )
 
     if estado:
         query = query.where(Tarea.estado_tarea == estado)
 
-    result = await db.execute(query)
-    tareas = result.scalars().all()
+    # Un técnico solo puede ver su propia carga de trabajo. Antes este endpoint
+    # devolvía las tareas de toda la empresa a cualquier autenticado y el
+    # recorte por técnico lo hacía el cliente, así que bastaba con llamar a
+    # /tareas sin filtros para leer el trabajo de los demás.
+    if current_user.rol in ROLES_SUPERVISION:
+        tecnico_filtrado = id_tecnico
+    else:
+        tecnico_filtrado = current_user.id_empleado
 
-    # Conteo de evidencias de todas las tareas en una sola consulta agrupada,
-    # para no lanzar un COUNT por tarea (N+1) al construir la respuesta.
-    result_incidencias = await db.execute(
-        select(Incidencia.id_tarea, func.count(Incidencia.id_incidencia))
-        .group_by(Incidencia.id_tarea)
-    )
-    incidencias_por_tarea = dict(result_incidencias.all())
+    if tecnico_filtrado is not None:
+        # El filtro se resuelve en SQL: antes se traían todas las tareas y se
+        # descartaban en Python, lo que además rompía el límite de resultados.
+        query = query.where(
+            Tarea.id_tarea.in_(
+                select(EmpleadoTarea.id_tarea).where(
+                    EmpleadoTarea.id_empleado == tecnico_filtrado
+                )
+            )
+        )
+
+    # Cota superior explícita: la tabla solo crece y sin límite la respuesta
+    # terminaría materializando el histórico completo en memoria.
+    query = query.order_by(Tarea.id_tarea.desc()).limit(limite)
+
+    result = await db.execute(query)
+    filas = result.all()
+
+    ids = [tarea.id_tarea for tarea, _lat, _lng in filas]
+
+    # Conteo de evidencias en una sola consulta agrupada, para no lanzar un
+    # COUNT por tarea (N+1) al construir la respuesta. Se restringe a las
+    # tareas devueltas: agrupar sobre la tabla entera hacía trabajo de más.
+    incidencias_por_tarea: dict[int, int] = {}
+
+    if ids:
+        result_incidencias = await db.execute(
+            select(Incidencia.id_tarea, func.count(Incidencia.id_incidencia))
+            .where(Incidencia.id_tarea.in_(ids))
+            .group_by(Incidencia.id_tarea)
+        )
+        incidencias_por_tarea = dict(result_incidencias.all())
 
     tareas_response = []
 
-    for tarea in tareas:
+    for tarea, lat, lng in filas:
         tecnico = None
 
         if tarea.empleados:
@@ -185,9 +327,6 @@ async def get_tareas(
                 "id_empleado": emp.id_empleado,
                 "nombre": f"{emp.nombre} {emp.apellido}",
             }
-
-        if id_tecnico and (not tecnico or tecnico["id_empleado"] != id_tecnico):
-            continue
 
         tareas_response.append(
             TareaResponse(
@@ -201,8 +340,131 @@ async def get_tareas(
                 fecha_finalizacion=tarea.fecha_finalizacion,
                 fecha_asignacion=tarea.fecha_asignacion,
                 fecha_completado=tarea.fecha_completado,
+                lat=lat,
+                lng=lng,
                 tecnico=tecnico,
                 total_incidencias=incidencias_por_tarea.get(tarea.id_tarea, 0),
+            )
+        )
+
+    return tareas_response
+
+
+# ─── GET /tareas/mi-ruta ──────────────────────────────────────────────────────
+# Acceso: el empleado autenticado (solo ve sus propias tareas del día).
+
+@router.get(
+    "/mi-ruta",
+    response_model=List[TareaRutaResponse],
+    summary="Ruta diaria del técnico: tareas de hoy con coordenadas para el mapa",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mi_ruta(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Devuelve solo las tareas de HOY asignadas al técnico autenticado, con sus
+    coordenadas (lat/lng) y estado, listas para pintar en el mapa.
+
+    "Hoy" se calcula con la hora de Guatemala (hoy_local), no en UTC.
+    """
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+
+    query = (
+        select(
+            Tarea.id_tarea,
+            Tarea.estado_tarea,
+            func.ST_Y(coord).label("lat"),
+            func.ST_X(coord).label("lng"),
+        )
+        .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+        .where(
+            EmpleadoTarea.id_empleado == current_user.id_empleado,
+            Tarea.fecha_inicio == hoy_local(),
+        )
+        .order_by(Tarea.id_tarea)
+    )
+
+    result = await db.execute(query)
+
+    return [
+        TareaRutaResponse(id_tarea=id_tarea, estado_tarea=estado_tarea, lat=lat, lng=lng)
+        for id_tarea, estado_tarea, lat, lng in result.all()
+    ]
+
+
+# ─── GET /tareas/mapa-supervisor ──────────────────────────────────────────────
+# Acceso: admin, supervisor, gerente.
+
+@router.get(
+    "/mapa-supervisor",
+    response_model=List[TareaMapaSupervisorResponse],
+    summary="Mapa de tareas de un dia, con tecnico asignado, para el supervisor",
+    status_code=status.HTTP_200_OK,
+)
+async def get_mapa_supervisor(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    fecha: Annotated[Optional[date], Query()] = None,
+    id_tecnico: Annotated[Optional[int], Query()] = None,
+):
+    """
+    Devuelve las tareas de una fecha (hoy en hora de Guatemala por defecto)
+    con sus coordenadas y el técnico asignado, para que el supervisor las
+    pinte en el mapa agrupadas por técnico.
+
+    Filtros:
+    - fecha: compara contra fecha_inicio. Si no se envía, usa hoy_local().
+    - id_tecnico: si se envía, solo devuelve las tareas de ese técnico.
+
+    Roles: admin | supervisor | gerente.
+    """
+    fecha_filtro = fecha or hoy_local()
+
+    coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
+    query = (
+        select(Tarea, lat_col, lng_col)
+        .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
+        .where(Tarea.fecha_inicio == fecha_filtro)
+    )
+
+    if id_tecnico is not None:
+        query = query.where(
+            Tarea.id_tarea.in_(
+                select(EmpleadoTarea.id_tarea).where(
+                    EmpleadoTarea.id_empleado == id_tecnico
+                )
+            )
+        )
+
+    query = query.order_by(Tarea.id_tarea)
+
+    result = await db.execute(query)
+    filas = result.all()
+
+    tareas_response = []
+
+    for tarea, lat, lng in filas:
+        tecnico = None
+
+        if tarea.empleados:
+            emp = tarea.empleados[0].empleado
+            tecnico = {
+                "id_empleado": emp.id_empleado,
+                "nombre": f"{emp.nombre} {emp.apellido}",
+            }
+
+        tareas_response.append(
+            TareaMapaSupervisorResponse(
+                id_tarea=tarea.id_tarea,
+                estado_tarea=tarea.estado_tarea,
+                lat=lat,
+                lng=lng,
+                tecnico=tecnico,
             )
         )
 
@@ -228,7 +490,8 @@ async def create_tarea(
 
     Reglas de negocio (Historia 5):
     - Si se indica id_tecnico, se verifica que ese técnico tenga menos de
-      LIMITE_TAREAS_ACTIVAS (3) tareas en estado 'pendiente' o 'en_progreso'.
+      LIMITE_TAREAS_ACTIVAS tareas en estado 'pendiente' o 'en_progreso'
+      (el valor vive en app/core/reglas.py).
     - Si el límite se supera, se devuelve HTTP 400 con mensaje claro para
       que el frontend lo muestre al supervisor.
 
@@ -236,22 +499,8 @@ async def create_tarea(
     """
     # ── Validación de límite de carga ──────────────────────────
     if tarea.id_tecnico:
-        # Verificar que el técnico existe y es un técnico activo
-        result_tec = await db.execute(
-            select(Empleado).where(
-                Empleado.id_empleado == tarea.id_tecnico,
-                Empleado.estado == "activo",
-            )
-        )
-        tecnico = result_tec.scalar_one_or_none()
-
-        if not tecnico:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"No se encontró ningún técnico activo con id={tarea.id_tecnico}."
-                ),
-            )
+        # Verificar que existe, está activo y es realmente un técnico.
+        tecnico = await _buscar_tecnico_asignable(db, tarea.id_tecnico)
 
         tareas_activas = await _contar_tareas_activas(db, tarea.id_tecnico)
 
@@ -320,8 +569,9 @@ async def update_tarea(
     estado, fecha_inicio, fecha_finalizacion e id_tecnico.
 
     Reglas de negocio:
-    - Cambiar el técnico respeta el límite de LIMITE_TAREAS_ACTIVAS (3) tareas
+    - Cambiar el técnico respeta el límite de LIMITE_TAREAS_ACTIVAS tareas
       activas, sin contar esta misma tarea.
+    - Reabrir una tarea cerrada vuelve a comprobar ese mismo límite.
     - Enviar `id_tecnico: null` desasigna la tarea.
     - Al pasar a 'en_progreso' sin fecha_inicio se registra la fecha de hoy.
 
@@ -374,6 +624,9 @@ async def update_tarea(
 
     if "estado" in cambios and cambios["estado"] is not None:
         nuevo_estado = data.estado.value
+        # Reabrir una tarea cerrada devuelve carga al técnico: hay que volver a
+        # comprobar su límite, igual que si se le asignara una tarea nueva.
+        await _validar_limite_al_reabrir(db, tarea, nuevo_estado)
         if nuevo_estado == "completado":
             # Pasa por el helper compartido para que la tarea quede con
             # `fecha_completado` y aparezca en el historial diario.
@@ -390,25 +643,38 @@ async def update_tarea(
     if "id_tecnico" in cambios:
         nuevo_tecnico = cambios["id_tecnico"]
 
+        # Una tarea cerrada no cambia de técnico. `PATCH /tareas/{id}/reasignar`
+        # ya lo impedía, pero este endpoint hacía exactamente lo mismo sin
+        # ninguna comprobación: dos caminos para la misma acción y solo uno
+        # vigilado.
+        #
+        # No es un detalle formal. Quién hizo el trabajo se deduce de quién
+        # tiene la tarea asignada —la evidencia no guarda autor—, así que
+        # cambiar el técnico de una tarea ya completada reescribe la historia:
+        # el trabajo y las fotos que dejó una persona pasan a figurar a nombre
+        # de otra, sin rastro de que hubo un cambio.
+        #
+        # Se mira el estado DESPUÉS de aplicar el cambio de estado de esta
+        # misma petición, para que reabrir y reasignar en una sola operación
+        # siga funcionando: ahí sí queda constancia de que se reabrió.
+        if tarea.estado_tarea in ESTADOS_TAREA_CERRADOS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"La tarea está en estado '{tarea.estado_tarea}' y ya no "
+                    "puede cambiar de técnico: la evidencia registrada quedaría "
+                    "atribuida a alguien que no hizo el trabajo. Reábrela "
+                    "primero si necesitas reasignarla."
+                ),
+            )
+
         if nuevo_tecnico is None:
             await db.execute(
                 delete(EmpleadoTarea).where(EmpleadoTarea.id_tarea == id)
             )
             tarea.fecha_asignacion = None
         else:
-            result_tec = await db.execute(
-                select(Empleado).where(
-                    Empleado.id_empleado == nuevo_tecnico,
-                    Empleado.estado == "activo",
-                )
-            )
-            tecnico = result_tec.scalar_one_or_none()
-
-            if not tecnico:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No se encontró ningún técnico activo con id={nuevo_tecnico}.",
-                )
+            tecnico = await _buscar_tecnico_asignable(db, nuevo_tecnico)
 
             asignado_actual = await _obtener_tecnico_de_tarea(db, id)
             ya_asignado = (
@@ -472,6 +738,10 @@ async def update_estado(
 
     nuevo_estado = data.estado.value
 
+    # Sin esto, reabrir tareas cerradas era la forma de dejar a un técnico con
+    # más tareas activas que el límite: el tope solo se miraba al asignar.
+    await _validar_limite_al_reabrir(db, tarea, nuevo_estado)
+
     if nuevo_estado == "completado":
         marcar_completada(tarea)
     else:
@@ -529,19 +799,7 @@ async def reasignar_tarea(
         )
 
     # Verificar límite de carga del técnico destino
-    result_tec = await db.execute(
-        select(Empleado).where(
-            Empleado.id_empleado == data.id_tecnico,
-            Empleado.estado == "activo",
-        )
-    )
-    tecnico = result_tec.scalar_one_or_none()
-
-    if not tecnico:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró ningún técnico activo con id={data.id_tecnico}.",
-        )
+    tecnico = await _buscar_tecnico_asignable(db, data.id_tecnico)
 
     # Se excluye esta misma tarea: si ya estaba asignada al técnico destino no
     # debe contar contra su propio límite.
@@ -691,6 +949,7 @@ async def finalizar_tarea(
     Reglas:
     - Solo el técnico asignado puede finalizar (admin/supervisor pasan igual).
     - Requiere al menos una evidencia registrada en la tarea.
+    - La tarea debe estar en curso: una 'pendiente' hay que iniciarla primero.
     - Una tarea cancelada no puede completarse.
 
     Roles: técnico asignado, admin, supervisor.
@@ -718,11 +977,9 @@ async def finalizar_tarea(
                        "Solo el técnico asignado puede cerrarla.",
             )
 
-    if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se puede finalizar una tarea cancelada.",
-        )
+    # Mismas reglas de estado que el cierre vía evidencia (incidencias.py):
+    # ni cancelada, ni pendiente (una tarea que nunca se inició no se termina).
+    validar_cierre_permitido(tarea)
 
     # La evidencia es obligatoria (SCRUM-139): cerrar sin ella dejaría al
     # supervisor sin constancia de lo hecho.

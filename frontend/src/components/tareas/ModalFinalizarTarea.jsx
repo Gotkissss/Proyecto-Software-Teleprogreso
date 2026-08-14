@@ -74,7 +74,12 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
 
   const handleFoto = (evento) => {
     const archivo = evento.target.files?.[0] ?? null
-    const error = archivo ? validarFoto(archivo) : null
+
+    // Cancelar el selector dispara un change sin archivos. Si aquí se siguiera
+    // adelante, se borraría la foto que el técnico ya había elegido antes.
+    if (!archivo) return
+
+    const error = validarFoto(archivo)
 
     if (error) {
       setFoto(null)

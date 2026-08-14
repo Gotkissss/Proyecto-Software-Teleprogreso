@@ -79,6 +79,10 @@ class TareaResponse(BaseModel):
     # Momento real de cierre. Es lo que permite al frontend distinguir "esto
     # se completó hoy" de "esto se completó la semana pasada" sin adivinar.
     fecha_completado:   Optional[datetime]        = None
+    # Coordenadas del servicio ya serializadas desde coordenada_servicio
+    # (PostGIS): lat = ST_Y, lng = ST_X. None si la tarea no tiene ubicación.
+    lat:                Optional[float]           = None
+    lng:                Optional[float]           = None
     tecnico:            Optional[TecnicoResponse] = None
     # Cuántas evidencias (incidencias) tiene registradas la tarea. Permite al
     # dashboard del supervisor mostrar el acceso a "ver evidencias" sin pedir
@@ -87,6 +91,24 @@ class TareaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Ruta diaria: respuesta liviana solo con lo que el mapa necesita pintar
+class TareaRutaResponse(BaseModel):
+    id_tarea:     int
+    estado_tarea: str
+    lat:          Optional[float] = None
+    lng:          Optional[float] = None
+
+
+# Mapa del supervisor: igual de liviana que TareaRutaResponse, pero con el
+# tecnico asignado para que el frontend pueda agrupar los marcadores por él.
+class TareaMapaSupervisorResponse(BaseModel):
+    id_tarea:     int
+    estado_tarea: str
+    lat:          Optional[float]           = None
+    lng:          Optional[float]           = None
+    tecnico:      Optional[TecnicoResponse] = None
 
 
 # 🔹 UPDATE ESTADO

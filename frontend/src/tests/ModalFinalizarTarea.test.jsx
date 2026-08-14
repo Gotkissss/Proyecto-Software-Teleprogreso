@@ -108,7 +108,14 @@ describe('ModalFinalizarTarea', () => {
     const { container } = renderizar()
     const input = container.querySelector('input[type="file"]')
 
-    await userEvent.upload(input, archivo('documento.pdf', 100, 'application/pdf'))
+    // applyAccept: false simula al usuario que en el diálogo del sistema elige
+    // "Todos los archivos" y se salta el filtro del atributo accept. Ese es
+    // justamente el caso contra el que defiende la validación.
+    await userEvent.upload(
+      input,
+      archivo('documento.pdf', 100, 'application/pdf'),
+      { applyAccept: false },
+    )
 
     expect(await screen.findByText(/Formato no permitido/i)).toBeInTheDocument()
   })

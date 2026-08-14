@@ -40,7 +40,10 @@ async def test_get_alertas_devuelve_alertas_filtradas():
 
     assert len(alertas) == 1
     assert alertas[0].estado == "pendiente"
-    db.execute.assert_awaited_once()
+    # Dos consultas: la de alertas y la que resuelve las referencias a nombres
+    # ("tarea:7" → "Cambio de poste dañado"). Antes se exigía una sola, pero
+    # sin la segunda la pantalla solo puede mostrar el id crudo.
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -91,7 +94,13 @@ async def test_generar_alertas_crea_las_tres_condiciones():
     tecnicos.all.return_value = [(20,)]
     materiales = MagicMock()
     materiales.all.return_value = [(30,)]
-    db.execute.side_effect = [referencias, tareas, tecnicos, materiales]
+    # El quinto execute es el INSERT de las alertas nuevas y el sexto es la
+    # consulta de _resolver_alertas_obsoletas, que no devuelve nada pendiente.
+    obsoletas = MagicMock()
+    obsoletas.scalars.return_value.all.return_value = []
+    db.execute.side_effect = [
+        referencias, tareas, tecnicos, materiales, MagicMock(), obsoletas
+    ]
 
     from app.core import config
 
@@ -103,10 +112,21 @@ async def test_generar_alertas_crea_las_tres_condiciones():
         config.settings.ALERTA_HORA_LIMITE = hora_original
 
     assert creadas == 3
-    nuevas = db.add_all.call_args.args[0]
-    assert {(alerta.tipo, alerta.referencia) for alerta in nuevas} == {
+
+    # El INSERT es la penúltima consulta: la última es la del resolutor.
+    insert = db.execute.await_args_list[-2].args[0]
+    sql = str(insert.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "INSERT INTO alerta" in sql
+    for tipo, referencia in (
         ("tarea_vencida", "tarea:10"),
         ("tecnico_sin_entrada", "empleado:20"),
         ("stock_critico", "material:30"),
-    }
+    ):
+        assert tipo in sql
+        assert referencia in sql
+
+    # Sin ON CONFLICT, dos supervisores abriendo la pantalla a la vez chocan
+    # contra el índice único y se cae la generación entera.
+    assert "ON CONFLICT DO NOTHING" in sql
     db.flush.assert_awaited_once()

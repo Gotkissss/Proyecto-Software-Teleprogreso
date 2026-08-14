@@ -10,7 +10,7 @@ import {
   asignarTecnicoACarro,
   asignarHerramientaACarro,
 } from '../api/inventarioService'
-import apiClient from '../api/client'
+import { getTecnicosDisponibles } from '../api/tareaService'
 
 /* ── Iconos ──────────────────────────────────────────────────────────────── */
 const IconCar = () => (
@@ -154,8 +154,16 @@ function ModalAsignarTecnico({ vehiculo, onCerrar, onAsignado }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    apiClient.get('/empleados?rol=tecnico&estado=activo')
-      .then(({ data }) => setTecnicos(data?.empleados ?? []))
+    // Se usa el mismo endpoint que el resto de la app para pedir técnicos.
+    //
+    // Antes iba contra `/empleados?rol=tecnico&estado=activo`, que es la
+    // gestión de personal y exige rol admin: a un supervisor le respondía 403
+    // y este modal le mostraba "No se pudo cargar la lista de técnicos" sin
+    // más pistas. `/empleados/tecnicos/disponibles` existe justamente para
+    // esto, lo admite el supervisor y además trae la carga de trabajo de cada
+    // uno, así que la lista dice lo mismo aquí que en Reasignación.
+    getTecnicosDisponibles()
+      .then(setTecnicos)
       .catch(() => setError('No se pudo cargar la lista de técnicos.'))
       .finally(() => setLoading(false))
   }, [])
@@ -190,7 +198,11 @@ function ModalAsignarTecnico({ vehiculo, onCerrar, onAsignado }) {
               <option value="">— Selecciona un técnico —</option>
               {tecnicos.map(tec => (
                 <option key={tec.id_empleado} value={tec.id_empleado}>
-                  {tec.nombre} {tec.apellido}
+                  {tec.nombre_completo ?? `${tec.nombre} ${tec.apellido}`}
+                  {' — '}
+                  {tec.tareas_activas ?? 0} tarea
+                  {tec.tareas_activas === 1 ? '' : 's'} activa
+                  {tec.tareas_activas === 1 ? '' : 's'}
                 </option>
               ))}
             </select>

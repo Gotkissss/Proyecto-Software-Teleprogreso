@@ -1,28 +1,44 @@
 """
 seed.py — Datos de demostración para Teleprogreso S.A.
 -----------------------------------------------------------------------------
-Siembra una base de datos vacía con un escenario realista y completo:
+Siembra la base de datos con un escenario realista y completo:
 
+  - Catálogo de tipos de pausa (tabla tipo_pausa)
   - 8 empleados (admin, supervisor, gerente y 5 técnicos)
   - 12 tareas con coordenadas reales de Fraijanes, repartidas entre técnicos
   - Inventario: 3 vehículos, 8 herramientas y 8 materiales (algunos bajo stock)
   - Asignación de vehículos y herramientas a técnicos
   - Historial de asistencia de 14 días con pausas, llegadas tarde y una
     jornada sin salida marcada
-  - Ubicaciones GPS de los técnicos
+  - Ubicaciones GPS de los técnicos (las dibuja el mapa de ruta)
   - Evidencias (incidencias) en las tareas completadas
 
 Las alertas NO se siembran a mano: las genera el propio backend al abrir la
 pantalla de alertas, a partir de estos datos (tareas vencidas, técnicos sin
 entrada y materiales bajo el mínimo).
 
-El script es idempotente: si ya existen empleados no hace nada, para no pisar
-datos de desarrollo. Para resembrar desde cero:
-    docker compose down -v && docker compose up
+MODOS DE EJECUCIÓN
+------------------
+Por defecto es idempotente: si ya existen empleados no hace nada, para no
+pisar datos de desarrollo.
+
+Para BORRAR TODO y volver a sembrar desde cero:
+
+    SEED_RESET=true python seed.py      (o el flag  --reset)
+
+Es lo que permite repoblar un entorno ya desplegado, como Railway, donde no se
+puede hacer `docker compose down -v`. El reset vacía todas las tablas de datos
+pero NO toca `alembic_version`: el esquema se sigue gobernando con migraciones.
+
+⚠️ SEED_RESET destruye datos. En Railway se activa, se despliega una vez y se
+vuelve a poner en false, o el siguiente reinicio del contenedor borrará todo
+otra vez.
 -----------------------------------------------------------------------------
 """
 import asyncio
+import os
 import random
+import sys
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import text
@@ -30,6 +46,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.core.security import hash_password
+# Reloj de la operación (America/Guatemala). El contenedor corre en UTC: con
+# `datetime.now()` los datos sembrados quedaban 6 horas en el futuro, así que
+# las ubicaciones del seed tapaban a las que el técnico reportaba de verdad y
+# `date.today()` cambiaba de día a las 18:00 hora local.
+from app.core.tiempo import ahora as ahora_local, hoy as hoy_local
+from app.db.base import Base
+
+# Importa TODOS los modelos, no solo los que este script instancia. El reset
+# recorre Base.metadata para saber qué vaciar, y metadata solo conoce las
+# clases que se hayan importado: sin esta línea el TRUNCATE se saltaría
+# `alerta` y `token_revocado`, y las alertas viejas sobrevivirían al borrado.
+import app.models  # noqa: F401
+
 from app.models.activo import (
     Activo,
     Carro,
@@ -39,6 +68,7 @@ from app.models.activo import (
 )
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado, EmpleadoCarro, EmpleadoTarea
+from app.models.pausa import TipoPausa
 from app.models.tarea import Incidencia, Tarea
 from app.models.ubicacion import UbicacionEmpleado
 
@@ -52,12 +82,26 @@ AsyncSessionLocal = async_sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
-HOY = date.today()
+HOY = hoy_local()
 
 
 def punto(lat: float, lon: float) -> str:
     """WKT de un punto para las columnas Geography (PostGIS espera lon lat)."""
     return f"SRID=4326;POINT({lon} {lat})"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CATÁLOGO DE TIPOS DE PAUSA
+# Es dato de operación, no configuración de código: el router de descanso lo
+# lee de esta tabla. La migración 0005 lo inserta al crear la tabla; aquí se
+# vuelve a sembrar porque el reset vacía todas las tablas.
+# ═══════════════════════════════════════════════════════════════════════════
+
+TIPOS_PAUSA = [
+    {"id": "almuerzo", "label": "Pausa de Almuerzo",       "duracion_max_min": 60, "orden": 1},
+    {"id": "tecnica",  "label": "Pausa Técnica (Soporte)", "duracion_max_min": 15, "orden": 2},
+    {"id": "personal", "label": "Pausa Personal",          "duracion_max_min": 10, "orden": 3},
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -324,6 +368,72 @@ async def verificar_postgis(db: AsyncSession) -> None:
         print("✅ PostGIS ya está habilitado")
 
 
+def reset_solicitado() -> bool:
+    """
+    ¿Hay que borrar todo antes de sembrar?
+
+    Se activa con la variable de entorno SEED_RESET (true/1/yes) o con el flag
+    --reset. La variable de entorno existe para poder repoblar entornos
+    desplegados como Railway, donde no hay forma de tirar el volumen de la BD.
+    """
+    if "--reset" in sys.argv:
+        return True
+    return os.getenv("SEED_RESET", "").strip().lower() in ("1", "true", "yes", "si", "sí")
+
+
+async def resetear_base_de_datos(db: AsyncSession) -> None:
+    """
+    Vacía todas las tablas de datos de la aplicación.
+
+    Usa TRUNCATE ... RESTART IDENTITY CASCADE y no DROP: el esquema lo gobierna
+    Alembic, y borrar las tablas dejaría `alembic_version` apuntando a una
+    migración cuyas tablas ya no existen. Con TRUNCATE la estructura queda
+    intacta y los IDs vuelven a empezar en 1, así que el escenario sembrado es
+    idéntico al de una base recién creada.
+
+    `alembic_version` se excluye a propósito: es metadata de migraciones, no
+    dato de la operación.
+    """
+    tablas = [
+        tabla.name
+        for tabla in Base.metadata.sorted_tables
+        if tabla.name != "alembic_version"
+    ]
+
+    if not tablas:
+        return
+
+    print("\n🗑️  SEED_RESET activo: borrando todos los datos existentes...")
+    print(f"   Tablas: {', '.join(sorted(tablas))}")
+
+    # Una sola sentencia con todas las tablas: CASCADE resuelve las claves
+    # foráneas entre ellas sin tener que calcular el orden de borrado.
+    lista = ", ".join(f'"{nombre}"' for nombre in tablas)
+    await db.execute(text(f"TRUNCATE TABLE {lista} RESTART IDENTITY CASCADE"))
+    await db.commit()
+
+    print("   ✅ Base de datos vacía")
+
+
+async def crear_tipos_pausa(db: AsyncSession) -> None:
+    """Siembra el catálogo de pausas que consume el router de descanso."""
+    print("\n⏸️  Creando catálogo de tipos de pausa...")
+
+    for datos in TIPOS_PAUSA:
+        db.add(
+            TipoPausa(
+                id_tipo_pausa=datos["id"],
+                label=datos["label"],
+                duracion_max_min=datos["duracion_max_min"],
+                orden=datos["orden"],
+                activo=True,
+            )
+        )
+
+    await db.flush()
+    print(f"   ✅ {len(TIPOS_PAUSA)} tipos de pausa")
+
+
 async def bd_ya_tiene_datos(db: AsyncSession) -> bool:
     """True si ya existen empleados; evita resembrar y perder datos de dev."""
     try:
@@ -491,7 +601,8 @@ async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
     ]
     for carro, tecnico in zip(disponibles, tecnicos):
         db.add(EmpleadoCarro(id_empleado=tecnico.id_empleado, id_carro=carro.id_activo))
-        carro.estado_vehiculo = "asignado"
+        # Igual que arriba: el endpoint de asignación usa "en_uso".
+        carro.estado_vehiculo = "en_uso"
 
     # ── Herramientas cargadas en los vehículos ───────────────────────────────
     herramientas_libres = [
@@ -510,7 +621,11 @@ async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
                 comentario="Entregada en la asignación semanal de equipo.",
             )
         )
-        herramienta.estado = "asignada"
+        # "en_uso" es el estado que escribe POST /activos/carros/{id}/herramientas.
+        # El seed ponía "asignada", un cuarto valor que el frontend no sabe
+        # traducir: las herramientas sembradas salían con el badge en crudo y
+        # parecía que asignar una desde la app "no actualizaba" nada.
+        herramienta.estado = "en_uso"
 
     await db.flush()
 
@@ -603,6 +718,10 @@ async def crear_historial_asistencia(
                     id_asistencia=asistencia.id_asistencia,
                     hora_inicio=almuerzo_inicio.time(),
                     hora_fin=almuerzo_fin.time(),
+                    # El tipo tiene que ir: sin él la pantalla de Pausas
+                    # etiqueta la pausa como genérica y le aplica el límite
+                    # por defecto en vez del de almuerzo.
+                    tipo="almuerzo",
                 )
             )
             pausas += 1
@@ -619,6 +738,7 @@ async def crear_historial_asistencia(
                         hora_fin=(
                             tecnica_inicio + timedelta(minutes=random.randint(8, 15))
                         ).time(),
+                        tipo="tecnica",
                     )
                 )
                 pausas += 1
@@ -635,7 +755,10 @@ async def crear_ubicaciones(db: AsyncSession, tecnicos: list[Empleado]) -> None:
     """Últimas posiciones GPS de cada técnico, dispersas por Fraijanes."""
     print("\n📍 Registrando ubicaciones GPS...")
     total = 0
-    ahora = datetime.now()
+    # Hora local, no datetime.now(): en UTC estos puntos quedarían 6 horas en
+    # el futuro y el mapa seguiría mostrándolos por encima de la posición que
+    # el técnico acaba de reportar desde su teléfono.
+    ahora = ahora_local()
 
     for tecnico in tecnicos:
         for horas in (4, 2, 0):
@@ -667,6 +790,11 @@ def imprimir_resumen() -> None:
         print(f"  {datos['rol']:<11} {datos['correo']:<38} {datos['contrasena']}{marca}")
     print("\n  Las alertas no se siembran: se generan solas al abrir")
     print("  la pantalla de Alertas del supervisor.\n")
+    # El aviso solo aplica a la variable de entorno: el flag --reset es una
+    # ejecución puntual y no se va a repetir sola en el próximo arranque.
+    if os.getenv("SEED_RESET", "").strip().lower() in ("1", "true", "yes", "si", "sí"):
+        print("  ⚠️  SEED_RESET está activo. Vuelve a ponerlo en false para que")
+        print("     el próximo reinicio no borre estos datos.\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -678,19 +806,27 @@ async def seed() -> None:
     async with AsyncSessionLocal() as db:
         await verificar_postgis(db)
 
-    # 2. Si ya hay datos, salir sin tocar nada
+    # 2. Reset opcional: borra todo antes de sembrar
+    reset = reset_solicitado()
+    if reset:
+        async with AsyncSessionLocal() as db:
+            await resetear_base_de_datos(db)
+
+    # 3. Si ya hay datos (y no se pidió reset), salir sin tocar nada
     async with AsyncSessionLocal() as db:
         if await bd_ya_tiene_datos(db):
             result = await db.execute(text("SELECT COUNT(*) FROM empleado"))
             print(f"✅ La base de datos ya tiene {result.scalar()} empleados.")
             print("   Omitiendo seed para respetar datos existentes.")
-            print("   (Para resembrar desde cero: docker compose down -v && docker compose up)")
+            print("   (Para resembrar desde cero: SEED_RESET=true python seed.py)")
             await engine.dispose()
             return
 
-    # 3. BD vacía → sembrar el escenario completo
+    # 4. BD vacía → sembrar el escenario completo
     print("\n🌱 Base de datos vacía. Insertando datos de demostración...")
     async with AsyncSessionLocal() as db:
+        await crear_tipos_pausa(db)
+
         empleados = await crear_empleados(db)
         tecnicos = [e for e in empleados if e.rol == "tecnico" and e.estado == "activo"]
 

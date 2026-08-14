@@ -10,6 +10,9 @@ Verifica:
 Se ejecutan con: pytest tests/ -v
 """
 
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from jose import JWTError
 
@@ -17,7 +20,9 @@ from app.core.security import (
     create_access_token,
     decode_access_token,
     hash_password,
+    purgar_tokens_expirados,
     revoke_token,
+    token_esta_revocado,
     verify_password,
 )
 
@@ -77,12 +82,89 @@ def test_decode_token_invalido_lanza_error():
         decode_access_token("esto.no.es_un_jwt")
 
 
-# 3. REVOCACIÓN (LOGOUT)
+def test_token_incluye_jti_unico():
+    """Sin jti no hay forma de revocar un token concreto."""
+    payload_a = decode_access_token(create_access_token(subject=1, rol="admin"))
+    payload_b = decode_access_token(create_access_token(subject=1, rol="admin"))
 
-def test_token_revocado_no_es_valido():
-    """Después del logout, el token revocado debe ser rechazado."""
-    token = create_access_token(subject=7, rol="tecnico")
-    decode_access_token(token)  # antes de revocar: válido
-    revoke_token(token)
-    with pytest.raises(JWTError):
-        decode_access_token(token)
+    assert payload_a["jti"]
+    assert payload_a["jti"] != payload_b["jti"]
+
+
+# 3. REVOCACIÓN (LOGOUT)
+#
+# La revocación vive en la tabla token_revocado, así que la sesión se simula:
+# lo que se comprueba aquí es que se consulte e inserte por jti, no el
+# comportamiento de PostgreSQL.
+
+def _db(existe_jti=False):
+    resultado = MagicMock()
+    resultado.scalar_one_or_none.return_value = "jti-existente" if existe_jti else None
+    resultado.rowcount = 3
+
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=resultado)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    return db
+
+
+@pytest.mark.asyncio
+async def test_token_sin_revocar_pasa():
+    db = _db(existe_jti=False)
+    payload = decode_access_token(create_access_token(subject=7, rol="tecnico"))
+
+    assert await token_esta_revocado(db, payload) is False
+
+
+@pytest.mark.asyncio
+async def test_token_revocado_es_rechazado():
+    db = _db(existe_jti=True)
+    payload = decode_access_token(create_access_token(subject=7, rol="tecnico"))
+
+    assert await token_esta_revocado(db, payload) is True
+
+
+@pytest.mark.asyncio
+async def test_revocar_guarda_el_jti_y_su_expiracion():
+    db = _db(existe_jti=False)
+    payload = decode_access_token(create_access_token(subject=7, rol="tecnico"))
+
+    assert await revoke_token(db, payload) is True
+
+    fila = db.add.call_args.args[0]
+    assert fila.jti == payload["jti"]
+    assert fila.id_empleado == 7
+    # La fila deja de tener sentido cuando el token expira por su cuenta.
+    assert fila.expira > datetime.utcnow()
+
+
+@pytest.mark.asyncio
+async def test_revocar_dos_veces_no_duplica():
+    """El logout repetido con el mismo token no debe insertar otra fila."""
+    db = _db(existe_jti=True)
+    payload = decode_access_token(create_access_token(subject=7, rol="tecnico"))
+
+    assert await revoke_token(db, payload) is True
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_token_antiguo_sin_jti_no_se_puede_revocar():
+    """Los tokens emitidos antes del jti siguen valiendo hasta expirar."""
+    db = _db()
+
+    assert await revoke_token(db, {"sub": "7"}) is False
+    assert await token_esta_revocado(db, {"sub": "7"}) is False
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_purga_borra_los_tokens_ya_expirados():
+    """Sin purga la tabla de revocados solo crecería."""
+    db = _db()
+
+    assert await purgar_tokens_expirados(db) == 3
+
+    sql = str(db.execute.await_args.args[0])
+    assert "DELETE FROM token_revocado" in sql

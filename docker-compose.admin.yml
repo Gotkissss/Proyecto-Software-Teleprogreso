@@ -1,0 +1,34 @@
+# =============================================================================
+# docker-compose.admin.yml — Acceso directo a la base para administración
+# -----------------------------------------------------------------------------
+# En el compose normal la base de datos NO publica ningún puerto: no existe
+# forma de llegar a Postgres desde fuera del contenedor `backend`. Esa es la
+# postura por defecto y la que debe quedar activa el 99 % del tiempo.
+#
+# Cuando de verdad necesites abrir psql, DBeaver o pgAdmin contra la base,
+# levanta el proyecto añadiendo este archivo:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.admin.yml up -d
+#
+# Y para volver a cerrarla (recomendado en cuanto termines):
+#
+#   docker compose up -d
+#
+# El puerto se publica en 127.0.0.1 exclusivamente: sigue sin ser alcanzable
+# desde la red local ni desde internet, solo desde esta computadora. La
+# contraseña se sigue exigiendo (scram-sha-256), así que ni siquiera con el
+# puerto abierto se entra sin credenciales.
+#
+# Alternativa que NO requiere abrir nada y sirve para la mayoría de casos:
+#   docker compose exec db psql -U <usuario> -d <base>
+# =============================================================================
+services:
+  db:
+    # La red `datos` es `internal: true` y por eso bloquea la publicación de
+    # puertos. Al añadir la red pública, Docker puede enrutar 127.0.0.1:5433
+    # hacia el contenedor.
+    networks:
+      - datos
+      - publica
+    ports:
+      - "127.0.0.1:5433:5432"

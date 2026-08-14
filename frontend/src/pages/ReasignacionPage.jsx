@@ -4,17 +4,33 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Badge from '../components/ui/Badge'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
+import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
-import { getTareas, getTecnicosDisponibles, reasignarTarea } from '../api/tareaService'
+import {
+  LIMITE_TAREAS_FALLBACK,
+  getTareas,
+  getTecnicosDisponibles,
+  reasignarTarea,
+} from '../api/tareaService'
+import { describirVencimiento } from '../utils/vencimiento'
 import styles from './ReasignacionPage.module.css'
 
 
-const LIMITE_TAREAS = 3
+// Respaldo. El límite real lo manda el backend en `limite_tareas` de cada
+// técnico (backend/app/core/reglas.py). Esta pantalla lo tenía escrito a mano
+// como 3, así que tras subir la política a 5 marcaba técnicos como llenos
+// cuando todavía podían recibir trabajo.
+const LIMITE_TAREAS = LIMITE_TAREAS_FALLBACK
+
+/** Límite vigente para un técnico concreto. */
+const limiteDe = (tecnico) => tecnico?.limite_tareas ?? LIMITE_TAREAS
+
+/** True si el técnico ya no puede recibir más trabajo. */
+const alLimite = (tecnico) => (tecnico?.tareas_activas ?? 0) >= limiteDe(tecnico)
 
 // Estados en los que la tarea ya está cerrada: no se reasigna algo que
 // el técnico ya entregó (ni algo que se canceló).
@@ -22,6 +38,53 @@ const ESTADOS_CERRADOS = ['completado', 'cancelado']
 
 const estadoDe = (tarea) => tarea.estado_tarea ?? tarea.estado
 const estaCerrada = (tarea) => ESTADOS_CERRADOS.includes(estadoDe(tarea))
+
+const PRIORIDAD_LABEL = {
+  baja:    'Prioridad Baja',
+  media:   'Prioridad Media',
+  alta:    'Prioridad Alta',
+  urgente: 'Prioridad Urgente',
+}
+
+/**
+ * Color de la barra lateral de la tarjeta.
+ *
+ * Sigue al vencimiento y no a la prioridad: lo que hace que una tarea salte a
+ * la vista en esta pantalla es que se esté pasando de fecha. Una tarea urgente
+ * con una semana por delante no necesita gritar; una media que venció ayer sí.
+ */
+const acentoDe = (vencimiento) => {
+  if (!vencimiento) return 'neutro'
+  if (vencimiento.variant === 'danger') return 'critico'
+  if (vencimiento.variant === 'warning') return 'proximo'
+  return 'neutro'
+}
+
+// ── Iconos ───────────────────────────────────────────────────────────────────
+const IconPin = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+)
+const IconReloj = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 7 12 12 15 14" />
+  </svg>
+)
+const IconProgreso = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+    <polyline points="21 3 21 9 15 9" />
+  </svg>
+)
+const IconMas = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+)
 
 export default function ReasignacionPage() {
 
@@ -36,6 +99,9 @@ export default function ReasignacionPage() {
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null)
   const [tareaEditando, setTareaEditando] = useState(null)
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
+  // Ficha de solo lectura: se abre al hacer clic en la tarjeta, sin tener que
+  // entrar al modal de edición solo para consultar los datos.
+  const [tareaDetalle, setTareaDetalle] = useState(null)
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
@@ -80,9 +146,9 @@ export default function ReasignacionPage() {
     )
 
     // Validación client-side antes de llamar al backend
-    if (tecnicoSeleccionado?.tareas_activas >= LIMITE_TAREAS) {
+    if (alLimite(tecnicoSeleccionado)) {
       setErrorReasignacion(
-        `${tecnicoSeleccionado.nombre_completo} ya tiene ${tecnicoSeleccionado.tareas_activas} tareas activas. El límite es ${LIMITE_TAREAS}.`
+        `${tecnicoSeleccionado.nombre_completo} ya tiene ${tecnicoSeleccionado.tareas_activas} tareas activas. El límite es ${limiteDe(tecnicoSeleccionado)}.`
       )
 
       setGuardando(false)
@@ -173,7 +239,22 @@ export default function ReasignacionPage() {
     () => tareas.filter((t) => !estaCerrada(t)),
     [tareas]
   )
-  const totalCerradas = tareas.length - tareasActivas.length
+
+  // Se cuentan por separado y no como un total de "cerradas".
+  //
+  // El aviso decía "3 tareas ya cerradas... Ver tareas realizadas", pero
+  // sumaba completadas y canceladas, mientras que la pantalla de Realizadas
+  // solo muestra las completadas. Con los datos de ejemplo (2 completadas y 1
+  // cancelada) el supervisor leía 3, entraba, y encontraba 2 sin explicación.
+  const totalCompletadas = useMemo(
+    () => tareas.filter((t) => estadoDe(t) === 'completado').length,
+    [tareas]
+  )
+  const totalCanceladas = useMemo(
+    () => tareas.filter((t) => estadoDe(t) === 'cancelado').length,
+    [tareas]
+  )
+  const totalCerradas = totalCompletadas + totalCanceladas
 
   /** Técnico que ya tiene la tarea abierta en el modal. */
   const idTecnicoActual =
@@ -206,6 +287,16 @@ export default function ReasignacionPage() {
   return (
     <div className={styles.page}>
 
+      {/* Ficha de solo lectura. Desde aquí se puede saltar a editar, reasignar
+          o ver evidencias sin volver a la lista. */}
+      <ModalDetalleTarea
+        tarea={tareaDetalle}
+        onClose={() => setTareaDetalle(null)}
+        onEditar={(t) => { setTareaDetalle(null); setTareaEditando(t) }}
+        onReasignar={(t) => { setTareaDetalle(null); abrirPanel(t) }}
+        onVerEvidencias={(t) => { setTareaDetalle(null); setTareaEvidencias(t) }}
+      />
+
       {/* Modal de edición de una tarea existente */}
       <ModalEditarTarea
         open={Boolean(tareaEditando)}
@@ -234,7 +325,8 @@ export default function ReasignacionPage() {
           className={styles.nuevaTareaBtn}
           onClick={() => navigate('/supervisor/nueva-tarea')}
         >
-          + Nueva tarea
+          <IconMas />
+          <span>Nueva tarea</span>
         </button>
       </div>
 
@@ -242,16 +334,32 @@ export default function ReasignacionPage() {
           si no, parecería que las tareas cerradas se perdieron. */}
       {totalCerradas > 0 && (
         <p className={styles.cerradasNota}>
-          {totalCerradas} tarea{totalCerradas === 1 ? '' : 's'} ya cerrada
-          {totalCerradas === 1 ? '' : 's'} no aparece
-          {totalCerradas === 1 ? '' : 'n'} aquí.{' '}
-          <button
-            type="button"
-            className={styles.verRealizadasBtn}
-            onClick={() => navigate('/supervisor/historial-tareas')}
-          >
-            Ver tareas realizadas
-          </button>
+          {/* Cada cifra dice exactamente qué es y a dónde lleva. Las
+              canceladas no tienen pantalla propia, así que se nombran pero no
+              se enlazan: prometer un enlace que no existe es peor que no
+              mencionarlas. */}
+          {totalCompletadas > 0 && (
+            <>
+              {totalCompletadas} realizada{totalCompletadas === 1 ? '' : 's'}
+              {totalCanceladas > 0 && ` y ${totalCanceladas} cancelada${totalCanceladas === 1 ? '' : 's'}`}
+            </>
+          )}
+          {totalCompletadas === 0 && (
+            <>{totalCanceladas} cancelada{totalCanceladas === 1 ? '' : 's'}</>
+          )}
+          {' '}no aparece{totalCerradas === 1 ? '' : 'n'} aquí.
+          {totalCompletadas > 0 && (
+            <>
+              {' '}
+              <button
+                type="button"
+                className={styles.verRealizadasBtn}
+                onClick={() => navigate('/supervisor/historial-tareas')}
+              >
+                Ver tareas realizadas
+              </button>
+            </>
+          )}
         </p>
       )}
 
@@ -273,7 +381,8 @@ export default function ReasignacionPage() {
               className={styles.nuevaTareaBtn}
               onClick={() => navigate('/supervisor/nueva-tarea')}
             >
-              + Nueva tarea
+              <IconMas />
+              <span>Nueva tarea</span>
             </button>
           }
         />
@@ -281,33 +390,93 @@ export default function ReasignacionPage() {
         <ul className={styles.tareasList}>
           {tareasActivas.map((tarea) => {
             const id = tarea.id_tarea ?? tarea.id
+            const vencimiento = describirVencimiento(tarea)
+            const estado = estadoDe(tarea)
+            const prioridad = (tarea.prioridad ?? 'media').toLowerCase()
+            const enProgreso = estado === 'en_progreso'
 
             return (
-              <li key={id} className={styles.tareaItem}>
-                <div className={styles.tareaInfo}>
+              <li
+                key={id}
+                className={`${styles.tareaItem} ${styles[`acento_${acentoDe(vencimiento)}`]}`}
+              >
+                {/* Toda la zona de información abre la ficha. Los botones de
+                    la derecha detienen la propagación para que "Editar" no
+                    dispare además el detalle. */}
+                <div
+                  className={`${styles.tareaInfo} ${styles.tareaInfoClickable}`}
+                  role="button"
+                  tabIndex={0}
+                  title="Ver detalle de la tarea"
+                  onClick={() => setTareaDetalle(tarea)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setTareaDetalle(tarea)
+                    }
+                  }}
+                >
                   <span className={styles.tareaTitulo}>
                     {tarea.titulo}
                   </span>
 
-                  <span className={styles.tareaTecnico}>
+                  {/* Quién la lleva y dónde. El nombre va destacado porque es
+                      el dato por el que se busca al repartir trabajo. */}
+                  <span className={styles.tareaMeta}>
                     {/* El backend devuelve tecnico.nombre (nombre completo).
                         Antes se leía `nombre_completo`, que no existe, y todas
                         las tareas aparecían como "Sin asignar". */}
-                    {tarea.tecnico?.nombre ?? 'Sin asignar'}
+                    <span
+                      className={
+                        tarea.tecnico?.nombre ? styles.metaTecnico : styles.metaSinAsignar
+                      }
+                    >
+                      {tarea.tecnico?.nombre ?? 'Sin asignar'}
+                    </span>
+
+                    {tarea.direccion_servicio && (
+                      <>
+                        <span className={styles.metaSep} aria-hidden="true">·</span>
+                        <span className={styles.metaDireccion}>
+                          <IconPin />
+                          {tarea.direccion_servicio}
+                        </span>
+                      </>
+                    )}
+                  </span>
+
+                  {/* Fila de contexto: cuánto queda, qué tan urgente es y de
+                      qué va la tarea, todo a un golpe de vista. */}
+                  <span className={styles.tareaChips}>
+                    {/* Cuánto queda para la fecha límite, para no tener que
+                        calcularlo mentalmente a partir de una fecha suelta. */}
+                    {vencimiento && (
+                      <span
+                        className={`${styles.chip} ${styles[`chipPlazo_${vencimiento.variant}`]}`}
+                      >
+                        {vencimiento.texto}
+                      </span>
+                    )}
+
+                    <span className={`${styles.chip} ${styles[`chipPrioridad_${prioridad}`]}`}>
+                      {PRIORIDAD_LABEL[prioridad] ?? `Prioridad ${prioridad}`}
+                    </span>
+
+                    {tarea.descripcion && (
+                      <span className={styles.tareaDescripcion}>{tarea.descripcion}</span>
+                    )}
                   </span>
                 </div>
 
-                <div className={styles.tareaAcciones}>
-                  <Badge
-                    label={tarea.estado_tarea ?? tarea.estado}
-                    variant={
-                      (tarea.estado_tarea ?? tarea.estado) === 'en_progreso'
-                        ? 'info'
-                        : (tarea.estado_tarea ?? tarea.estado) === 'retrasado'
-                          ? 'danger'
-                          : 'warning'
-                    }
-                  />
+                <div className={styles.tareaAcciones} onClick={(e) => e.stopPropagation()}>
+                  <span
+                    className={`${styles.estadoPill} ${
+                      enProgreso ? styles.estadoProgreso : styles.estadoPendiente
+                    }`}
+                  >
+                    {enProgreso ? <IconProgreso /> : <IconReloj />}
+                    {estado}
+                  </span>
 
                   {tarea.total_incidencias > 0 && (
                     <button
@@ -381,7 +550,7 @@ export default function ReasignacionPage() {
           <option value="">Selecciona un técnico</option>
 
           {tecnicos.map((tec) => {
-            const alLimite = (tec.tareas_activas ?? 0) >= LIMITE_TAREAS
+            const tecAlLimite = alLimite(tec)
             // El técnico que ya la tiene se muestra marcado y bloqueado:
             // reasignar una tarea a quien ya la tiene no hace nada.
             const esElActual = tec.id === idTecnicoActual
@@ -390,7 +559,7 @@ export default function ReasignacionPage() {
               <option
                 key={tec.id}
                 value={tec.id}
-                disabled={alLimite || esElActual}
+                disabled={tecAlLimite || esElActual}
               >
                 {tec.nombre_completo}
                 {' — '}
@@ -399,7 +568,7 @@ export default function ReasignacionPage() {
                 {' '}activa
                 {tec.tareas_activas !== 1 ? 's' : ''}
                 {esElActual ? ' (ya tiene esta tarea)' : ''}
-                {!esElActual && alLimite ? ' (límite alcanzado)' : ''}
+                {!esElActual && tecAlLimite ? ' (límite alcanzado)' : ''}
               </option>
             )
           })}
@@ -409,7 +578,7 @@ export default function ReasignacionPage() {
             pasársela, y conviene decirlo en lugar de dejar un select inerte. */}
         {tecnicos.length > 0 &&
           tecnicos.every(
-            (t) => t.id === idTecnicoActual || (t.tareas_activas ?? 0) >= LIMITE_TAREAS
+            (t) => t.id === idTecnicoActual || alLimite(t)
           ) && (
             <p className={styles.limiteMsg}>
               ⚠ No hay ningún otro técnico disponible para recibir esta tarea.
@@ -422,15 +591,15 @@ export default function ReasignacionPage() {
 
           const activas = tec.tareas_activas ?? 0
 
-          if (activas >= LIMITE_TAREAS) {
+          if (alLimite(tec)) {
             return (
               <p className={styles.limiteMsg}>
-                ⚠ Este técnico ya alcanzó el límite de {LIMITE_TAREAS} tareas activas.
+                ⚠ Este técnico ya alcanzó el límite de {limiteDe(tec)} tareas activas.
               </p>
             )
           }
 
-          if (activas === LIMITE_TAREAS - 1) {
+          if (activas === limiteDe(tec) - 1) {
             return (
               <p className={styles.advertenciaMsg}>
                 ℹ Este técnico tendrá {activas + 1} tareas activas tras la reasignación.
@@ -455,8 +624,7 @@ export default function ReasignacionPage() {
             disabled={
               !tecnicoNuevo ||
               guardando ||
-              (tecnicos.find((t) => t.id === Number(tecnicoNuevo))?.tareas_activas ?? 0)
-                >= LIMITE_TAREAS
+              alLimite(tecnicos.find((t) => t.id === Number(tecnicoNuevo)))
             }
           >
             {guardando ? 'Guardando...' : 'Confirmar'}

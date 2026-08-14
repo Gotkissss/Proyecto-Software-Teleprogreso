@@ -6,8 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_empleado, require_supervisor
+from app.core.deps import (
+    get_current_empleado,
+    require_admin_supervisor_gerente,
+    require_supervisor,
+)
+from app.core.reglas import (
+    ESTADO_DISPONIBLE,
+    ESTADO_EMPLEADO_ACTIVO,
+    ESTADO_EN_USO,
+)
 from app.db.session import get_db
+from app.services.inventario import exigir_acceso_a_carro
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
 from app.models.empleado import Empleado, EmpleadoCarro
 from app.schemas.activo import (
@@ -35,11 +45,13 @@ router = APIRouter(prefix="/activos", tags=["Carros"])
 )
 async def get_carros(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
     Lista todos los vehiculos del inventario con su tecnico asignado (si aplica).
-    Roles: cualquier empleado autenticado.
+
+    Roles: admin, supervisor y gerente. Un tecnico ve su propio vehiculo en
+    GET /empleados/mi-equipo, no la flota entera.
     """
     result = await db.execute(
         select(Activo, Carro)
@@ -98,11 +110,11 @@ async def get_carros(
 async def get_carro_by_id(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
     Devuelve el detalle de un vehiculo por su id_activo.
-    Roles: cualquier empleado autenticado.
+    Roles: admin, supervisor y gerente.
     """
     result = await db.execute(
         select(Activo, Carro)
@@ -125,7 +137,7 @@ async def get_carro_by_id(
         .options(selectinload(EmpleadoCarro.empleado))
         .where(EmpleadoCarro.id_carro == id)
     )
-    asig = result_asig.scalar_one_or_none()
+    asig = result_asig.scalars().first()
 
     return CarroResponse(
         id_activo=activo.id_activo,
@@ -161,12 +173,15 @@ async def get_carro_by_id(
 async def get_herramientas_de_carro(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
     Lista todas las herramientas actualmente asignadas al vehiculo indicado.
     Incluye datos de la tabla CarroHerramienta (fecha_asignacion, estado_entrega, comentario).
-    Roles: cualquier empleado autenticado.
+
+    Roles: admin, supervisor y gerente sobre cualquier vehiculo. Un tecnico
+    solo sobre el suyo: es la unica parte del inventario que le corresponde
+    ver, porque son las herramientas que lleva encima.
     """
     # Verificar que el carro existe
     result_carro = await db.execute(
@@ -179,6 +194,8 @@ async def get_herramientas_de_carro(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontro ningun vehiculo con id={id}.",
         )
+
+    await exigir_acceso_a_carro(db, current_user, id)
 
     # Join CarroHerramienta → Herramienta → Activo
     result = await db.execute(
@@ -257,7 +274,7 @@ async def asignar_herramienta_a_carro(
 
     herramienta, activo = row_herr
 
-    if herramienta.estado != "disponible":
+    if herramienta.estado != ESTADO_DISPONIBLE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -291,7 +308,7 @@ async def asignar_herramienta_a_carro(
     db.add(nueva_asignacion)
 
     # 5. Marcar herramienta como en uso
-    herramienta.estado = "en_uso"
+    herramienta.estado = ESTADO_EN_USO
 
     await db.flush()
 
@@ -347,16 +364,28 @@ async def liberar_herramienta_de_carro(
             ),
         )
 
-    # Liberar la herramienta (vuelve a disponible)
+    # Eliminar la relacion
+    await db.delete(relacion)
+    await db.flush()
+
+    # Liberar la herramienta solo si ya no queda en ningun otro vehiculo.
+    #
+    # Antes se ponia en 'disponible' sin mirar: si por lo que fuera la
+    # herramienta figuraba en dos vehiculos, quitarla de uno la anunciaba como
+    # libre mientras seguia cargada en el otro.
+    result_otras = await db.execute(
+        select(CarroHerramienta).where(
+            CarroHerramienta.id_herramienta == id_h,
+        )
+    )
+    sigue_asignada = result_otras.scalars().first() is not None
+
     result_herr = await db.execute(
         select(Herramienta).where(Herramienta.id_activo == id_h)
     )
     herramienta = result_herr.scalar_one_or_none()
-    if herramienta:
-        herramienta.estado = "disponible"
-
-    # Eliminar la relacion
-    await db.delete(relacion)
+    if herramienta and not sigue_asignada:
+        herramienta.estado = ESTADO_DISPONIBLE
 
     return {
         "detail": f"Herramienta id={id_h} liberada del vehiculo id={id} correctamente.",
@@ -390,8 +419,9 @@ async def asignar_tecnico_a_carro(
     3. Un tecnico solo puede tener un vehiculo asignado a la vez (1 tecnico = 1 carro).
     4. Un vehiculo solo puede tener un tecnico asignado a la vez.
 
-    Si el vehiculo ya tiene tecnico asignado, se reemplaza la asignacion anterior
-    (el tecnico anterior queda liberado automaticamente).
+    Si el vehiculo ya tiene tecnico asignado se devuelve 400: hay que liberar
+    la asignacion primero. Antes se reemplazaba en silencio, asi que reasignar
+    un vehiculo dejaba a otro tecnico sin transporte sin ningun aviso.
 
     Roles: admin, supervisor.
     """
@@ -411,7 +441,7 @@ async def asignar_tecnico_a_carro(
 
     activo_carro, carro = row_carro
 
-    if carro.estado_vehiculo != "disponible":
+    if carro.estado_vehiculo != ESTADO_DISPONIBLE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -434,7 +464,7 @@ async def asignar_tecnico_a_carro(
             detail=f"No se encontro ningun empleado con id={body.id_empleado}.",
         )
 
-    if empleado.estado != "activo":
+    if empleado.estado != ESTADO_EMPLEADO_ACTIVO:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -451,7 +481,7 @@ async def asignar_tecnico_a_carro(
             EmpleadoCarro.id_empleado == body.id_empleado
         )
     )
-    asig_existente_tecnico = result_tecnico_carro.scalar_one_or_none()
+    asig_existente_tecnico = result_tecnico_carro.scalars().first()
 
     if asig_existente_tecnico:
         # Si ya esta asignado al mismo carro, no hay nada que hacer
@@ -474,17 +504,26 @@ async def asignar_tecnico_a_carro(
             ),
         )
 
-    # 4. Verificar si el carro ya tiene tecnico asignado
-    # Si lo tiene, liberar la asignacion anterior
+    # 4. Verificar si el carro ya tiene tecnico asignado.
+    #
+    # Antes se borraba la asignacion anterior en silencio: quien reasignaba un
+    # vehiculo dejaba a otro tecnico sin transporte sin enterarse. Ahora es un
+    # error explicito, coherente con la regla "un vehiculo = un tecnico" y con
+    # el paso 3, que ya rechaza el caso simetrico.
     result_carro_tecnico = await db.execute(
         select(EmpleadoCarro).where(EmpleadoCarro.id_carro == id)
     )
-    asig_anterior = result_carro_tecnico.scalar_one_or_none()
+    asig_anterior = result_carro_tecnico.scalars().first()
 
     if asig_anterior:
-        # Eliminar asignacion anterior (reemplazo)
-        await db.delete(asig_anterior)
-        await db.flush()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"El vehiculo '{activo_carro.nombre_activo}' ya tiene asignado "
+                f"al empleado id={asig_anterior.id_empleado}. Libera esa "
+                "asignacion antes de asignarlo a otro tecnico."
+            ),
+        )
 
     # 5. Crear nueva asignacion
     nueva_asignacion = EmpleadoCarro(
@@ -494,7 +533,7 @@ async def asignar_tecnico_a_carro(
     db.add(nueva_asignacion)
 
     # 6. Actualizar estado del vehiculo a 'en_uso'
-    carro.estado_vehiculo = "en_uso"
+    carro.estado_vehiculo = ESTADO_EN_USO
 
     await db.flush()
 
@@ -546,7 +585,7 @@ async def liberar_asignacion_tecnico(
         .options(selectinload(EmpleadoCarro.empleado))
         .where(EmpleadoCarro.id_carro == id)
     )
-    asignacion = result_asig.scalar_one_or_none()
+    asignacion = result_asig.scalars().first()
 
     if not asignacion:
         raise HTTPException(
@@ -564,7 +603,7 @@ async def liberar_asignacion_tecnico(
     await db.delete(asignacion)
 
     # Vehiculo vuelve a disponible
-    carro.estado_vehiculo = "disponible"
+    carro.estado_vehiculo = ESTADO_DISPONIBLE
 
     return {
         "detail": f"Tecnico '{nombre_empleado}' liberado del vehiculo id={id} correctamente.",

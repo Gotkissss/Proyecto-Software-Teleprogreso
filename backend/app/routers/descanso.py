@@ -37,36 +37,15 @@ from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado
 from app.services.asistencia import segundos_entre
+from app.services.pausas import (
+    Catalogo,
+    cargar_catalogo,
+    duracion_max_min,
+    label,
+    tipo_valido,
+)
 
 router = APIRouter(prefix="/descanso", tags=["Descanso"])
-
-
-# ─── Configuración de tipos de pausa ─────────────────────────────────────────
-# Vive aquí, en un solo sitio, porque la usan tres endpoints: el catálogo que
-# consume la UI, la validación al iniciar y el etiquetado del historial.
-
-TIPOS_PAUSA: dict[str, dict] = {
-    "almuerzo": {"label": "Pausa de Almuerzo",       "duracion_max_min": 60},
-    "tecnica":  {"label": "Pausa Técnica (Soporte)", "duracion_max_min": 15},
-    "personal": {"label": "Pausa Personal",          "duracion_max_min": 10},
-}
-
-TIPO_POR_DEFECTO = "personal"
-
-
-def _tipo_valido(tipo: Optional[str]) -> str:
-    """Normaliza el tipo recibido; cae al genérico si viene vacío o desconocido."""
-    if tipo in TIPOS_PAUSA:
-        return tipo
-    return TIPO_POR_DEFECTO
-
-
-def _label(tipo: Optional[str]) -> str:
-    return TIPOS_PAUSA.get(tipo or "", {}).get("label", "Pausa")
-
-
-def _duracion_max_min(tipo: Optional[str]) -> int:
-    return TIPOS_PAUSA.get(tipo or "", {}).get("duracion_max_min", 15)
 
 
 class DescansoIniciar(BaseModel):
@@ -83,23 +62,26 @@ class DescansoIniciar(BaseModel):
     )
 
 
-def _serializar_descanso(descanso: Descanso, ahora: time) -> dict:
+def _serializar_descanso(descanso: Descanso, ahora: time, catalogo: Catalogo) -> dict:
     """
     Convierte un Descanso en el objeto que consume la pantalla de Pausas.
 
     Para una pausa en curso, `duracion_segundos` se calcula contra la hora
     actual: así el cronómetro del navegador arranca en el valor real que lleva
     la pausa en lugar de en cero.
+
+    El catálogo llega ya cargado desde el endpoint: serializar en bucle las
+    pausas del día haría una consulta por pausa si se leyera aquí dentro.
     """
     en_curso = descanso.hora_fin is None
     referencia = ahora if en_curso else descanso.hora_fin
     transcurridos = segundos_entre(descanso.hora_inicio, referencia)
-    maximo = _duracion_max_min(descanso.tipo) * 60
+    maximo = duracion_max_min(catalogo, descanso.tipo) * 60
 
     return {
         "id_descanso":        descanso.id_descanso,
         "tipo":               descanso.tipo,
-        "label":              _label(descanso.tipo),
+        "label":              label(catalogo, descanso.tipo),
         "hora_inicio":        descanso.hora_inicio.strftime("%H:%M:%S"),
         "hora_fin":           descanso.hora_fin.strftime("%H:%M:%S") if descanso.hora_fin else None,
         "duracion_segundos":  transcurridos,
@@ -140,26 +122,39 @@ async def _descanso_activo(db: AsyncSession, id_asistencia: int) -> Optional[Des
 
 
 # ─── GET /descanso/tipos ─────────────────────────────────────────────────────
-# Configuración estática de los tipos de pausa según normativa de Teleprogreso.
 
 @router.get(
     "/tipos",
     summary="Listar tipos de pausa disponibles",
     status_code=status.HTTP_200_OK,
 )
-async def get_tipos_pausa():
+async def get_tipos_pausa(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
     """
-    Retorna la lista de tipos de pausa permitidos según la normativa operativa.
-    Estos valores son estáticos: no vienen de la BD.
+    Retorna la lista de tipos de pausa permitidos según la normativa operativa,
+    leída de la tabla `tipo_pausa`.
+
+    Requiere sesión iniciada. Era el único endpoint que consultaba la base sin
+    pedir token: cualquiera desde internet podía hacer que el backend abriera
+    una conexión y ejecutara una consulta, sin identificarse. El frontend ya lo
+    llamaba con el token puesto (lo añade el interceptor de api/client.js), así
+    que la aplicación no nota el cambio.
 
     Campos:
       - id:               identificador interno usado al iniciar la pausa
       - label:            nombre visible en la UI
       - duracion_max_min: duración máxima permitida en minutos
     """
+    catalogo = await cargar_catalogo(db)
     return [
-        {"id": tipo_id, **config}
-        for tipo_id, config in TIPOS_PAUSA.items()
+        {
+            "id": tipo_id,
+            "label": config["label"],
+            "duracion_max_min": config["duracion_max_min"],
+        }
+        for tipo_id, config in catalogo.items()
     ]
 
 
@@ -191,7 +186,8 @@ async def iniciar_descanso(
     - 401 si el token es invalido o expirado.
     - 403 si la cuenta está inactiva.
     """
-    tipo = _tipo_valido(data.tipo if data else None)
+    catalogo = await cargar_catalogo(db)
+    tipo = tipo_valido(catalogo, data.tipo if data else None)
 
     # 1. Verificar que el empleado tenga una jornada activa
     jornada = await _jornada_activa(db, current_user.id_empleado)
@@ -227,7 +223,7 @@ async def iniciar_descanso(
     if result_mismo_tipo.scalars().first() is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya usaste tu '{_label(tipo)}' en esta jornada.",
+            detail=f"Ya usaste tu '{label(catalogo, tipo)}' en esta jornada.",
         )
 
     # 4. Crear el nuevo descanso
@@ -247,8 +243,8 @@ async def iniciar_descanso(
         "id_asistencia": jornada.id_asistencia,
         "empleado": f"{current_user.nombre} {current_user.apellido}",
         "tipo": tipo,
-        "label": _label(tipo),
-        "duracion_max_seg": _duracion_max_min(tipo) * 60,
+        "label": label(catalogo, tipo),
+        "duracion_max_seg": duracion_max_min(catalogo, tipo) * 60,
         "hora_inicio": now.time().strftime("%H:%M:%S"),
     }
 
@@ -304,14 +300,27 @@ async def finalizar_descanso(
     descanso_activo.hora_fin = now.time()
     await db.flush()
 
+    catalogo = await cargar_catalogo(db)
+
+    # La duración real se registra tal cual, sin recortarla al máximo permitido:
+    # falsear el dato dejaría al supervisor sin forma de ver que la pausa se
+    # excedió, que es justo lo que necesita saber. Lo que sí se devuelve es el
+    # exceso ya calculado, para que la pantalla y el historial puedan marcarlo.
+    duracion_segundos = segundos_entre(descanso_activo.hora_inicio, now.time())
+    maximo_segundos = duracion_max_min(catalogo, descanso_activo.tipo) * 60
+    exceso = max(0, duracion_segundos - maximo_segundos)
+
     return {
         "message": "Descanso finalizado correctamente",
         "id_descanso": descanso_activo.id_descanso,
         "tipo": descanso_activo.tipo,
-        "label": _label(descanso_activo.tipo),
+        "label": label(catalogo, descanso_activo.tipo),
         "hora_inicio": descanso_activo.hora_inicio.strftime("%H:%M:%S"),
         "hora_fin": now.time().strftime("%H:%M:%S"),
-        "duracion_segundos": segundos_entre(descanso_activo.hora_inicio, now.time()),
+        "duracion_segundos": duracion_segundos,
+        "duracion_max_seg": maximo_segundos,
+        "excedida": exceso > 0,
+        "segundos_excedidos": exceso,
     }
 
 
@@ -340,11 +349,12 @@ async def get_descanso_activo(
 
     descanso = await _descanso_activo(db, jornada.id_asistencia)
     ahora = hora_local()
+    catalogo = await cargar_catalogo(db)
 
     return {
         "jornada_activa": True,
         "id_asistencia": jornada.id_asistencia,
-        "pausa_activa": _serializar_descanso(descanso, ahora) if descanso else None,
+        "pausa_activa": _serializar_descanso(descanso, ahora, catalogo) if descanso else None,
     }
 
 
@@ -399,7 +409,8 @@ async def get_descansos_hoy(
         }
 
     descansos = sorted(jornada.descansos, key=lambda d: d.hora_inicio)
-    serializados = [_serializar_descanso(d, ahora) for d in descansos]
+    catalogo = await cargar_catalogo(db)
+    serializados = [_serializar_descanso(d, ahora, catalogo) for d in descansos]
     pausa_activa = next((d for d in serializados if d["en_curso"]), None)
 
     segundos_en_pausa = sum(d["duracion_segundos"] for d in serializados)

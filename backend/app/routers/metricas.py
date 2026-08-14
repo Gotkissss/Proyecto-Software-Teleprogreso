@@ -21,6 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.reglas import (
+    ESTADOS_TAREA_ACTIVOS,
+    ESTADO_EMPLEADO_ACTIVO,
+    LIMITE_TAREAS_ACTIVAS,
+    ROL_TECNICO,
+)
 from app.db.session import get_db
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado, EmpleadoTarea
@@ -28,8 +34,9 @@ from app.models.tarea import Tarea
 
 router = APIRouter(tags=["Métricas"])
 
-# Estados que cuentan como "tareas activas" para el límite de carga
-ESTADOS_ACTIVOS = ("pendiente", "en_progreso")
+# Antes este módulo tenía su propia copia del límite de carga y de la lista de
+# estados activos. Ahora se leen de app/core/reglas.py, que es la única fuente.
+ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
 
 
 # ─── GET /metricas/supervisor ─────────────────────────────────────────────────
@@ -47,12 +54,16 @@ async def get_metricas_supervisor(
     """
     Devuelve las métricas operativas del día actual:
 
-    - **tecnicos_activos**: técnicos que tienen una jornada abierta hoy
-      (registro de asistencia con hora_entrada y sin hora_salida).
-    - **tareas_completadas**: tareas con estado 'completado' y fecha_inicio = hoy.
+    - **tecnicos_en_jornada**: técnicos con la jornada abierta ahora mismo
+      (entrada marcada hoy y sin salida).
+    - **tecnicos_total**: técnicos activos en plantilla. Se devuelve para que
+      el panel pueda mostrar "2 de 5": antes solo se enviaba el primero y el
+      número parecía roto al lado de la lista de técnicos, que muestra a todos.
+    - **tareas_completadas_hoy**: tareas cerradas hoy (por `fecha_completado`).
+    - **tareas_completadas_total**: histórico completo de cerradas.
     - **tareas_pendientes**: tareas en estado 'pendiente'.
-    - **tareas_retrasadas**: tareas en estado 'en_progreso' con fecha_finalizacion
-      anterior a hoy (debían completarse antes).
+    - **tareas_retrasadas**: tareas pendientes o en progreso cuya
+      fecha_finalizacion ya pasó.
 
     Roles: admin | supervisor | gerente.
     """
@@ -61,33 +72,53 @@ async def get_metricas_supervisor(
     # ── 1. Técnicos con jornada activa hoy ──────────────────────────────────
     # Un técnico está "activo" si tiene asistencia de hoy con hora_entrada
     # y sin hora_salida aún.
+    #
+    # Se cuentan EMPLEADOS DISTINTOS, no filas de asistencia. Antes esto era
+    # `count(Asistencia.id_asistencia)`: un técnico con dos jornadas abiertas
+    # el mismo día se contaba dos veces y el panel llegaba a mostrar cosas como
+    # "6 de 5 técnicos en jornada".
     result_tecnicos = await db.execute(
-        select(func.count(Asistencia.id_asistencia))
+        select(func.count(func.distinct(Asistencia.id_empleado)))
         .join(Empleado, Empleado.id_empleado == Asistencia.id_empleado)
         .where(
             Asistencia.fecha == hoy,
             Asistencia.hora_entrada.isnot(None),
             Asistencia.hora_salida.is_(None),
-            Empleado.rol == "tecnico",
-            Empleado.estado == "activo",
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
         )
     )
-    tecnicos_activos: int = result_tecnicos.scalar() or 0
+    tecnicos_en_jornada: int = result_tecnicos.scalar() or 0
+
+    # Plantilla total de técnicos, para poder mostrar "2 de 5" en el panel.
+    result_plantilla = await db.execute(
+        select(func.count(Empleado.id_empleado)).where(
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+        )
+    )
+    tecnicos_total: int = result_plantilla.scalar() or 0
 
     # ── 2. Tareas completadas ────────────────────────────────────────────────
-    # Contamos tareas cuyo estado es 'completado' y fueron iniciadas hoy.
-    # Si fecha_inicio puede ser NULL para completadas antiguas, contamos
-    # todas las completadas para no perder datos.
-    result_completadas = await db.execute(
+    # Se separan "hoy" e histórico. Antes esta consulta no filtraba nada (el
+    # WHERE quedó vacío entre comentarios) y devolvía el histórico completo
+    # bajo la etiqueta de métrica del día, así que el panel decía "2 tareas
+    # completadas" aunque ninguna se hubiera cerrado hoy.
+    result_completadas_hoy = await db.execute(
         select(func.count(Tarea.id_tarea)).where(
             Tarea.estado_tarea == "completado",
-            # Solo las completadas del día (fecha_inicio = hoy)
-            # Si no tienen fecha_inicio usamos fecha_asignacion como fallback.
-            # Para no excluir tareas sin fecha, incluimos todas las 'completado'.
-            # El supervisor puede filtrar por fecha desde el frontend si lo desea.
+            Tarea.fecha_completado.is_not(None),
+            func.date(Tarea.fecha_completado) == hoy,
         )
     )
-    tareas_completadas: int = result_completadas.scalar() or 0
+    tareas_completadas_hoy: int = result_completadas_hoy.scalar() or 0
+
+    result_completadas_total = await db.execute(
+        select(func.count(Tarea.id_tarea)).where(
+            Tarea.estado_tarea == "completado",
+        )
+    )
+    tareas_completadas_total: int = result_completadas_total.scalar() or 0
 
     # ── 3. Tareas pendientes ─────────────────────────────────────────────────
     result_pendientes = await db.execute(
@@ -110,10 +141,12 @@ async def get_metricas_supervisor(
     tareas_retrasadas: int = result_retrasadas.scalar() or 0
 
     return {
-        "tecnicos_activos":   tecnicos_activos,
-        "tareas_completadas": tareas_completadas,
-        "tareas_pendientes":  tareas_pendientes,
-        "tareas_retrasadas":  tareas_retrasadas,
+        "tecnicos_en_jornada":      tecnicos_en_jornada,
+        "tecnicos_total":           tecnicos_total,
+        "tareas_completadas_hoy":   tareas_completadas_hoy,
+        "tareas_completadas_total": tareas_completadas_total,
+        "tareas_pendientes":        tareas_pendientes,
+        "tareas_retrasadas":        tareas_retrasadas,
     }
 
 
@@ -144,7 +177,8 @@ async def get_tecnicos_disponibles(
         "correo": "tecnico@teleprogreso.com",
         "telefono": "5550-0002",
         "tareas_activas": 2,
-        "disponible": true        // false si tareas_activas >= 3
+        "disponible": true,       // false si tareas_activas >= limite_tareas
+        "limite_tareas": 5        // política vigente, para no duplicarla en la UI
       },
       ...
     ]
@@ -155,13 +189,17 @@ async def get_tecnicos_disponibles(
 
     Roles: admin | supervisor.
     """
-    LIMITE = 3
+    # Fuente única del límite (app/core/reglas.py). Además se devuelve dentro
+    # de cada elemento como `limite_tareas`, para que el frontend no tenga que
+    # guardar su propia copia del número: tenía dos, y al subir el tope se
+    # habrían quedado desfasadas marcando técnicos como llenos sin estarlo.
+    LIMITE = LIMITE_TAREAS_ACTIVAS
 
     # Traer todos los técnicos activos
     result_tecnicos = await db.execute(
         select(Empleado).where(
-            Empleado.rol == "tecnico",
-            Empleado.estado == "activo",
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
         ).order_by(Empleado.nombre, Empleado.apellido)
     )
     tecnicos = result_tecnicos.scalars().all()
@@ -192,6 +230,21 @@ async def get_tecnicos_disponibles(
         for row in result_conteos.all()
     }
 
+    # Asistencia de hoy. El panel mostraba a todos los técnicos con la etiqueta
+    # "activo", que en realidad era el estado de su cuenta, no el de su
+    # jornada: un técnico que no había marcado entrada salía igual que uno
+    # trabajando, y el número de "técnicos activos" no cuadraba con la lista.
+    result_jornadas = await db.execute(
+        select(Asistencia.id_empleado, Asistencia.hora_salida).where(
+            Asistencia.id_empleado.in_(ids_tecnicos),
+            Asistencia.fecha == hoy_local(),
+        )
+    )
+    jornadas: dict[int, bool] = {}
+    for id_empleado, hora_salida in result_jornadas.all():
+        # Si hay varias jornadas del día, basta con que una siga abierta.
+        jornadas[id_empleado] = jornadas.get(id_empleado, False) or hora_salida is None
+
     return [
         {
             "id_empleado":    tec.id_empleado,
@@ -202,6 +255,11 @@ async def get_tecnicos_disponibles(
             "telefono":       tec.telefono,
             "tareas_activas": conteos.get(tec.id_empleado, 0),
             "disponible":     conteos.get(tec.id_empleado, 0) < LIMITE,
+            "limite_tareas":  LIMITE,
+            # Marcó entrada hoy (haya salido o no).
+            "marco_entrada":  tec.id_empleado in jornadas,
+            # Está trabajando ahora mismo: entrada marcada y sin salida.
+            "en_jornada":     jornadas.get(tec.id_empleado, False),
         }
         for tec in tecnicos
     ]

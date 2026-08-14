@@ -10,8 +10,10 @@
  * Los totales del encabezado corresponden a todo el rango filtrado, no solo a
  * la página visible: los envía el backend en el bloque `totales`.
  *
- * Componente reutilizable: se usa tanto en la ruta standalone
- * (/supervisor/asistencia) como en el tab "Historial" de EmpleadosPage.
+ * Único punto de entrada al historial: el tab "Historial de asistencia" de
+ * EmpleadosPage. La ruta suelta /supervisor/asistencia se eliminó (ahora
+ * redirige aquí) porque tener dos pantallas para la misma tabla obligaba al
+ * supervisor a elegir entre puertas equivalentes.
  * `showHeader` permite ocultar el título cuando ya lo da el contenedor (tab).
  * ---------------------------------------------------------------------------
  */

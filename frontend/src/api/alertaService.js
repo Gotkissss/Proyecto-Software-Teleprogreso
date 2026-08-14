@@ -15,6 +15,10 @@ export const ESTADO_ALERTA = {
   PENDIENTE: 'pendiente',
   ATENDIDA: 'atendida',
   DESCARTADA: 'descartada',
+  // La pone el backend solo, cuando la causa del aviso desaparece (la tarea
+  // se cerró, el material se repuso, el técnico marcó entrada). No es una
+  // acción del supervisor: por eso no hay botón que la produzca.
+  RESUELTA: 'resuelta',
 }
 
 /** Tipos de alerta que puede generar el backend (services/alertas.py) */
@@ -81,10 +85,8 @@ export async function getMetricas() {
   return data
 }
 
-/**
- * Obtiene la lista de técnicos con su estado actual.
- */
-export async function getTecnicos() {
-  const { data } = await apiClient.get('/empleados?rol=tecnico')
-  return data
-}
+// Aquí vivía `getTecnicos()`, que pedía la lista a `/empleados?rol=tecnico`
+// (gestión de personal, restringida a admin y supervisor). No la llamaba nadie
+// y era una trampa para el siguiente que necesitara técnicos: lo correcto es
+// `getTecnicosDisponibles()` de api/tareaService, que además trae la carga de
+// trabajo de cada uno y devuelve lo mismo en todas las pantallas.

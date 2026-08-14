@@ -22,24 +22,31 @@ Importate:
   - El admin no puede desactivarse a si mismo (guard en PATCH /{id}/estado).
 """
 
+import logging
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_empleado, require_admin
+from app.core.deps import get_current_empleado, require_admin, require_supervisor
+from app.core.reglas import ESTADO_EMPLEADO_ACTIVO, ROL_ADMIN, ROLES_VALIDOS
 from app.core.security import hash_password
 from app.db.session import get_db
+from app.services.empleados import desvincular_recursos
 from app.models.empleado import Empleado, EmpleadoCarro
 from app.models.activo import Carro
 from app.schemas.empleado import (
     EmpleadoCreate,
+    EmpleadoEstadoResponse,
     EmpleadoEstadoUpdate,
     EmpleadoListResponse,
+    EmpleadoPasswordUpdate,
     EmpleadoResponse,
     EmpleadoUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/empleados", tags=["Empleados"])
 
@@ -55,8 +62,13 @@ router = APIRouter(prefix="/empleados", tags=["Empleados"])
 )
 async def get_empleados( # Endpoint para listar empleados con filtros opcionales.
     db: Annotated[AsyncSession, Depends(get_db)],
-    # Solo el admin puede ver la lista completa de empleados
-    _current_user: Annotated[Empleado, Depends(require_admin)],
+    # Leer la lista: admin y supervisor.
+    #
+    # Era solo-admin. Se abre al supervisor porque ahora también puede
+    # restablecer contraseñas (PATCH /{id}/contrasena) y sin ver la lista no
+    # tiene forma de llegar al empleado. Crear, editar y activar/desactivar
+    # siguen siendo exclusivos del admin.
+    _current_user: Annotated[Empleado, Depends(require_supervisor)],
     # Filtros opcionales
     rol: Optional[str] = Query(
         None,
@@ -81,7 +93,7 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
 
     # Aplicar filtro por rol si se proporciono
     if rol:
-        roles_validos = {"admin", "supervisor", "tecnico", "gerente"}
+        roles_validos = set(ROLES_VALIDOS)
         if rol not in roles_validos:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -122,6 +134,19 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
     result = await db.execute(query)
     rows = result.all()  # lista de (Empleado, placa | None)
 
+    # El LEFT JOIN a empleado_carro devuelve una fila por vehículo asignado.
+    # La API impide asignar dos vehículos al mismo empleado, pero la tabla sí
+    # lo admite (su índice por empleado no es único), y si alguna vez ocurriera
+    # el empleado saldría duplicado en la lista y `total` contaría de más. Se
+    # deduplica por id, quedándose con el primer vehículo encontrado.
+    vistos: set[int] = set()
+    unicos = []
+    for emp, placa in rows:
+        if emp.id_empleado in vistos:
+            continue
+        vistos.add(emp.id_empleado)
+        unicos.append((emp, placa))
+
     # Construir respuestas incluyendo placa_vehiculo del JOIN
     empleados_response = [
         EmpleadoResponse(
@@ -137,7 +162,7 @@ async def get_empleados( # Endpoint para listar empleados con filtros opcionales
             ultimo_acceso=emp.ultimo_acceso,
             placa_vehiculo=placa,
         )
-        for emp, placa in rows
+        for emp, placa in unicos
     ]
 
     return EmpleadoListResponse(
@@ -219,7 +244,7 @@ async def update_empleado(
     id: int,
     data: EmpleadoUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _current_user: Annotated[Empleado, Depends(require_admin)],
+    current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     #Buscar el empleado que se quiere editar
     result = await db.execute(
@@ -232,6 +257,40 @@ async def update_empleado(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontró ningún empleado con id={id}.",
         )
+
+    # ── Protección del rol admin ────────────────────────────────────────────
+    # Ya existía un guard para que un admin no se desactivara a sí mismo
+    # (PATCH /{id}/estado), pero no para el ROL: bastaba con quitarse el rol
+    # admin, o quitárselo al último que quedaba, para dejar el sistema sin
+    # nadie que pueda administrarlo. Y como la creación de empleados también
+    # exige ser admin, no había forma de recuperarse desde la aplicación.
+    if data.rol is not None and data.rol != empleado.rol:
+        if id == current_user.id_empleado:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "No puedes cambiar tu propio rol. "
+                    "Pide a otro administrador que lo haga."
+                ),
+            )
+
+        if empleado.rol == ROL_ADMIN:
+            result_admins = await db.execute(
+                select(func.count(Empleado.id_empleado)).where(
+                    Empleado.rol == ROL_ADMIN,
+                    Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+                    Empleado.id_empleado != id,
+                )
+            )
+            if (result_admins.scalar() or 0) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "No se puede quitar el rol de administrador: es el "
+                        "único admin activo que queda. Asigna primero el rol "
+                        "'admin' a otro empleado."
+                    ),
+                )
 
     # Si se esta cambiando el correo, verificar que no este en uso
     if data.correo and data.correo != empleado.correo:
@@ -263,7 +322,7 @@ async def update_empleado(
 
 @router.patch(
     "/{id}/estado",
-    response_model=EmpleadoResponse,
+    response_model=EmpleadoEstadoResponse,
     summary="Activar o desactivar la cuenta de un empleado",
     status_code=status.HTTP_200_OK,
 )
@@ -307,10 +366,123 @@ async def update_estado_empleado(
             ),
         )
 
+    # Mismo razonamiento que en PATCH /{id}: desactivar al último admin activo
+    # deja el sistema sin nadie que pueda administrarlo, y como crear empleados
+    # también exige ser admin, no habría forma de recuperarse desde la app.
+    if empleado.rol == ROL_ADMIN and data.estado != ESTADO_EMPLEADO_ACTIVO:
+        result_admins = await db.execute(
+            select(func.count(Empleado.id_empleado)).where(
+                Empleado.rol == ROL_ADMIN,
+                Empleado.estado == ESTADO_EMPLEADO_ACTIVO,
+                Empleado.id_empleado != id,
+            )
+        )
+        if (result_admins.scalar() or 0) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "No se puede desactivar: es el único administrador activo "
+                    "que queda. Activa o crea otro admin antes de desactivar "
+                    "este."
+                ),
+            )
+
     # Aplicar el cambio de estado
     empleado.estado = data.estado
 
-    return empleado
+    # Al desactivar hay que soltar lo que el empleado retiene. Antes esto solo
+    # cambiaba una columna: su vehículo quedaba bloqueado en 'en_uso' para
+    # siempre y su jornada abierta no se cerraba nunca, porque ya no puede
+    # entrar a marcar salida.
+    efectos = None
+    if data.estado != ESTADO_EMPLEADO_ACTIVO:
+        efectos = await desvincular_recursos(db, empleado)
+        logger.info(
+            "Empleado %s (id=%s) desactivado: vehiculo=%s, jornadas cerradas=%s, "
+            "tareas activas sin reasignar=%s",
+            empleado.correo, empleado.id_empleado,
+            efectos.vehiculo_liberado, efectos.jornadas_cerradas,
+            efectos.tareas_activas,
+        )
+
+    return EmpleadoEstadoResponse(
+        id_empleado=empleado.id_empleado,
+        nombre=empleado.nombre,
+        apellido=empleado.apellido,
+        correo=empleado.correo,
+        rol=empleado.rol,
+        estado=empleado.estado,
+        telefono=empleado.telefono,
+        fecha_contratacion=empleado.fecha_contratacion,
+        fecha_registro=empleado.fecha_registro,
+        ultimo_acceso=empleado.ultimo_acceso,
+        vehiculo_liberado=efectos.vehiculo_liberado if efectos else None,
+        jornadas_cerradas=efectos.jornadas_cerradas if efectos else 0,
+        tareas_activas_sin_reasignar=efectos.tareas_activas if efectos else 0,
+    )
+
+# ─── PATCH /empleados/{id}/contrasena ─────────────────────────────────────
+# Como admin o supervisor, quiero poder restablecer la contraseña de cualquier
+# empleado que la haya olvidado.
+
+@router.patch(
+    "/{id}/contrasena",
+    summary="Restablecer la contraseña de un empleado",
+    status_code=status.HTTP_200_OK,
+)
+async def update_contrasena_empleado(
+    id: int,
+    data: EmpleadoPasswordUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(require_supervisor)],
+):
+    """
+    Asigna una contraseña nueva a un empleado.
+
+    Hasta ahora la contraseña se fijaba al crear el empleado y no había forma
+    de volver a cambiarla: ni el propio usuario ni un administrador. Un
+    empleado que la olvidara quedaba sin acceso de forma permanente.
+
+    Reglas:
+    - Solo admin y supervisor (`require_supervisor`).
+    - Mínimo 8 caracteres y hay que escribirla dos veces (la valida el schema).
+    - Se guarda hasheada con bcrypt; nunca en texto plano y nunca se devuelve.
+    - No se pide la contraseña anterior: quien la restablece es un
+      administrador, no el dueño de la cuenta.
+    """
+    result = await db.execute(
+        select(Empleado).where(Empleado.id_empleado == id)
+    )
+    empleado = result.scalar_one_or_none()
+
+    if not empleado:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún empleado con id={id}.",
+        )
+
+    empleado.hash_contrasena = hash_password(data.contrasena)
+
+    logger.warning(
+        "Contraseña restablecida para %s (id=%s) por %s (id=%s, rol=%s)",
+        empleado.correo, empleado.id_empleado,
+        current_user.correo, current_user.id_empleado, current_user.rol,
+    )
+
+    # ⚠️ Las sesiones que el empleado ya tuviera abiertas siguen siendo válidas
+    # hasta que su token expire por su cuenta (ACCESS_TOKEN_EXPIRE_MINUTES).
+    # Invalidarlas al cambiar la contraseña exige guardar el momento del cambio
+    # y compararlo contra el `iat` del token, lo que requiere una migración.
+    # Está anotado como pendiente en SEGURIDAD.md.
+    return {
+        "detail": (
+            f"Contraseña actualizada para {empleado.nombre} {empleado.apellido}. "
+            "Comunícasela por un medio seguro y pídele que la cambie contigo "
+            "si sospecha que alguien más la vio."
+        ),
+        "id_empleado": empleado.id_empleado,
+    }
+
 
 # ─── GET /empleados/mi-equipo ─────────────────────────────────────────────
 # T5.1: Endpoint para que el técnico autenticado vea su vehículo + herramientas

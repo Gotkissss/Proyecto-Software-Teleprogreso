@@ -13,7 +13,9 @@ import { getTareas } from '../api/tareaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
+import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
 
 const IconFoto = () => (
@@ -45,9 +47,21 @@ async function fetchTecnicosReal() {
   return (Array.isArray(data) ? data : []).map((tec) => ({
     id:               tec.id_empleado,
     nombre_completo:  tec.nombre_completo,
-    estado:           tec.disponible ? 'activo' : 'en_limite',
     tareas_asignadas: tec.tareas_activas,
+    // Estado de la JORNADA, no de la cuenta. Antes aquí se ponía
+    // `disponible ? 'activo' : 'en_limite'`, que habla de carga de trabajo:
+    // por eso todos salían como "activo" aunque no hubieran marcado entrada.
+    enJornada:        tec.en_jornada,
+    marcoEntrada:     tec.marco_entrada,
+    alLimite:         !tec.disponible,
   }))
+}
+
+/** Etiqueta y color del estado de jornada de un técnico. */
+function estadoJornada(tec) {
+  if (tec.enJornada)    return { label: 'En jornada',  variant: 'success' }
+  if (tec.marcoEntrada) return { label: 'Jornada cerrada', variant: 'muted' }
+  return { label: 'Sin entrada', variant: 'warning' }
 }
 
 export default function DashboardPage() {
@@ -60,6 +74,8 @@ export default function DashboardPage() {
   const [error,         setError]         = useState(null)
   // Tarea cuyas evidencias está revisando el supervisor (SCRUM-141/142)
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
+  // Tarea abierta en la ficha de detalle (clic en la tarjeta)
+  const [tareaDetalle, setTareaDetalle] = useState(null)
 
 
   const fetchData = useCallback(async () => {
@@ -86,8 +102,17 @@ export default function DashboardPage() {
               // cuáles muestran el botón de "ver evidencias".
               total_incidencias: t.total_incidencias ?? 0,
               tecnico: t.tecnico
-                ? { nombre_completo: t.tecnico.nombre }
+                ? { nombre: t.tecnico.nombre, nombre_completo: t.tecnico.nombre }
                 : null,
+              // Campos que necesita la ficha de detalle. Antes se descartaban
+              // en este mapeo, así que el panel no tenía con qué mostrarlos.
+              descripcion:        t.descripcion,
+              prioridad:          t.prioridad,
+              direccion_servicio: t.direccion_servicio,
+              fecha_inicio:       t.fecha_inicio,
+              fecha_finalizacion: t.fecha_finalizacion,
+              fecha_asignacion:   t.fecha_asignacion,
+              estado_tarea:       t.estado_tarea,
             }))
           )
       } catch (err) {
@@ -127,21 +152,24 @@ export default function DashboardPage() {
 
       {/* ── Métricas ── */}
       <section className={styles.metricsGrid}>
+        {/* Antes esta tarjeta decía "Técnicos activos" y, si el backend
+            devolvía 0, mostraba el total de la plantilla. Resultado: el número
+            no cuadraba con la lista de abajo. Ahora dice explícitamente
+            cuántos están en jornada sobre el total. */}
         <MetricCard
-          label="Técnicos activos"
-          // Si el backend reporta 0 pero hay técnicos activos en la lista,
-          // mostramos el conteo real (técnicos con estado 'activo' o 'en_limite')
-          // visible en la sección "Técnicos hoy".
-          value={
-            metricas?.tecnicos_activos && metricas.tecnicos_activos > 0
-              ? metricas.tecnicos_activos
-              : tecnicosList.length
-          }
+          label="Técnicos en jornada"
+          value={metricas?.tecnicos_en_jornada ?? 0}
+          suffix={metricas?.tecnicos_total ? `de ${metricas.tecnicos_total}` : null}
           variant="info"
         />
         <MetricCard
-          label="Tareas completadas"
-          value={metricas?.tareas_completadas ?? 0}
+          label="Completadas hoy"
+          value={metricas?.tareas_completadas_hoy ?? 0}
+          suffix={
+            metricas?.tareas_completadas_total
+              ? `${metricas.tareas_completadas_total} en total`
+              : null
+          }
           variant="success"
           onClick={() => navigate('/supervisor/historial-tareas')}
           clickable
@@ -179,12 +207,10 @@ export default function DashboardPage() {
                   <span className={styles.tecnicoNombre}>{tec.nombre_completo}</span>
                   <span className={styles.tecnicoTareas}>
                     {tec.tareas_asignadas ?? 0} tareas activas
+                    {tec.alLimite && ' · al límite'}
                   </span>
                 </div>
-                <Badge
-                  label={tec.estado === 'activo' ? 'activo' : 'en límite'}
-                  variant={tec.estado === 'activo' ? 'success' : 'warning'}
-                />
+                <Badge {...estadoJornada(tec)} />
               </li>
             ))}
           </ul>
@@ -201,14 +227,25 @@ export default function DashboardPage() {
           />
         ) : (
           <ul className={styles.tareasList}>
-            {tareasList.slice(0, 5).map((tarea) => (
+            {tareasList.slice(0, 5).map((tarea) => {
+              const vencimiento = describirVencimiento(tarea)
+              return (
               <li key={tarea.id} className={styles.tareaItem}>
+                {/* Antes este clic saltaba a Reasignación, que obliga a
+                    buscar la tarea otra vez en otra lista. Ahora abre la ficha
+                    con los datos completos, sin salir del panel. */}
                 <div
                   className={styles.tareaInfo}
                   role="button"
                   tabIndex={0}
-                  onClick={() => navigate('/supervisor/reasignacion')}
-                  onKeyDown={(e) => e.key === 'Enter' && navigate('/supervisor/reasignacion')}
+                  title="Ver detalle de la tarea"
+                  onClick={() => setTareaDetalle(tarea)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setTareaDetalle(tarea)
+                    }
+                  }}
                 >
                   <span className={styles.tareaTitulo}>{tarea.titulo}</span>
                   <span className={styles.tareaTecnico}>
@@ -217,6 +254,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div className={styles.tareaAcciones}>
+                  {vencimiento && (
+                    <Badge label={vencimiento.texto} variant={vencimiento.variant} />
+                  )}
                   {tarea.total_incidencias > 0 && (
                     <button
                       className={styles.evidenciasBtn}
@@ -240,10 +280,20 @@ export default function DashboardPage() {
                   />
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </section>
+
+      {/* Ficha de solo lectura de la tarea. Desde el panel no se reasigna:
+          para eso está su pantalla, a la que se salta desde aquí. */}
+      <ModalDetalleTarea
+        tarea={tareaDetalle}
+        onClose={() => setTareaDetalle(null)}
+        onReasignar={() => navigate('/supervisor/reasignacion')}
+        onVerEvidencias={(t) => { setTareaDetalle(null); setTareaEvidencias(t) }}
+      />
 
       {/* SCRUM-141/142: evidencias de la tarea seleccionada */}
       <ModalEvidencias
@@ -257,7 +307,7 @@ export default function DashboardPage() {
   )
 }
 
-function MetricCard({ label, value, variant, onClick, clickable }) {
+function MetricCard({ label, value, variant, onClick, clickable, suffix }) {
   return (
     <div
       className={`${styles.metricCard} ${styles[variant]} ${clickable ? styles.clickable : ''}`}
@@ -265,6 +315,9 @@ function MetricCard({ label, value, variant, onClick, clickable }) {
     >
       <span className={styles.metricValue}>{value}</span>
       <span className={styles.metricLabel}>{label}</span>
+      {/* Contexto del número (p. ej. "de 5"), para que la cifra no se lea
+          suelta y se pueda contrastar con las listas de abajo. */}
+      {suffix && <span className={styles.metricSuffix}>{suffix}</span>}
     </div>
   )
 }

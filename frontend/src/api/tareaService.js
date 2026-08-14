@@ -94,6 +94,17 @@ export async function actualizarTarea(id, cambios = {}) {
 }
 
 /**
+ * Máximo de tareas activas por técnico, por si el backend no lo envía.
+ *
+ * El valor bueno viene en `limite_tareas` dentro de cada técnico
+ * (backend/app/core/reglas.py). Esta constante es solo el respaldo: antes el
+ * número estaba escrito a mano en dos pantallas distintas, así que al cambiar
+ * la política en el backend el selector seguía bloqueando técnicos que sí
+ * podían recibir trabajo.
+ */
+export const LIMITE_TAREAS_FALLBACK = 5
+
+/**
  * Técnicos activos con su conteo de tareas activas.
  *
  * Se usa este endpoint (admin + supervisor) en lugar de GET /empleados?rol=tecnico,
@@ -106,5 +117,6 @@ export async function getTecnicosDisponibles() {
     id: tec.id_empleado,
     nombre_completo: tec.nombre_completo ?? `${tec.nombre} ${tec.apellido}`,
     tareas_activas: tec.tareas_activas ?? 0,
+    limite_tareas: tec.limite_tareas ?? LIMITE_TAREAS_FALLBACK,
   }))
 }

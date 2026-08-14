@@ -1,0 +1,56 @@
+/* components/mapa/MarcadorTareaSupervisor.module.css
+   Pin coloreado (divIcon) + contenido del popup. Mismo patrón visual que
+   MarcadorTarea.module.css (vista del técnico) para mantener consistencia
+   entre las dos pantallas de mapa. */
+
+.icon {
+  background: transparent;
+  border: none;
+}
+
+.pinWrap {
+  display: flex;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
+}
+
+.pinPulse {
+  border-radius: 50%;
+  animation: pulse-ring 2s infinite;
+}
+
+.popup {
+  min-width: 200px;
+  font-family: var(--font-sans);
+}
+
+.popupTitulo {
+  margin: 0 0 4px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.popupTecnico {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.popupBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.popupRow {
+  margin: 4px 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.popupRow strong {
+  color: var(--color-text);
+  font-weight: 600;
+}

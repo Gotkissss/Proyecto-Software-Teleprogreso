@@ -14,6 +14,8 @@ Endpoints:
 Control de acceso:
   - Un técnico solo puede ver y registrar evidencias de tareas asignadas a él.
   - admin y supervisor pueden hacerlo sobre cualquier tarea.
+  - gerente puede VER cualquier evidencia, pero no registrarla: es un rol
+    de consulta y coordina el registro con el supervisor.
   - Eliminar una evidencia queda restringido a admin y supervisor.
 
 Requiere token JWT válido en Authorization: Bearer <token>.
@@ -31,10 +33,11 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado, require_supervisor
+from app.core.reglas import ROLES_GESTION, ROL_GERENTE
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
@@ -43,15 +46,17 @@ from app.schemas.incidencia import (
     IncidenciaCreate,
     IncidenciaResponse,
 )
-from app.services.tareas import marcar_completada
+from app.services.tareas import (
+    marcar_completada,
+    validar_cierre_permitido,
+    validar_tarea_abierta,
+)
 from app.services.uploads import eliminar_imagen, guardar_imagen
 
 # El prefijo cuelga de /tareas para respetar la jerarquía del recurso.
 # No colisiona con las rutas de tareas.py porque el segmento "incidencias"
 # es literal y aquellas usan /{id}/estado, /{id}/reasignar e /{id}/iniciar.
 router = APIRouter(prefix="/tareas", tags=["Incidencias"])
-
-ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 
 
 # ─── Utilidades internas ─────────────────────────────────────────────────────
@@ -60,12 +65,23 @@ async def _obtener_tarea_autorizada(
     db: AsyncSession,
     id_tarea: int,
     current_user: Empleado,
+    *,
+    escritura: bool = False,
 ) -> Tarea:
     """
     Devuelve la tarea si existe y el usuario tiene acceso a ella.
 
-    Un técnico solo accede a las tareas que tiene asignadas; los roles de
-    supervisión acceden a todas.
+    Distingue leer de escribir, que no es lo mismo según el rol:
+
+      - admin y supervisor: leen y escriben en cualquier tarea.
+      - gerente: LEE cualquier tarea, pero no registra nada. Es un rol de
+        consulta —revisa la operación y se comunica con el supervisor—, así
+        que no tiene sentido que aparezcan evidencias firmadas por él. Antes
+        iba en el mismo grupo que admin y supervisor y sí podía registrarlas.
+      - técnico: solo las tareas que tiene asignadas, para leer y para
+        escribir.
+
+    `escritura=True` lo pasan los endpoints que crean o modifican evidencias.
     """
     result = await db.execute(select(Tarea).where(Tarea.id_tarea == id_tarea))
     tarea = result.scalar_one_or_none()
@@ -76,21 +92,34 @@ async def _obtener_tarea_autorizada(
             detail=f"Tarea con id={id_tarea} no encontrada.",
         )
 
-    if current_user.rol not in ROLES_SUPERVISION:
-        result_asig = await db.execute(
-            select(EmpleadoTarea).where(
-                EmpleadoTarea.id_tarea == id_tarea,
-                EmpleadoTarea.id_empleado == current_user.id_empleado,
-            )
-        )
-        if result_asig.scalar_one_or_none() is None:
+    if current_user.rol in ROLES_GESTION:
+        return tarea
+
+    if current_user.rol == ROL_GERENTE:
+        if escritura:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "No tienes permiso sobre esta tarea. "
-                    "Solo el técnico asignado puede registrar o consultar sus evidencias."
+                    "El rol gerente es de consulta: puede revisar las evidencias "
+                    "pero no registrarlas. Coordina el registro con el supervisor."
                 ),
             )
+        return tarea
+
+    result_asig = await db.execute(
+        select(EmpleadoTarea).where(
+            EmpleadoTarea.id_tarea == id_tarea,
+            EmpleadoTarea.id_empleado == current_user.id_empleado,
+        )
+    )
+    if result_asig.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "No tienes permiso sobre esta tarea. "
+                "Solo el técnico asignado puede registrar o consultar sus evidencias."
+            ),
+        )
 
     return tarea
 
@@ -106,12 +135,13 @@ def _finalizar_tarea(tarea: Tarea) -> None:
     Delega en `marcar_completada` para que el cierre deje siempre puesta la
     `fecha_completado`; antes esta función solo cambiaba el estado y la tarea
     no llegaba nunca al historial diario.
+
+    Las reglas de "¿se puede cerrar esta tarea?" viven en
+    `app.services.tareas.validar_cierre_permitido`, compartidas con
+    `PATCH /tareas/{id}/finalizar`. Son dos caminos de cierre distintos y
+    ninguno debe poder saltarse lo que exige el otro.
     """
-    if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se puede finalizar una tarea cancelada.",
-        )
+    validar_cierre_permitido(tarea)
     marcar_completada(tarea)
 
 
@@ -167,7 +197,11 @@ async def crear_incidencia(
 
     Roles: el técnico asignado, admin o supervisor.
     """
-    tarea = await _obtener_tarea_autorizada(db, id, current_user)
+    tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    # Una tarea cerrada no recibe trabajo nuevo. Sin esta comprobación, un
+    # técnico con la pantalla ya cargada podía seguir documentando una tarea
+    # que el supervisor acababa de cancelar.
+    validar_tarea_abierta(tarea)
 
     incidencia = Incidencia(
         id_tarea=tarea.id_tarea,
@@ -262,7 +296,8 @@ async def upload_foto_evidencia(
 
     Roles: el técnico asignado, admin o supervisor.
     """
-    tarea = await _obtener_tarea_autorizada(db, id, current_user)
+    tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    validar_tarea_abierta(tarea)
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
 
     incidencia.foto_evidencia = await guardar_imagen(
@@ -302,8 +337,34 @@ async def eliminar_incidencia(
 
     Restringido a admin y supervisor: una evidencia es el respaldo del trabajo
     hecho, el técnico no debería poder borrar la suya.
+
+    No se permite borrar la ÚLTIMA evidencia de una tarea ya completada: para
+    cerrarla se exigió tener al menos una, y dejarla en cero contradice la
+    regla que se aplicó al cerrarla. Quedaría una tarea "completada" sin
+    ninguna constancia de qué se hizo, que es justo lo que la evidencia
+    obligatoria trata de evitar.
     """
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
+
+    result_tarea = await db.execute(select(Tarea).where(Tarea.id_tarea == id))
+    tarea = result_tarea.scalar_one_or_none()
+
+    if tarea is not None and tarea.estado_tarea == "completado":
+        result_total = await db.execute(
+            select(func.count())
+            .select_from(Incidencia)
+            .where(Incidencia.id_tarea == id)
+        )
+        if (result_total.scalar() or 0) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Es la única evidencia de una tarea completada y no se puede "
+                    "eliminar: la tarea quedaría cerrada sin ninguna constancia "
+                    "de lo que se hizo. Reabre la tarea si necesitas rehacer el "
+                    "registro."
+                ),
+            )
 
     eliminar_imagen(incidencia.foto_evidencia)
     await db.delete(incidencia)

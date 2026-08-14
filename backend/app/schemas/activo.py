@@ -1,7 +1,33 @@
 
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.core.reglas import ESTADOS_HERRAMIENTA, ESTADOS_VEHICULO
+
+
+def _validar_estado(valor: Optional[str], permitidos: tuple, campo: str) -> Optional[str]:
+    """
+    Comprueba que un estado esté dentro de la lista blanca.
+
+    Se hace con una función y no con `Literal[...]` para poder construir el
+    mensaje de error con los valores admitidos, que es lo que necesita ver
+    quien esté llamando a la API.
+
+    Solo se aplica a los schemas de ENTRADA. Los de respuesta siguen aceptando
+    cualquier cadena a propósito: si en la base quedó un estado antiguo de
+    antes de la migración 0006, la lectura tiene que seguir funcionando en vez
+    de reventar al serializar.
+    """
+    if valor is None:
+        return None
+    limpio = valor.strip().lower()
+    if limpio not in permitidos:
+        raise ValueError(
+            f"'{valor}' no es un {campo} válido. "
+            f"Valores permitidos: {', '.join(permitidos)}."
+        )
+    return limpio
 
 
 # ── Activo base ────────────────────────────────────────────────────────────
@@ -103,6 +129,8 @@ class AsignarTecnicoRequest(BaseModel):
 
 from typing import Literal
 
+from pydantic import field_validator
+
 
 class CarroCreate(BaseModel):
     """Body para POST /activos cuando tipo='carro'."""
@@ -112,8 +140,13 @@ class CarroCreate(BaseModel):
     placa:           str
     marca:           Optional[str] = None
     modelo:          Optional[str] = None
-    capacidad:       Optional[int] = None
+    capacidad:       Optional[int] = Field(None, ge=0)
     estado_vehiculo: str = "disponible"
+
+    @field_validator("estado_vehiculo")
+    @classmethod
+    def estado_permitido(cls, v):
+        return _validar_estado(v, ESTADOS_VEHICULO, "estado de vehículo")
 
 
 class HerramientaCreate(BaseModel):
@@ -126,14 +159,21 @@ class HerramientaCreate(BaseModel):
     modelo:           Optional[str] = None
     estado:           str = "disponible"
 
+    @field_validator("estado")
+    @classmethod
+    def estado_permitido(cls, v):
+        return _validar_estado(v, ESTADOS_HERRAMIENTA, "estado de herramienta")
+
 
 class MaterialCreate(BaseModel):
     """Body para POST /activos cuando tipo='material'."""
     tipo: Literal["material"] = "material"
     nombre_activo:       str
     descripcion:         Optional[str] = None
-    cantidad_disponible: int = 0
-    stock_minimo:        int = 0
+    # ge=0: el inventario admitía cantidades negativas. Se podía dejar un
+    # material en -500 unidades, y esa fila además contaba como "bajo stock".
+    cantidad_disponible: int = Field(0, ge=0)
+    stock_minimo:        int = Field(0, ge=0)
     unidad_medida:       Optional[str] = None
     tipo_material:       Optional[str] = None
 
@@ -150,16 +190,31 @@ class ActivoUpdateRequest(BaseModel):
     placa:               Optional[str] = None
     marca:               Optional[str] = None
     modelo:              Optional[str] = None
-    capacidad:           Optional[int] = None
+    capacidad:           Optional[int] = Field(None, ge=0)
     estado_vehiculo:     Optional[str] = None
     # Herramienta
     tipo_herramienta:    Optional[str] = None
     estado:              Optional[str] = None
     # Material
-    cantidad_disponible: Optional[int] = None
-    stock_minimo:        Optional[int] = None
+    cantidad_disponible: Optional[int] = Field(None, ge=0)
+    stock_minimo:        Optional[int] = Field(None, ge=0)
     unidad_medida:       Optional[str] = None
     tipo_material:       Optional[str] = None
+
+    # Estos dos campos eran texto libre. Con `{"estado": "disponible"}` sobre
+    # una herramienta ya cargada en un vehículo se conseguía volver a
+    # asignarla, dejándola en dos vehículos a la vez; y con
+    # `{"estado_vehiculo": "disponible"}` sobre un carro ya asignado, la
+    # siguiente asignación borraba al técnico anterior sin avisar.
+    @field_validator("estado")
+    @classmethod
+    def estado_herramienta_permitido(cls, v):
+        return _validar_estado(v, ESTADOS_HERRAMIENTA, "estado de herramienta")
+
+    @field_validator("estado_vehiculo")
+    @classmethod
+    def estado_vehiculo_permitido(cls, v):
+        return _validar_estado(v, ESTADOS_VEHICULO, "estado de vehículo")
 
 
 class ActivoDetalleResponse(BaseModel):

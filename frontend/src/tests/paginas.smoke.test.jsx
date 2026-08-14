@@ -170,6 +170,7 @@ vi.mock('../api/tareaService', () => ({
   actualizarTarea: vi.fn(async () => ({})),
   crearTarea: vi.fn(async () => ({})),
   actualizarEstado: vi.fn(async () => ({})),
+  LIMITE_TAREAS_FALLBACK: 5,
 }))
 
 vi.mock('../api/incidenciaService', () => ({
@@ -307,8 +308,12 @@ describe('Pantallas del supervisor', () => {
     expect(await screen.findByText(/Reasignación de servicios/i)).toBeInTheDocument()
   })
 
-  it('HistorialAsistenciaPage muestra los filtros aunque no haya jornadas', async () => {
-    const { default: Historial } = await import('../pages/HistorialAsistenciaPage')
+  it('HistorialAsistenciaTable muestra los filtros aunque no haya jornadas', async () => {
+    // Ya no hay pantalla suelta de asistencia: la tabla se monta como tab
+    // dentro de EmpleadosPage, así que el smoke test va contra el componente.
+    const { default: Historial } = await import(
+      '../components/asistencia/HistorialAsistenciaTable'
+    )
     const { container } = renderizar(Historial)
     await esperarContenido(container)
     expect(await screen.findByText(/Historial de asistencia/i)).toBeInTheDocument()
