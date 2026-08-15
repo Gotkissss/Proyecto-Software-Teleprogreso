@@ -1,0 +1,23 @@
+.wrap { border-radius: var(--radius-lg); }
+
+.mapa {
+  height: 280px !important;
+  min-height: 280px !important;
+  cursor: crosshair;
+}
+
+.pie { margin-top: var(--space-2); min-height: 20px; }
+
+.estado {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.aviso { font-size: 0.8125rem; color: var(--color-warning-dark); font-weight: 500; }
+.ayuda { font-size: 0.75rem; color: var(--color-text-muted); font-style: italic; }
+
+.pinWrap { display: block; color: var(--color-primary); filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35)); }
+.icon { background: transparent; border: none; }

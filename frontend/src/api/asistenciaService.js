@@ -179,3 +179,36 @@ export const getEmpleadosParaFiltro = async () => {
     throw err
   }
 }
+
+/**
+ * Trae TODO el historial de asistencia que cumpla los filtros, recorriendo
+ * las páginas del backend (page_size tope 100) hasta agotarlas.
+ *
+ * Se usa para exportaciones (CSV), donde se necesita el conjunto completo,
+ * no una página a la vez. Para pantallas con tabla paginada, sigue siendo
+ * mejor pedir página por página con getHistorialAsistencia.
+ *
+ * @param {Object} filtros - mismos que getHistorialAsistencia (sin page/page_size)
+ * @returns {Promise<{items: Array, totales: Object}>}
+ */
+export const getHistorialAsistenciaCompleto = async (filtros = {}) => {
+  const PAGE_SIZE_MAX = 100
+  let page = 1
+  let totalPages = 1
+  let items = []
+  let totales = null
+
+  do {
+    const respuesta = await getHistorialAsistencia({
+      ...filtros,
+      page,
+      page_size: PAGE_SIZE_MAX,
+    })
+    items = items.concat(respuesta.items ?? [])
+    totales = respuesta.totales ?? totales
+    totalPages = respuesta.total_pages ?? 1
+    page += 1
+  } while (page <= totalPages)
+
+  return { items, totales }
+}

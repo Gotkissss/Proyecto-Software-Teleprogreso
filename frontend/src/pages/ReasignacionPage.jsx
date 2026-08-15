@@ -10,6 +10,7 @@ import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import MiniMapaTarea from '../components/mapa/MiniMapaTarea'
 import {
   LIMITE_TAREAS_FALLBACK,
   getTareas,
@@ -514,10 +515,15 @@ export default function ReasignacionPage() {
         open={Boolean(tareaSeleccionada)}
         onClose={() => setTareaSeleccionada(null)}
         title="Reasignar tarea"
+        width={520}
       >
         <p className={styles.panelSubtitle}>
           {tareaSeleccionada?.titulo}
         </p>
+
+        {/* Ubicación del servicio, para decidir con contexto a qué técnico
+            le queda mejor la zona antes de reasignar. */}
+        {tareaSeleccionada && <MiniMapaTarea tarea={tareaSeleccionada} />}
 
         {errorReasignacion && (
           <div className={styles.errorPanel}>

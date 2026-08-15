@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
 import {
   LIMITE_TAREAS_FALLBACK,
   crearTarea,
@@ -39,6 +40,8 @@ const FORM_INICIAL = {
   id_tecnico:         '',
   fecha_inicio:       '',
   fecha_finalizacion: '',
+  lat:                null,
+  lng:                null,
 }
 
 function validar(form) {
@@ -109,6 +112,20 @@ export default function NuevaTareaPage() {
     setErrores((prev) => ({ ...prev, [campo]: nuevosErrores[campo] || null }))
   }
 
+    /** Sincroniza mapa ↔ dirección (ver SelectorUbicacionMapa). */
+  const handleUbicacionCambiada = ({ lat, lng, direccion }) => {
+    setForm((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      // `direccion` llega undefined mientras la geocodificación inversa está
+      // en curso o si no encontró nada: no se pisa lo que el supervisor
+      // ya tenga escrito.
+      direccion: direccion !== undefined ? direccion : prev.direccion,
+    }))
+    setErrorServidor(null)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -147,6 +164,8 @@ export default function NuevaTareaPage() {
         id_tecnico:         form.id_tecnico ? Number(form.id_tecnico) : null,
         fecha_inicio:       form.fecha_inicio       || null,
         fecha_finalizacion: form.fecha_finalizacion || null,
+        lat: form.lat,
+        lng: form.lng,
       })
 
       setExito(true)
@@ -279,6 +298,22 @@ export default function NuevaTareaPage() {
               value={form.direccion}
               onChange={(e) => handleChange('direccion', e.target.value)}
               disabled={cargando}
+            />
+          </div>
+
+          {/* ── Ubicación en mapa ──
+              Sincronizada con el campo de dirección: fijar el marcador la
+              rellena (geocodificación inversa) y escribir una dirección
+              mueve el marcador (geocodificación directa). */}
+          <div className={styles.field}>
+            <label className={styles.label}>
+              Ubicación en el mapa <span className={styles.optional}>(opcional)</span>
+            </label>
+            <SelectorUbicacionMapa
+              direccion={form.direccion}
+              lat={form.lat}
+              lng={form.lng}
+              onCambiarUbicacion={handleUbicacionCambiada}
             />
           </div>
 

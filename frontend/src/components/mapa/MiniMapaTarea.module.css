@@ -1,0 +1,35 @@
+.wrap { margin: 0 0 var(--space-4); }
+
+.mapa {
+  height: 200px !important;
+  min-height: 200px !important;
+}
+
+.nota {
+  margin: var(--space-2) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.cargando,
+.vacio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.pinWrap { display: block; filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35)); }
+.icon { background: transparent; border: none; }
+
+.popup { min-width: 160px; font-family: var(--font-sans); }
+.popupTitulo { margin: 0 0 6px; font-weight: 700; font-size: 0.875rem; color: var(--color-text); }
+.popupBadges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.popupDireccion { margin: 0; font-size: 0.75rem; color: var(--color-text-secondary); line-height: 1.4; }

@@ -40,7 +40,7 @@ export async function reasignarTarea(id, tecnico_id) {
 /**
  * Crea una nueva tarea y la asigna a un técnico
  * @param {Object} tarea - { titulo, descripcion, direccion, prioridad, id_tecnico,
- *                           fecha_inicio, fecha_finalizacion }
+ *                           fecha_inicio, fecha_finalizacion, lat, lng }
  */
 export async function crearTarea({
   titulo,
@@ -50,6 +50,8 @@ export async function crearTarea({
   id_tecnico,
   fecha_inicio,
   fecha_finalizacion,
+  lat,
+  lng,
 }) {
   const { data } = await apiClient.post('/tareas', {
     nombre: titulo,
@@ -59,6 +61,13 @@ export async function crearTarea({
     id_tecnico,
     fecha_inicio: fecha_inicio || null,
     fecha_finalizacion: fecha_finalizacion || null,
+    // El backend todavía no persiste esta coordenada — TareaCreate
+    // (backend/app/schemas/tarea.py) no tiene lat/lng ni el router las
+    // vuelca a coordenada_servicio. Pydantic ignora estos campos extra por
+    // ahora sin fallar; quedan mandados desde ya para que cuando el
+    // backend los reciba no haga falta tocar el frontend otra vez.
+    lat,
+    lng,
   })
   return data
 }

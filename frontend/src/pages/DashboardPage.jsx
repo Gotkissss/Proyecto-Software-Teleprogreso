@@ -10,12 +10,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getTareas } from '../api/tareaService'
+import { getHistorialAsistenciaCompleto } from '../api/asistenciaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
+import Spinner from '../components/ui/Spinner'
+import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { describirVencimiento } from '../utils/vencimiento'
+import { descargarCSV } from '../utils/csv'
 import styles from './DashboardPage.module.css'
 
 const IconFoto = () => (
@@ -23,6 +27,14 @@ const IconFoto = () => (
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
     <polyline points="21 15 16 10 5 21" />
+  </svg>
+)
+
+const IconDescarga = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v12" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M4 19h16" />
   </svg>
 )
 
@@ -66,6 +78,7 @@ function estadoJornada(tec) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [metricas,      setMetricas]      = useState(null)
   const [tecnicosList,  setTecnicosList]  = useState([])
@@ -76,6 +89,9 @@ export default function DashboardPage() {
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
   // Tarea abierta en la ficha de detalle (clic en la tarjeta)
   const [tareaDetalle, setTareaDetalle] = useState(null)
+  // Exportación rápida de asistencia del mes (adelanto de la página
+  // completa de Reportes del próximo sprint).
+  const [exportando, setExportando] = useState(false)
 
 
   const fetchData = useCallback(async () => {
@@ -131,6 +147,50 @@ export default function DashboardPage() {
     fetchData()
   }, [fetchData])
 
+  /**
+   * SCRUM: exporta un CSV rápido de asistencia del mes en curso.
+   * Es el adelanto de la pantalla completa de Reportes: aquí solo se cubre
+   * la "descarga rápida" desde el panel, sin filtros ni previsualización.
+   */
+  const handleExportarReporte = async () => {
+    setExportando(true)
+    try {
+      const hoy = new Date()
+      const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+      const fecha_inicio = primerDiaMes.toISOString().split('T')[0]
+      const fecha_fin = hoy.toISOString().split('T')[0]
+
+      const { items } = await getHistorialAsistenciaCompleto({ fecha_inicio, fecha_fin })
+
+      if (items.length === 0) {
+        toast.info('No hay asistencia registrada este mes todavía.')
+        return
+      }
+
+      descargarCSV(
+        `asistencia_${fecha_inicio}_a_${fecha_fin}`,
+        [
+          { key: 'fecha',            label: 'Fecha' },
+          { key: 'nombre_empleado',  label: 'Empleado' },
+          { key: 'rol',              label: 'Rol' },
+          { key: 'hora_entrada',     label: 'Hora de entrada' },
+          { key: 'hora_salida',      label: 'Hora de salida' },
+          { key: 'horas_trabajadas', label: 'Horas trabajadas' },
+          { key: 'horas_pausa',      label: 'Tiempo en pausas' },
+          { key: 'total_pausas',     label: 'Pausas' },
+        ],
+        items
+      )
+
+      toast.success(`Reporte exportado: ${items.length} jornada${items.length === 1 ? '' : 's'}.`)
+    } catch (err) {
+      console.error('Error al exportar el reporte:', err)
+      toast.error(err?.response?.data?.detail || 'No se pudo exportar el reporte del mes.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
   if (loading || error) {
     return (
       <PageState
@@ -145,10 +205,24 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Panel de control</h1>
-      <p className={styles.subtitle}>
-        Vista general de la operación en tiempo real
-      </p>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.title}>Panel de control</h1>
+          <p className={styles.subtitle}>
+            Vista general de la operación en tiempo real
+          </p>
+        </div>
+
+        <button
+          className={styles.exportBtn}
+          onClick={handleExportarReporte}
+          disabled={exportando}
+          title="Descarga rápida de asistencia del mes en CSV"
+        >
+          {exportando ? <Spinner size="sm" /> : <IconDescarga />}
+          <span>{exportando ? 'Exportando...' : 'Exportar reporte'}</span>
+        </button>
+      </div>
 
       {/* ── Métricas ── */}
       <section className={styles.metricsGrid}>
