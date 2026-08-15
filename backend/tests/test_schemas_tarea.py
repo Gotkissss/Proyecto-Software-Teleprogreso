@@ -16,6 +16,7 @@ from app.schemas.tarea import (
     PrioridadServicio,
     TareaCreate,
     TareaReasignar,
+    TareaUpdate,
     TareaUpdateEstado,
 )
 
@@ -47,6 +48,67 @@ def test_tarea_create_prioridad_invalida_falla():
     """Una prioridad fuera del enum debe rechazarse."""
     with pytest.raises(ValidationError):
         TareaCreate(nombre="Test", prioridad="urgentisima")
+
+
+@pytest.mark.parametrize(
+    "lat,lng",
+    [
+        (-90, -180),
+        (0, 0),
+        (90, 180),
+        (14.4744, -90.4425),
+    ],
+)
+def test_tarea_create_acepta_coordenadas_validas(lat, lng):
+    tarea = TareaCreate(nombre="Instalar router", lat=lat, lng=lng)
+
+    assert tarea.lat == lat
+    assert tarea.lng == lng
+
+
+@pytest.mark.parametrize("lat", [-90.000001, 90.000001])
+def test_tarea_create_rechaza_latitud_fuera_de_rango(lat):
+    with pytest.raises(ValidationError):
+        TareaCreate(nombre="Instalar router", lat=lat, lng=-90.4425)
+
+
+@pytest.mark.parametrize("lng", [-180.000001, 180.000001])
+def test_tarea_create_rechaza_longitud_fuera_de_rango(lng):
+    with pytest.raises(ValidationError):
+        TareaCreate(nombre="Instalar router", lat=14.4744, lng=lng)
+
+
+@pytest.mark.parametrize("datos", [{"lat": 14.4744}, {"lng": -90.4425}])
+def test_tarea_create_rechaza_coordenada_incompleta(datos):
+    with pytest.raises(ValidationError, match="lat y lng"):
+        TareaCreate(nombre="Instalar router", **datos)
+
+
+def test_tarea_update_acepta_actualizar_y_eliminar_coordenadas():
+    actualizar = TareaUpdate(lat=14.4744, lng=-90.4425)
+    eliminar = TareaUpdate(lat=None, lng=None)
+
+    assert actualizar.model_dump(exclude_unset=True) == {
+        "lat": 14.4744,
+        "lng": -90.4425,
+    }
+    assert eliminar.model_dump(exclude_unset=True) == {"lat": None, "lng": None}
+
+
+@pytest.mark.parametrize(
+    "datos",
+    [
+        {"lat": 14.4744},
+        {"lng": -90.4425},
+        {"lat": None},
+        {"lng": None},
+        {"lat": 14.4744, "lng": None},
+        {"lat": None, "lng": -90.4425},
+    ],
+)
+def test_tarea_update_rechaza_coordenada_incompleta(datos):
+    with pytest.raises(ValidationError, match="lat y lng"):
+        TareaUpdate(**datos)
 
 
 # 2. CAMBIO DE ESTADO

@@ -11,6 +11,16 @@
 }
 
 /* ── Header de página ─────────────────────────────────────── */
+/* Envuelve título+subtítulo y el botón de exportar, uno a cada extremo. */
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-8);
+}
+
 .title {
   font-size: 1.875rem;
   font-weight: 800;
@@ -31,8 +41,53 @@
 .subtitle {
   font-size: 0.9375rem;
   color: var(--color-text-secondary);
-  margin: 0 0 var(--space-8);
+  margin: 0;
   padding-left: 18px;
+}
+
+/* Botón "Exportar reporte": descarga rápida de asistencia del mes,
+   adelanto de la página completa de Reportes del próximo sprint. Mismo
+   lenguaje visual que .nuevaTareaBtn de ReasignacionPage. */
+.exportarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 20px;
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-primary-sm);
+  transition: var(--transition);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.exportarBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.exportarBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-primary);
+}
+
+.exportarBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 560px) {
+  .pageHeader { flex-direction: column; align-items: stretch; }
+  .exportarBtn { justify-content: center; }
 }
 
 /* ── Centro / loading ─────────────────────────────────────── */

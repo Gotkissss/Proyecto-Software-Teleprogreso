@@ -13,9 +13,12 @@ import { getTareas } from '../api/tareaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
+import Spinner from '../components/ui/Spinner'
+import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { describirVencimiento } from '../utils/vencimiento'
+import { exportarReporteAsistenciaMes } from '../utils/exportarAsistenciaCSV'
 import styles from './DashboardPage.module.css'
 
 const IconFoto = () => (
@@ -23,6 +26,15 @@ const IconFoto = () => (
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
     <polyline points="21 15 16 10 5 21" />
+  </svg>
+)
+
+// Ícono del botón "Exportar reporte" (flecha hacia una bandeja de descarga).
+const IconDescarga = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 )
 
@@ -66,6 +78,7 @@ function estadoJornada(tec) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const toast = useToast()
 
   const [metricas,      setMetricas]      = useState(null)
   const [tecnicosList,  setTecnicosList]  = useState([])
@@ -76,6 +89,8 @@ export default function DashboardPage() {
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
   // Tarea abierta en la ficha de detalle (clic en la tarjeta)
   const [tareaDetalle, setTareaDetalle] = useState(null)
+  // Descarga rápida de asistencia del mes (adelanto de la página de Reportes)
+  const [exportando, setExportando] = useState(false)
 
 
   const fetchData = useCallback(async () => {
@@ -131,6 +146,29 @@ export default function DashboardPage() {
     fetchData()
   }, [fetchData])
 
+  /**
+   * Botón "Exportar reporte": descarga la asistencia de TODA la plantilla
+   * del mes actual en un CSV, sin salir del dashboard. Es un adelanto de la
+   * página completa de Reportes (con filtros de rango/empleado) prevista
+   * para el próximo sprint.
+   */
+  const handleExportarReporte = async () => {
+    setExportando(true)
+    try {
+      const { totalJornadas, archivo } = await exportarReporteAsistenciaMes()
+      toast.success(`Reporte descargado: ${archivo} (${totalJornadas} jornadas).`)
+    } catch (err) {
+      if (err?.sinDatos) {
+        toast.info(err.message)
+      } else {
+        console.error('Error al exportar reporte de asistencia:', err)
+        toast.error('No se pudo generar el reporte. Intenta de nuevo.')
+      }
+    } finally {
+      setExportando(false)
+    }
+  }
+
   if (loading || error) {
     return (
       <PageState
@@ -145,10 +183,29 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Panel de control</h1>
-      <p className={styles.subtitle}>
-        Vista general de la operación en tiempo real
-      </p>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.title}>Panel de control</h1>
+          <p className={styles.subtitle}>
+            Vista general de la operación en tiempo real
+          </p>
+        </div>
+
+        {/* Descarga rápida del mes actual. Es un adelanto de la página
+            completa de Reportes (con filtros de rango/empleado) prevista
+            para el próximo sprint; por ahora resuelve el caso más pedido:
+            "el mes tal cual". */}
+        <button
+          className={styles.exportarBtn}
+          onClick={handleExportarReporte}
+          disabled={exportando}
+          title="Descarga la asistencia de todos los técnicos de este mes en CSV"
+        >
+          {exportando
+            ? <><Spinner size="sm" color="white" /> Generando...</>
+            : <><IconDescarga /> Exportar reporte</>}
+        </button>
+      </div>
 
       {/* ── Métricas ── */}
       <section className={styles.metricsGrid}>

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional
 from datetime import date, datetime
 from enum import Enum
@@ -28,8 +28,27 @@ class TecnicoResponse(BaseModel):
         from_attributes = True
 
 
+class CoordenadasTarea(BaseModel):
+    """Coordenadas opcionales de una tarea, siempre enviadas como pareja."""
+
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lng: Optional[float] = Field(None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def coordenadas_completas(self):
+        enviados = {campo for campo in ("lat", "lng") if campo in self.model_fields_set}
+
+        if enviados and enviados != {"lat", "lng"}:
+            raise ValueError("Debes enviar lat y lng juntos.")
+
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat y lng deben tener un valor o ser null al mismo tiempo.")
+
+        return self
+
+
 # 🔹 BASE
-class TareaBase(BaseModel):
+class TareaBase(CoordenadasTarea):
     nombre:     str
     descripcion: Optional[str]            = None
     direccion:   Optional[str]            = None
@@ -47,7 +66,7 @@ class TareaCreate(TareaBase):
 
 
 # 🔹 UPDATE — edición parcial de una tarea existente (PATCH /tareas/{id})
-class TareaUpdate(BaseModel):
+class TareaUpdate(CoordenadasTarea):
     """
     Todos los campos son opcionales: solo se actualiza lo que venga en el body.
 
