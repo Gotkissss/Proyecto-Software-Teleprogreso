@@ -299,6 +299,9 @@ describe('Pantallas del supervisor', () => {
     const { container } = renderizar(DashboardPage)
     await esperarContenido(container)
     expect(await screen.findByText('Panel de control')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Exportar reporte/i })
+    ).toBeInTheDocument()
   })
 
   it('ReasignacionPage muestra la lista de tareas', async () => {

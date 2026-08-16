@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.reglas import ROL_TECNICO
 from app.core.tiempo import hora_actual, hoy
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado, EmpleadoTarea
@@ -31,6 +32,7 @@ def consulta_asistencias_por_rango(
     fecha_inicio: date,
     fecha_fin: date,
     id_empleado: int | None = None,
+    rol: str | None = None,
 ):
     """Construye la consulta base por rango y, opcionalmente, empleado."""
     filtros = [
@@ -39,6 +41,8 @@ def consulta_asistencias_por_rango(
     ]
     if id_empleado is not None:
         filtros.append(Asistencia.id_empleado == id_empleado)
+    if rol is not None:
+        filtros.append(Asistencia.empleado.has(Empleado.rol == rol))
 
     return (
         select(Asistencia)
@@ -51,10 +55,23 @@ def consulta_asistencias_por_rango(
     )
 
 
-def consulta_tareas_completadas_por_rango(fecha_inicio: date, fecha_fin: date):
-    """Construye la consulta base de tareas cerradas para un rango inclusivo."""
+def consulta_tareas_completadas_por_rango(
+    fecha_inicio: date,
+    fecha_fin: date,
+    id_tecnico: int | None = None,
+):
+    """Construye la consulta de tareas cerradas por técnico y rango."""
     limite_inferior = datetime.combine(fecha_inicio, time.min)
     limite_superior = datetime.combine(fecha_fin, time.max)
+    filtros = [
+        Tarea.estado_tarea == "completado",
+        Tarea.fecha_completado.is_not(None),
+        Tarea.fecha_completado >= limite_inferior,
+        Tarea.fecha_completado <= limite_superior,
+        Empleado.rol == ROL_TECNICO,
+    ]
+    if id_tecnico is not None:
+        filtros.append(Empleado.id_empleado == id_tecnico)
 
     return (
         select(
@@ -63,14 +80,9 @@ def consulta_tareas_completadas_por_rango(fecha_inicio: date, fecha_fin: date):
             Empleado.nombre,
             Empleado.apellido,
         )
-        .outerjoin(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
-        .outerjoin(Empleado, Empleado.id_empleado == EmpleadoTarea.id_empleado)
-        .where(
-            Tarea.estado_tarea == "completado",
-            Tarea.fecha_completado.is_not(None),
-            Tarea.fecha_completado >= limite_inferior,
-            Tarea.fecha_completado <= limite_superior,
-        )
+        .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+        .join(Empleado, Empleado.id_empleado == EmpleadoTarea.id_empleado)
+        .where(*filtros)
         .order_by(Tarea.fecha_completado, Tarea.id_tarea)
     )
 
@@ -118,10 +130,10 @@ def _agregar_tareas(filas: list) -> tuple[dict[int, dict], int]:
     ids_tareas: set[int] = set()
 
     for fila in filas:
-        ids_tareas.add(fila.id_tarea)
         if fila.id_empleado is None:
             continue
 
+        ids_tareas.add(fila.id_tarea)
         datos = por_empleado.setdefault(
             fila.id_empleado,
             {
@@ -140,12 +152,14 @@ async def _cargar_asistencias(
     fecha_inicio: date,
     fecha_fin: date,
     id_empleado: int | None = None,
+    rol: str | None = None,
 ) -> dict[int, dict]:
     result = await db.execute(
         consulta_asistencias_por_rango(
             fecha_inicio,
             fecha_fin,
             id_empleado=id_empleado,
+            rol=rol,
         )
     )
     return _agregar_asistencias(list(result.scalars().all()))
@@ -155,9 +169,14 @@ async def _cargar_tareas(
     db: AsyncSession,
     fecha_inicio: date,
     fecha_fin: date,
+    id_tecnico: int | None = None,
 ) -> tuple[dict[int, dict], int]:
     result = await db.execute(
-        consulta_tareas_completadas_por_rango(fecha_inicio, fecha_fin)
+        consulta_tareas_completadas_por_rango(
+            fecha_inicio,
+            fecha_fin,
+            id_tecnico=id_tecnico,
+        )
     )
     return _agregar_tareas(list(result.all()))
 
@@ -209,10 +228,14 @@ async def obtener_reporte_tareas_completadas(
     db: AsyncSession,
     fecha_inicio: date,
     fecha_fin: date,
+    id_tecnico: int | None = None,
 ) -> ReporteTareasCompletadasResponse:
-    """Genera los conteos de tareas completadas por empleado."""
+    """Genera los conteos de tareas completadas por técnico."""
     agregados, total_tareas = await _cargar_tareas(
-        db, fecha_inicio, fecha_fin
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_tecnico=id_tecnico,
     )
 
     items = [
@@ -239,10 +262,22 @@ async def obtener_reporte_productividad(
     db: AsyncSession,
     fecha_inicio: date,
     fecha_fin: date,
+    id_tecnico: int | None = None,
 ) -> ReporteProductividadResponse:
-    """Combina asistencia y tareas para calcular tareas por hora trabajada."""
-    asistencias = await _cargar_asistencias(db, fecha_inicio, fecha_fin)
-    tareas, total_tareas = await _cargar_tareas(db, fecha_inicio, fecha_fin)
+    """Combina asistencia y tareas para calcular productividad por técnico."""
+    asistencias = await _cargar_asistencias(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_empleado=id_tecnico,
+        rol=ROL_TECNICO,
+    )
+    tareas, total_tareas = await _cargar_tareas(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_tecnico=id_tecnico,
+    )
     ids_empleados = asistencias.keys() | tareas.keys()
 
     items: list[ProductividadEmpleado] = []

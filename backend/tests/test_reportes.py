@@ -9,7 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.routers.reportes import _validar_rango, get_reporte_asistencia
+from app.routers.reportes import (
+    _validar_rango,
+    get_reporte_asistencia,
+    get_reporte_productividad,
+    get_reporte_tareas_completadas,
+)
 from app.services.reportes import (
     consulta_asistencias_por_rango,
     consulta_tareas_completadas_por_rango,
@@ -76,6 +81,7 @@ def test_consultas_base_aplican_el_rango_inclusivo():
     assert "asistencia.fecha >= '2026-08-01'" in consulta_asistencias
     assert "asistencia.fecha <= '2026-08-15'" in consulta_asistencias
     assert "tarea.estado_tarea = 'completado'" in consulta_tareas
+    assert "empleado.rol = 'tecnico'" in consulta_tareas
     assert "tarea.fecha_completado >= '2026-08-01 00:00:00'" in consulta_tareas
     assert "tarea.fecha_completado <= '2026-08-15 23:59:59.999999'" in consulta_tareas
 
@@ -90,6 +96,29 @@ def test_consulta_asistencia_aplica_filtro_por_empleado():
     )
 
     assert "asistencia.id_empleado = 7" in consulta
+
+
+def test_consultas_de_productividad_filtran_por_tecnico():
+    consulta_asistencia = str(
+        consulta_asistencias_por_rango(
+            FECHA_INICIO,
+            FECHA_FIN,
+            id_empleado=7,
+            rol="tecnico",
+        ).compile(compile_kwargs={"literal_binds": True})
+    )
+    consulta_tareas = str(
+        consulta_tareas_completadas_por_rango(
+            FECHA_INICIO,
+            FECHA_FIN,
+            id_tecnico=7,
+        ).compile(compile_kwargs={"literal_binds": True})
+    )
+
+    assert "asistencia.id_empleado = 7" in consulta_asistencia
+    assert "empleado.rol = 'tecnico'" in consulta_asistencia
+    assert "empleado.id_empleado = 7" in consulta_tareas
+    assert "empleado.rol = 'tecnico'" in consulta_tareas
 
 
 @pytest.mark.asyncio
@@ -147,7 +176,7 @@ async def test_endpoint_asistencia_envia_filtro_al_servicio():
 
 
 @pytest.mark.asyncio
-async def test_reporte_tareas_cuenta_total_sin_duplicar_tareas_compartidas():
+async def test_reporte_tareas_cuenta_por_tecnico_sin_duplicar_compartidas():
     filas = [
         SimpleNamespace(
             id_tarea=10,
@@ -181,7 +210,7 @@ async def test_reporte_tareas_cuenta_total_sin_duplicar_tareas_compartidas():
         db, FECHA_INICIO, FECHA_FIN
     )
 
-    assert reporte.total_tareas_completadas == 3
+    assert reporte.total_tareas_completadas == 2
     assert reporte.total_empleados == 2
     assert reporte.items[0].id_empleado == 2
     assert reporte.items[0].tareas_completadas == 2
@@ -224,6 +253,60 @@ async def test_productividad_calcula_tareas_por_hora_trabajada():
     assert reporte.tareas_por_hora == 0.5
     assert reporte.items[0].horas_trabajadas == "04:00"
     assert reporte.items[0].tareas_por_hora == 0.5
+
+
+@pytest.mark.asyncio
+async def test_endpoint_tareas_completadas_envia_filtro_de_tecnico():
+    db = MagicMock()
+    gerente = SimpleNamespace(id_empleado=4, rol="gerente")
+    respuesta_esperada = MagicMock()
+
+    with patch(
+        "app.routers.reportes.obtener_reporte_tareas_completadas",
+        new=AsyncMock(return_value=respuesta_esperada),
+    ) as servicio:
+        respuesta = await get_reporte_tareas_completadas(
+            db,
+            gerente,
+            FECHA_INICIO,
+            FECHA_FIN,
+            tecnico=7,
+        )
+
+    assert respuesta is respuesta_esperada
+    servicio.assert_awaited_once_with(
+        db,
+        FECHA_INICIO,
+        FECHA_FIN,
+        id_tecnico=7,
+    )
+
+
+@pytest.mark.asyncio
+async def test_endpoint_productividad_envia_filtro_de_tecnico():
+    db = MagicMock()
+    gerente = SimpleNamespace(id_empleado=4, rol="gerente")
+    respuesta_esperada = MagicMock()
+
+    with patch(
+        "app.routers.reportes.obtener_reporte_productividad",
+        new=AsyncMock(return_value=respuesta_esperada),
+    ) as servicio:
+        respuesta = await get_reporte_productividad(
+            db,
+            gerente,
+            FECHA_INICIO,
+            FECHA_FIN,
+            tecnico=7,
+        )
+
+    assert respuesta is respuesta_esperada
+    servicio.assert_awaited_once_with(
+        db,
+        FECHA_INICIO,
+        FECHA_FIN,
+        id_tecnico=7,
+    )
 
 
 def test_rango_invertido_se_rechaza():
