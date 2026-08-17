@@ -1,0 +1,23 @@
+/* SCRUM-181 — Estilos compartidos del pin de los marcadores del mapa.
+   Antes cada componente de marcador repetía estas mismas tres reglas en su
+   propio módulo CSS; al cambiar la sombra o el pulso había que tocar cuatro
+   archivos y era fácil que uno se quedara atrás. */
+
+/* Reemplaza el className por defecto de Leaflet ('leaflet-div-icon'), que
+   trae una caja blanca con borde — no queremos esa caja, solo el pin. */
+.icon {
+  background: transparent;
+  border: none;
+}
+
+.pinWrap {
+  display: flex;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
+}
+
+/* Mismo anillo pulsante que usa el timeline de "Mi Ruta" para en_progreso
+   (@keyframes pulse-ring, definido globalmente en index.css). */
+.pinPulse {
+  border-radius: 50%;
+  animation: pulse-ring 2s infinite;
+}

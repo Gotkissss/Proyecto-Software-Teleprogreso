@@ -348,7 +348,7 @@ export default function ReasignacionPage() {
           {totalCompletadas === 0 && (
             <>{totalCanceladas} cancelada{totalCanceladas === 1 ? '' : 's'}</>
           )}
-          {' '}no aparece{totalCerradas === 1 ? '' : 'n'} aquí.
+          {' '}en total no aparece{totalCerradas === 1 ? '' : 'n'} aquí.
           {totalCompletadas > 0 && (
             <>
               {' '}
@@ -359,6 +359,13 @@ export default function ReasignacionPage() {
               >
                 Ver tareas realizadas
               </button>
+              {/* El histórico ya cubre semanas de trabajo (SCRUM-180), así que
+                  este número es mucho mayor que lo que abre "Realizadas", que
+                  arranca en los últimos 7 días. Sin este aviso el supervisor
+                  compara las dos cifras y cree que se perdieron tareas. */}
+              <span className={styles.cerradasAclaracion}>
+                (el historial abre en los últimos 7 días; amplía el rango para ver más)
+              </span>
             </>
           )}
         </p>

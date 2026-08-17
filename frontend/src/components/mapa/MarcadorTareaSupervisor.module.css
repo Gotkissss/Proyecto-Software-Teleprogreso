@@ -3,20 +3,8 @@
    MarcadorTarea.module.css (vista del técnico) para mantener consistencia
    entre las dos pantallas de mapa. */
 
-.icon {
-  background: transparent;
-  border: none;
-}
-
-.pinWrap {
-  display: flex;
-  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
-}
-
-.pinPulse {
-  border-radius: 50%;
-  animation: pulse-ring 2s infinite;
-}
+/* Los estilos del pin (.icon, .pinWrap, .pinPulse) se movieron a
+   iconoMarcador.module.css — SCRUM-181. Aquí solo queda el popup. */
 
 .popup {
   min-width: 200px;

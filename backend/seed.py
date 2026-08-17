@@ -5,11 +5,14 @@ Siembra la base de datos con un escenario realista y completo:
 
   - Catálogo de tipos de pausa (tabla tipo_pausa)
   - 8 empleados (admin, supervisor, gerente y 5 técnicos)
-  - 12 tareas con coordenadas reales de Fraijanes, repartidas entre técnicos
+  - 12 tareas del día con coordenadas reales de Fraijanes, repartidas entre
+    técnicos (el escenario que se ve en el mapa y en reasignación)
+  - 8 semanas de tareas ya completadas, con coordenada y `fecha_completado`,
+    para que los reportes de tareas y productividad tengan qué agregar
   - Inventario: 3 vehículos, 8 herramientas y 8 materiales (algunos bajo stock)
   - Asignación de vehículos y herramientas a técnicos
-  - Historial de asistencia de 14 días con pausas, llegadas tarde y una
-    jornada sin salida marcada
+  - Historial de asistencia de las mismas 8 semanas, con pausas, llegadas
+    tarde y una jornada sin salida marcada
   - Ubicaciones GPS de los técnicos (las dibuja el mapa de ruta)
   - Evidencias (incidencias) en las tareas completadas
 
@@ -88,6 +91,18 @@ HOY = hoy_local()
 def punto(lat: float, lon: float) -> str:
     """WKT de un punto para las columnas Geography (PostGIS espera lon lat)."""
     return f"SRID=4326;POINT({lon} {lat})"
+
+
+def cierre(dias_atras: int, hora: int = 16, minuto: int = 30) -> datetime:
+    """
+    Momento en que se cerró una tarea, `dias_atras` días antes de hoy.
+
+    `fecha_completado` es lo que filtran los tres reportes
+    (services/reportes.py) y el historial diario; sin ella una tarea marcada
+    como completada no aparece en ninguno de los dos, por mucho que su
+    `fecha_finalizacion` caiga dentro del rango consultado.
+    """
+    return datetime.combine(HOY - timedelta(days=dias_atras), time(hora, minuto))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -221,6 +236,7 @@ TAREAS = [
         "direccion_servicio": "Salida a La Lima, KM 18.5, Fraijanes",
         "coordenada": punto(14.4805, -90.4344), "tecnico": 0,
         "fecha_asignacion": HOY - timedelta(days=3),
+        "fecha_completado": cierre(1),
         "evidencia": (
             "Se instalaron los 5 puntos de red solicitados y se certificaron con "
             "probador de categoría 6. Se etiquetó cada roseta en bodega y oficinas. "
@@ -264,6 +280,7 @@ TAREAS = [
         "direccion_servicio": "Aldea El Cerrito, KM 22 carretera a Fraijanes",
         "coordenada": punto(14.4831, -90.4287), "tecnico": 1,
         "fecha_asignacion": HOY - timedelta(days=5),
+        "fecha_completado": cierre(4, 11, 15),
         "evidencia": (
             "Se detectó un cable UTP en mal estado entre el ODF y el router de borde. "
             "Se reemplazó el patch cord y la latencia bajó de 180 ms a 12 ms. "
@@ -290,6 +307,109 @@ TAREAS = [
         "fecha_asignacion": None,
     },
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HISTÓRICO — SCRUM-180
+#
+# Las 12 tareas de arriba son el escenario "de hoy": sirven para la demo del
+# mapa y de reasignación, pero no alcanzan para los reportes. Un reporte de
+# productividad sobre dos tareas completadas sale en 0.0x tareas/hora y no
+# dice nada, y el de asistencia sobre 14 días no deja probar un rango mensual.
+#
+# Por eso este bloque genera varias semanas de trabajo ya cerrado, repartido
+# por las zonas reales de Fraijanes y con ritmos distintos por técnico, para
+# que los tres reportes tengan algo que agregar y el ranking no salga plano.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Semanas de historial. 8 semanas cubren un rango mensual completo con margen
+# para comparar "este mes contra el anterior" en los reportes.
+SEMANAS_HISTORIAL = 8
+
+# Puntos de referencia del municipio de Fraijanes (casco urbano y aldeas
+# cercanas). Las tareas del histórico se reparten entre estas zonas con una
+# dispersión de ~150 m, para que el mapa muestre grupos por barrio en lugar
+# de una nube uniforme sobre el pueblo.
+ZONAS_FRAIJANES = [
+    {"zona": "Barrio El Centro",        "lat": 14.4751, "lon": -90.4437},
+    {"zona": "Col. Universidad",        "lat": 14.4693, "lon": -90.4381},
+    {"zona": "Bo. Guamilito",           "lat": 14.4776, "lon": -90.4459},
+    {"zona": "Res. El Portal",          "lat": 14.4712, "lon": -90.4502},
+    {"zona": "Salida a La Lima",        "lat": 14.4805, "lon": -90.4344},
+    {"zona": "Aldea El Cerrito",        "lat": 14.4831, "lon": -90.4287},
+    {"zona": "Col. Las Victorias",      "lat": 14.4659, "lon": -90.4419},
+    {"zona": "Condominio Villas del Pinar", "lat": 14.4857, "lon": -90.4521},
+    {"zona": "Bo. La Esperanza",        "lat": 14.4688, "lon": -90.4463},
+    {"zona": "Zona 1, casco urbano",    "lat": 14.4762, "lon": -90.4398},
+    {"zona": "Aldea Los Verdes",        "lat": 14.4602, "lon": -90.4356},
+    {"zona": "Lomas de San Isidro",     "lat": 14.4884, "lon": -90.4402},
+]
+
+# Catálogo de trabajos recurrentes. La evidencia se usa solo en una parte de
+# las tareas: en la operación real no todas llevan foto ni informe.
+SERVICIOS_HISTORICOS = [
+    {
+        "servicio": "Instalación de fibra óptica",
+        "evidencia": "Acometida tendida y ONT configurada. Potencia óptica dentro de rango (-19 dBm).",
+    },
+    {
+        "servicio": "Reparación de señal",
+        "evidencia": "Se reemplazó el splitter dañado y se recertificó la bajada. Señal estable.",
+    },
+    {
+        "servicio": "Mantenimiento preventivo",
+        "evidencia": "Limpieza de conectores y medición de niveles. Sin observaciones.",
+    },
+    {
+        "servicio": "Instalación de TV cable",
+        "evidencia": "Puntos instalados y decodificador emparejado. Cliente conforme.",
+    },
+    {
+        "servicio": "Cambio de router",
+        "evidencia": "Equipo sustituido por falla de fuente. Se recuperó la configuración anterior.",
+    },
+    {
+        "servicio": "Revisión de equipo",
+        "evidencia": None,
+    },
+    {
+        "servicio": "Ampliación de red",
+        "evidencia": "Puntos adicionales certificados con probador de categoría 6.",
+    },
+    {
+        "servicio": "Retiro de equipo",
+        "evidencia": None,
+    },
+    {
+        "servicio": "Instalación de cámara IP",
+        "evidencia": "Cámaras montadas y agregadas al NVR. Se dejó grabación de prueba.",
+    },
+    {
+        "servicio": "Soporte a cliente corporativo",
+        "evidencia": "Se midió throughput y se ajustó el router de borde. Latencia normalizada.",
+    },
+]
+
+# Clientes recurrentes, para que los títulos del histórico no se repitan
+# palabra por palabra en cada fila del reporte.
+CLIENTES_HISTORICOS = [
+    "Tienda El Ahorro", "Farmacia La Salud", "Panadería San Miguel",
+    "Clínica Santa Lucía", "Ferretería El Tornillo", "Beneficio de Café",
+    "Supermercado La Antorcha", "Colegio Mixto Fraijanes", "Hotel Las Brisas",
+    "Taller Mecánico Ruiz", "Abarrotería Doña Tere", "Restaurante Sabor Latino",
+    "Residencial Los Álamos", "Municipalidad de Fraijanes", "Gasolinera El Cruce",
+    "Veterinaria Huellitas", "Librería El Estudiante", "Depósito San José",
+]
+
+# Ritmo de cierre por técnico: pesos de "cuántas tareas cerró hoy" para
+# 0, 1, 2 y 3 tareas. Sin esta variación los cinco técnicos salían con la
+# misma productividad y el reporte no servía para comparar a nadie.
+RITMOS = {
+    "alto":  [5, 20, 45, 30],
+    "medio": [10, 35, 40, 15],
+    "bajo":  [22, 45, 28, 5],
+}
+RITMO_POR_TECNICO = ["alto", "medio", "medio", "bajo", "alto"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -483,6 +603,9 @@ async def crear_tareas(db: AsyncSession, tecnicos: list[Empleado]) -> list[Tarea
             direccion_servicio=datos["direccion_servicio"],
             coordenada_servicio=datos["coordenada"],
             fecha_asignacion=datos["fecha_asignacion"],
+            # Solo las completadas la traen; el resto queda en None, que es
+            # justo lo que distingue "cerrada" de "todavía abierta".
+            fecha_completado=datos.get("fecha_completado"),
         )
         db.add(tarea)
         creadas.append(tarea)
@@ -519,6 +642,111 @@ async def crear_tareas(db: AsyncSession, tecnicos: list[Empleado]) -> list[Tarea
     await db.flush()
     print(f"   ✅ {len(creadas)} tareas ({asignadas} asignadas, {evidencias} con evidencia)")
     return creadas
+
+
+async def crear_historial_tareas(
+    db: AsyncSession,
+    tecnicos: list[Empleado],
+    semanas: int = SEMANAS_HISTORIAL,
+) -> int:
+    """
+    SCRUM-180 — Siembra varias semanas de tareas YA COMPLETADAS.
+
+    Todas llevan coordenada en Fraijanes y, sobre todo, `fecha_completado`:
+    es la columna por la que filtran `GET /reportes/tareas-completadas`,
+    `/reportes/productividad` y el historial diario. Una tarea en estado
+    'completado' sin esa marca es invisible para los tres.
+
+    Se genera de ayer hacia atrás, nunca hoy: el día de hoy lo ocupan las
+    tareas abiertas de TAREAS, que son las que se ven en el mapa y en la
+    pantalla de reasignación durante la demo.
+    """
+    print(f"\n🗂️  Generando historial de tareas ({semanas} semanas)...")
+
+    nuevas: list[tuple[Tarea, int, str | None]] = []
+
+    for indice, tecnico in enumerate(tecnicos):
+        pesos = RITMOS[RITMO_POR_TECNICO[indice % len(RITMO_POR_TECNICO)]]
+
+        # Desde hace `semanas` semanas hasta ayer.
+        for delta in range(semanas * 7, 0, -1):
+            dia = HOY - timedelta(days=delta)
+            if dia.weekday() >= 5:          # fin de semana: no se opera
+                continue
+
+            cerradas_hoy = random.choices([0, 1, 2, 3], weights=pesos)[0]
+
+            for n in range(cerradas_hoy):
+                zona = random.choice(ZONAS_FRAIJANES)
+                trabajo = random.choice(SERVICIOS_HISTORICOS)
+                cliente = random.choice(CLIENTES_HISTORICOS)
+
+                # La tarea se asignó entre 0 y 3 días antes de cerrarse.
+                dias_previos = random.randint(0, 3)
+                fecha_asignacion = dia - timedelta(days=dias_previos)
+
+                # Cierres repartidos por la jornada, en orden a lo largo del
+                # día para que el historial diario se lea de forma natural.
+                hora_cierre = 9 + n * 2 + random.randint(0, 1)
+                momento_cierre = datetime.combine(
+                    dia, time(min(hora_cierre, 17), random.randint(0, 59))
+                )
+
+                tarea = Tarea(
+                    titulo=f"{trabajo['servicio']} — {cliente}",
+                    descripcion=(
+                        f"{trabajo['servicio']} en {zona['zona']}. "
+                        f"Servicio atendido y cerrado en sitio."
+                    ),
+                    estado_tarea="completado",
+                    prioridad=random.choices(
+                        ["baja", "media", "alta", "urgente"],
+                        weights=[15, 45, 30, 10],
+                    )[0],
+                    fecha_inicio=fecha_asignacion,
+                    fecha_finalizacion=dia,
+                    direccion_servicio=f"{zona['zona']}, Fraijanes",
+                    # ±0.0015° ≈ 150 m: dispersa los pines dentro del barrio
+                    # sin sacarlos de él.
+                    coordenada_servicio=punto(
+                        zona["lat"] + random.uniform(-0.0015, 0.0015),
+                        zona["lon"] + random.uniform(-0.0015, 0.0015),
+                    ),
+                    fecha_asignacion=fecha_asignacion,
+                    fecha_completado=momento_cierre,
+                )
+                db.add(tarea)
+
+                # Solo ~45 % deja informe escrito, como en la operación real.
+                evidencia = (
+                    trabajo["evidencia"]
+                    if trabajo["evidencia"] and random.random() < 0.45
+                    else None
+                )
+                nuevas.append((tarea, tecnico.id_empleado, evidencia))
+
+    await db.flush()      # asigna los id_tarea de golpe
+
+    evidencias = 0
+    for tarea, id_empleado, evidencia in nuevas:
+        db.add(EmpleadoTarea(id_empleado=id_empleado, id_tarea=tarea.id_tarea))
+
+        if evidencia:
+            db.add(
+                Incidencia(
+                    id_tarea=tarea.id_tarea,
+                    descripcion=evidencia,
+                    fecha_reporte=tarea.fecha_completado,
+                )
+            )
+            evidencias += 1
+
+    await db.flush()
+    print(
+        f"   ✅ {len(nuevas)} tareas completadas en las últimas {semanas} semanas "
+        f"({evidencias} con evidencia)"
+    )
+    return len(nuevas)
 
 
 async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
@@ -642,10 +870,16 @@ async def crear_inventario(db: AsyncSession, tecnicos: list[Empleado]) -> None:
 async def crear_historial_asistencia(
     db: AsyncSession,
     tecnicos: list[Empleado],
-    dias: int = 14,
+    dias: int = SEMANAS_HISTORIAL * 7,
 ) -> None:
     """
     Genera jornadas de los últimos `dias` días hábiles con pausas realistas.
+
+    SCRUM-180: el rango cubre las mismas semanas que `crear_historial_tareas`.
+    Tienen que coincidir porque el reporte de productividad divide tareas
+    cerradas entre horas trabajadas: si la asistencia solo llegara a 14 días,
+    un rango mensual mostraría tareas sin horas contra las cuales dividirlas y
+    la productividad saldría disparada.
 
     El escenario incluye a propósito:
       - llegadas tarde (después de las 08:00) para el badge "Llegada tarde"
@@ -830,6 +1064,12 @@ async def seed() -> None:
         empleados = await crear_empleados(db)
         tecnicos = [e for e in empleados if e.rol == "tecnico" and e.estado == "activo"]
 
+        # El histórico va PRIMERO a propósito. GET /tareas devuelve como mucho
+        # `limite` filas (500 por defecto) ordenadas por id descendente, así
+        # que lo que se inserta al final es lo que siempre sobrevive al corte.
+        # Sembrando el histórico antes, las 12 tareas de la demo quedan con los
+        # ids más altos y nunca las desplaza el relleno.
+        await crear_historial_tareas(db, tecnicos)
         await crear_tareas(db, tecnicos)
         await crear_inventario(db, tecnicos)
         await crear_historial_asistencia(db, tecnicos)

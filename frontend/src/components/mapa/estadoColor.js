@@ -65,6 +65,18 @@ export function variantePorPrioridad(prioridad) {
   return PRIORIDAD_BADGE_VARIANT[prioridad] ?? 'muted'
 }
 
+/**
+ * SCRUM-181 — Color por prioridad, para las tareas que siguen abiertas.
+ * Urgente en rojo y baja en gris son las dos que importa distinguir de un
+ * vistazo; media usa el mismo azul informativo que su badge.
+ */
+export const PRIORIDAD_COLOR = {
+  urgente: 'var(--color-danger)',
+  alta:    'var(--color-warning)',
+  media:   'var(--color-info)',
+  baja:    'var(--color-text-muted)',
+}
+
 /** Orden fijo para pintar la leyenda siempre igual, sin depender del orden
  * en que llegan las tareas del backend. */
 export const ORDEN_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'cancelado']
@@ -72,4 +84,27 @@ export const ORDEN_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'cancela
 /** Color del pin/leyenda para un estado dado (con respaldo neutro). */
 export function colorPorEstado(estado) {
   return ESTADO_COLOR[estado] ?? 'var(--color-text-muted)'
+}
+
+/** Color del pin para una prioridad dada (con respaldo neutro). */
+export function colorPorPrioridad(prioridad) {
+  return PRIORIDAD_COLOR[prioridad] ?? 'var(--color-info)'
+}
+
+/**
+ * Color del pin en la vista del TÉCNICO (SCRUM-162).
+ *
+ * El estado manda cuando la tarea ya está cerrada (completada/cancelada);
+ * mientras sigue abierta, el color lo decide la prioridad — así el técnico ve
+ * qué parada urge más, no solo si ya la empezó. La vista del supervisor usa
+ * `colorPorEstado` a secas, porque ahí lo que importa es el avance del equipo.
+ */
+export function colorPorTarea(servicio) {
+  const estado = servicio?.estado ?? servicio?.estado_tarea
+
+  if (estado === 'completado')  return ESTADO_COLOR.completado
+  if (estado === 'cancelado')   return ESTADO_COLOR.cancelado
+  if (estado === 'en_progreso') return ESTADO_COLOR.en_progreso
+
+  return colorPorPrioridad(servicio?.prioridad)
 }

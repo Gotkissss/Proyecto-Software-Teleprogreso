@@ -131,6 +131,12 @@ services:
       - no-new-privileges:true
     volumes:
       - ./backend:/app
+      # Volumen anónimo: evita que un entorno virtual creado en Windows/macOS
+      # (backend/.venv, para correr pytest en local) se monte dentro del
+      # contenedor Linux. .dockerignore no protege de esto — solo filtra el
+      # contexto de build, no los volúmenes. Mismo truco que node_modules en
+      # el frontend.
+      - /app/.venv
     command: >
       sh -c "alembic upgrade head &&
              python seed.py &&

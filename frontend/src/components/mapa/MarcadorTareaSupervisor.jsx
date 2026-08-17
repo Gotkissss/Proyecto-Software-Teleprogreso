@@ -23,45 +23,23 @@
  *     tecnico: { id_empleado, nombre } | null }
  */
 import { Marker, Popup } from 'react-leaflet'
-import L from 'leaflet'
 import Badge from '../ui/Badge'
 import {
-  colorPorEstado,
   ESTADO_LABEL,
   PRIORIDAD_LABEL,
   variantePorEstado,
   variantePorPrioridad,
 } from './estadoColor'
+// SCRUM-181: pin compartido. Aquí el color va por ESTADO, para que coincida
+// con LeyendaMapaSupervisor.
+import { iconoPorEstado } from './iconoMarcador'
 import styles from './MarcadorTareaSupervisor.module.css'
-
-/** Ícono en forma de pin (SVG), coloreado según el estado de la tarea. */
-function crearIcono(servicio) {
-  const color = colorPorEstado(servicio.estado)
-  const enCurso = servicio.estado === 'en_progreso'
-
-  const html = `
-    <div class="${styles.pinWrap} ${enCurso ? styles.pinPulse : ''}" style="color:${color}">
-      <svg viewBox="0 0 24 32" width="34" height="44" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.4 0 0 5.4 0 12c0 8.5 12 20 12 20s12-11.5 12-20C24 5.4 18.6 0 12 0z" fill="currentColor"/>
-        <circle cx="12" cy="12" r="4.5" fill="#fff"/>
-      </svg>
-    </div>
-  `
-
-  return L.divIcon({
-    html,
-    className: styles.icon,
-    iconSize: [34, 44],
-    iconAnchor: [17, 44],
-    popupAnchor: [0, -38],
-  })
-}
 
 export default function MarcadorTareaSupervisor({ servicio }) {
   if (servicio?.lat == null || servicio?.lng == null) return null
 
   return (
-    <Marker position={[servicio.lat, servicio.lng]} icon={crearIcono(servicio)}>
+    <Marker position={[servicio.lat, servicio.lng]} icon={iconoPorEstado(servicio.estado)}>
       <Popup>
         <div className={styles.popup}>
           <p className={styles.popupTitulo}>{servicio.nombre}</p>

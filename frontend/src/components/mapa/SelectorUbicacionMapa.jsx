@@ -27,9 +27,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Marker, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
 import MapaBase from './MapaBase'
 import CentrarMarcadorSeleccionado from './CentrarMarcadorSeleccionado'
+// SCRUM-181: pin compartido, en tamaño `lg` porque es el elemento con el que
+// se interactúa en esta pantalla.
+import { iconoSeleccion } from './iconoMarcador'
 import Spinner from '../ui/Spinner'
 import {
   buscarCoordenadas,
@@ -45,25 +47,7 @@ const CENTRO_GUATEMALA = [14.6349, -90.5069]
 // cuenta contra su límite de uso. Por debajo de esto no se consulta.
 const MIN_CARACTERES_DIRECCION = 5
 
-function crearIconoSeleccion() {
-  const html = `
-    <div class="${styles.pinWrap}">
-      <svg viewBox="0 0 24 32" width="36" height="46" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.4 0 0 5.4 0 12c0 8.5 12 20 12 20s12-11.5 12-20C24 5.4 18.6 0 12 0z" fill="currentColor"/>
-        <circle cx="12" cy="12" r="4.5" fill="#fff"/>
-      </svg>
-    </div>
-  `
-  return L.divIcon({
-    html,
-    className: styles.icon,
-    iconSize: [36, 46],
-    iconAnchor: [18, 46],
-    popupAnchor: [0, -42],
-  })
-}
-
-const ICONO = crearIconoSeleccion()
+const ICONO = iconoSeleccion()
 
 /** Escucha los clics del mapa y coloca/mueve el marcador ahí. */
 function CapaClicMapa({ onClic }) {

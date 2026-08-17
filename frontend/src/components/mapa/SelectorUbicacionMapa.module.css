@@ -86,13 +86,4 @@
   text-decoration: none;
 }
 
-.pinWrap {
-  display: block;
-  color: var(--color-primary);
-  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
-}
-
-.icon {
-  background: transparent;
-  border: none;
-}
+/* Los estilos del pin viven en iconoMarcador.module.css — SCRUM-181. */

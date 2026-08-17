@@ -7,8 +7,13 @@ FROM node:20-alpine AS development
 
 WORKDIR /app
 
+# SCRUM-182: `npm ci` y no `npm install`, igual que la etapa de build y que el
+# CI. `npm install` resuelve por su cuenta cuando package.json y el lockfile no
+# coinciden, así que el contenedor podía levantar con una versión de leaflet
+# distinta de la que se probó, y el desajuste solo aparecía en producción.
+# `npm ci` instala exactamente el lockfile y falla si está desincronizado.
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 

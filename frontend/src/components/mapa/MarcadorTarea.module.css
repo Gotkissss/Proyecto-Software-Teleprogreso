@@ -2,24 +2,8 @@
    Pin coloreado (divIcon) + contenido del popup, alineado a la paleta
    y tipografía del resto de la app (misma que Badge.jsx). */
 
-/* Reemplaza el className por defecto de Leaflet ('leaflet-div-icon'),
-   que trae una caja blanca con borde — no queremos esa caja, solo el pin. */
-.icon {
-  background: transparent;
-  border: none;
-}
-
-.pinWrap {
-  display: flex;
-  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
-}
-
-/* Mismo anillo pulsante que ya usa el timeline de "Mi Ruta" para
-   en_progreso (@keyframes pulse-ring, definido en index.css). */
-.pinPulse {
-  border-radius: 50%;
-  animation: pulse-ring 2s infinite;
-}
+/* Los estilos del pin (.icon, .pinWrap, .pinPulse) se movieron a
+   iconoMarcador.module.css — SCRUM-181. Aquí solo queda el popup. */
 
 .popup {
   min-width: 200px;

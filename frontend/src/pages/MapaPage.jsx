@@ -17,6 +17,7 @@ import MarcadorTarea from '../components/mapa/MarcadorTarea'
 import MarcadorMiUbicacion from '../components/mapa/MarcadorMiUbicacion'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
 import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSeleccionado'
+import { ESTADO_COLOR, PRIORIDAD_COLOR } from '../components/mapa/estadoColor'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
@@ -30,14 +31,19 @@ const IconMapa = () => (
   </svg>
 )
 
-/** Leyenda de colores: mismo criterio que MarcadorTarea.colorPorTarea. */
+/**
+ * Leyenda de colores: mismo criterio que `colorPorTarea` (estadoColor.js).
+ * SCRUM-181: los colores se leen de las constantes compartidas en vez de
+ * repetirse aquí a mano, que era como la leyenda y los pines se
+ * desincronizaban al tocar la paleta.
+ */
 const LEYENDA = [
-  { color: 'var(--color-danger)',  label: 'Urgente' },
-  { color: 'var(--color-warning)', label: 'Alta' },
-  { color: 'var(--color-info)',    label: 'Media' },
-  { color: 'var(--color-text-muted)', label: 'Baja' },
-  { color: 'var(--color-primary)', label: 'En curso' },
-  { color: 'var(--color-success)', label: 'Completado' },
+  { color: PRIORIDAD_COLOR.urgente,  label: 'Urgente' },
+  { color: PRIORIDAD_COLOR.alta,     label: 'Alta' },
+  { color: PRIORIDAD_COLOR.media,    label: 'Media' },
+  { color: PRIORIDAD_COLOR.baja,     label: 'Baja' },
+  { color: ESTADO_COLOR.en_progreso, label: 'En curso' },
+  { color: ESTADO_COLOR.completado,  label: 'Completado' },
 ]
 
 /** Texto de aviso cuando la ubicación del técnico no está disponible. */

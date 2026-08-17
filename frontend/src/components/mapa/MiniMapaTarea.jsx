@@ -21,40 +21,20 @@
  */
 import { useEffect, useState } from 'react'
 import { Marker, Popup } from 'react-leaflet'
-import L from 'leaflet'
 import MapaBase from './MapaBase'
 import CentrarMarcadorSeleccionado from './CentrarMarcadorSeleccionado'
 import Badge from '../ui/Badge'
 import Spinner from '../ui/Spinner'
 import {
-  colorPorEstado,
   ESTADO_LABEL,
   PRIORIDAD_LABEL,
   variantePorEstado,
   variantePorPrioridad,
 } from './estadoColor'
+// SCRUM-181: pin compartido, en tamaño `sm` por ser un mapa embebido.
+import { iconoPorEstado } from './iconoMarcador'
 import { buscarCoordenadas } from '../../utils/geocodificacion'
 import styles from './MiniMapaTarea.module.css'
-
-/** Ícono de pin coloreado según el estado (misma fuente que la leyenda). */
-function crearIcono(estado) {
-  const color = colorPorEstado(estado)
-  const html = `
-    <div class="${styles.pinWrap}" style="color:${color}">
-      <svg viewBox="0 0 24 32" width="30" height="38" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.4 0 0 5.4 0 12c0 8.5 12 20 12 20s12-11.5 12-20C24 5.4 18.6 0 12 0z" fill="currentColor"/>
-        <circle cx="12" cy="12" r="4.5" fill="#fff"/>
-      </svg>
-    </div>
-  `
-  return L.divIcon({
-    html,
-    className: styles.icon,
-    iconSize: [30, 38],
-    iconAnchor: [15, 38],
-    popupAnchor: [0, -34],
-  })
-}
 
 export default function MiniMapaTarea({ tarea }) {
   const [punto, setPunto] = useState(null) // { lat, lng, aproximado }
@@ -146,7 +126,7 @@ export default function MiniMapaTarea({ tarea }) {
         className={styles.mapa}
       >
         <CentrarMarcadorSeleccionado punto={[punto.lat, punto.lng]} zoom={16} />
-        <Marker position={[punto.lat, punto.lng]} icon={crearIcono(estado)}>
+        <Marker position={[punto.lat, punto.lng]} icon={iconoPorEstado(estado, 'sm')}>
           <Popup>
             <div className={styles.popup}>
               <p className={styles.popupTitulo}>{tarea.titulo}</p>

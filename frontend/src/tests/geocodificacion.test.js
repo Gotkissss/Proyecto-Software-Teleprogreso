@@ -22,11 +22,11 @@ function respuesta(body, ok = true) {
 
 /** URL de la última llamada a fetch, ya parseada. */
 function ultimaUrl() {
-  return new URL(global.fetch.mock.calls.at(-1)[0])
+  return new URL(globalThis.fetch.mock.calls.at(-1)[0])
 }
 
 beforeEach(() => {
-  global.fetch = vi.fn()
+  globalThis.fetch = vi.fn()
 })
 
 afterEach(() => {
@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe('buscarCoordenadas', () => {
   it('traduce lat/lon de Nominatim a { lat, lng } numéricos', async () => {
-    global.fetch.mockResolvedValue(
+    globalThis.fetch.mockResolvedValue(
       respuesta([{ lat: '14.6349', lon: '-90.5069', display_name: 'Zona 10' }])
     )
 
@@ -49,7 +49,7 @@ describe('buscarCoordenadas', () => {
   })
 
   it('sesga la búsqueda a Guatemala y pide resultados en español', async () => {
-    global.fetch.mockResolvedValue(respuesta([]))
+    globalThis.fetch.mockResolvedValue(respuesta([]))
 
     await buscarCoordenadas('Calle 15')
 
@@ -64,25 +64,25 @@ describe('buscarCoordenadas', () => {
     expect(await buscarCoordenadas('z1')).toBeNull()
     expect(await buscarCoordenadas('   ')).toBeNull()
     expect(await buscarCoordenadas(null)).toBeNull()
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('devuelve null cuando Nominatim no encuentra la dirección', async () => {
-    global.fetch.mockResolvedValue(respuesta([]))
+    globalThis.fetch.mockResolvedValue(respuesta([]))
     expect(await buscarCoordenadas('dirección inexistente')).toBeNull()
   })
 
   it('devuelve null si las coordenadas no son numéricas', async () => {
     // Un NaN colado en el mapa deja el marcador en un limbo silencioso; es
     // preferible tratarlo como "no encontrado".
-    global.fetch.mockResolvedValue(
+    globalThis.fetch.mockResolvedValue(
       respuesta([{ lat: 'no-es-numero', lon: '-90.5', display_name: 'X' }])
     )
     expect(await buscarCoordenadas('Calle rara')).toBeNull()
   })
 
   it('lanza un error legible si el servicio responde mal', async () => {
-    global.fetch.mockResolvedValue(respuesta(null, false))
+    globalThis.fetch.mockResolvedValue(respuesta(null, false))
     await expect(buscarCoordenadas('Zona 1')).rejects.toThrow(
       'No se pudo consultar el mapa.'
     )
@@ -91,7 +91,7 @@ describe('buscarCoordenadas', () => {
 
 describe('buscarDireccion', () => {
   it('devuelve el display_name de la geocodificación inversa', async () => {
-    global.fetch.mockResolvedValue(
+    globalThis.fetch.mockResolvedValue(
       respuesta({ display_name: '5a Avenida, Zona 1, Guatemala' })
     )
 
@@ -107,11 +107,11 @@ describe('buscarDireccion', () => {
   it('no consulta si falta alguna coordenada', async () => {
     expect(await buscarDireccion(null, -90.5)).toBeNull()
     expect(await buscarDireccion(14.6, null)).toBeNull()
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('devuelve null si la respuesta no trae dirección', async () => {
-    global.fetch.mockResolvedValue(respuesta({}))
+    globalThis.fetch.mockResolvedValue(respuesta({}))
     expect(await buscarDireccion(14.6349, -90.5069)).toBeNull()
   })
 })
