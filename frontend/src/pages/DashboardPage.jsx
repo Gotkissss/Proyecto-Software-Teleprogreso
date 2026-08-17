@@ -18,7 +18,7 @@ import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { describirVencimiento } from '../utils/vencimiento'
-import { exportarReporteAsistenciaMes } from '../utils/exportarAsistenciaCSV'
+import { exportarReporteAsistenciaMes } from '../utils/exportarAsistenciaExcel'
 import styles from './DashboardPage.module.css'
 
 const IconFoto = () => (
@@ -148,22 +148,18 @@ export default function DashboardPage() {
 
   /**
    * Botón "Exportar reporte": descarga la asistencia de TODA la plantilla
-   * del mes actual en un CSV, sin salir del dashboard. Es un adelanto de la
+   * del mes actual en Excel, sin salir del dashboard. Es un adelanto de la
    * página completa de Reportes (con filtros de rango/empleado) prevista
    * para el próximo sprint.
    */
   const handleExportarReporte = async () => {
     setExportando(true)
     try {
-      const { totalJornadas, archivo } = await exportarReporteAsistenciaMes()
-      toast.success(`Reporte descargado: ${archivo} (${totalJornadas} jornadas).`)
+      const { archivo } = await exportarReporteAsistenciaMes()
+      toast.success(`Reporte descargado: ${archivo}.`)
     } catch (err) {
-      if (err?.sinDatos) {
-        toast.info(err.message)
-      } else {
-        console.error('Error al exportar reporte de asistencia:', err)
-        toast.error('No se pudo generar el reporte. Intenta de nuevo.')
-      }
+      console.error('Error al exportar reporte de asistencia:', err)
+      toast.error('No se pudo generar el reporte. Intenta de nuevo.')
     } finally {
       setExportando(false)
     }
@@ -199,7 +195,7 @@ export default function DashboardPage() {
           className={styles.exportarBtn}
           onClick={handleExportarReporte}
           disabled={exportando}
-          title="Descarga la asistencia de todos los técnicos de este mes en CSV"
+          title="Descarga la asistencia de toda la plantilla de este mes en Excel"
         >
           {exportando
             ? <><Spinner size="sm" color="white" /> Generando...</>
