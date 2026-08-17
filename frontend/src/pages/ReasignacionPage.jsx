@@ -10,6 +10,7 @@ import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import MiniMapaTarea from '../components/mapa/MiniMapaTarea'
 import {
   LIMITE_TAREAS_FALLBACK,
   getTareas,
@@ -514,10 +515,16 @@ export default function ReasignacionPage() {
         open={Boolean(tareaSeleccionada)}
         onClose={() => setTareaSeleccionada(null)}
         title="Reasignar tarea"
+        width={520}
       >
         <p className={styles.panelSubtitle}>
           {tareaSeleccionada?.titulo}
         </p>
+
+        {/* SCRUM-172: dónde queda el servicio. Reasignar a ciegas obligaba a
+            abrir el mapa del equipo en otra pestaña para saber si la zona le
+            quedaba de camino al técnico que se estaba eligiendo. */}
+        {tareaSeleccionada && <MiniMapaTarea tarea={tareaSeleccionada} />}
 
         {errorReasignacion && (
           <div className={styles.errorPanel}>

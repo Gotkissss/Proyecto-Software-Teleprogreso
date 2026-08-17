@@ -40,7 +40,12 @@ export async function reasignarTarea(id, tecnico_id) {
 /**
  * Crea una nueva tarea y la asigna a un técnico
  * @param {Object} tarea - { titulo, descripcion, direccion, prioridad, id_tecnico,
- *                           fecha_inicio, fecha_finalizacion }
+ *                           fecha_inicio, fecha_finalizacion, lat, lng }
+ *
+ * SCRUM-170/171: `lat` y `lng` son la ubicación exacta del servicio. El
+ * backend las valida como par (TareaCreate en backend/app/schemas/tarea.py:
+ * o van las dos con valor, o van las dos en null) y las guarda en
+ * `coordenada_servicio` como punto PostGIS.
  */
 export async function crearTarea({
   titulo,
@@ -50,6 +55,8 @@ export async function crearTarea({
   id_tecnico,
   fecha_inicio,
   fecha_finalizacion,
+  lat,
+  lng,
 }) {
   const { data } = await apiClient.post('/tareas', {
     nombre: titulo,
@@ -59,6 +66,9 @@ export async function crearTarea({
     id_tecnico,
     fecha_inicio: fecha_inicio || null,
     fecha_finalizacion: fecha_finalizacion || null,
+    // Se mandan siempre juntas: mandar solo una es un 422 del validador.
+    lat: lat ?? null,
+    lng: lng ?? null,
   })
   return data
 }
@@ -69,7 +79,8 @@ export async function crearTarea({
  *
  * @param {number} id
  * @param {Object} cambios - { titulo?, descripcion?, direccion?, prioridad?,
- *                             estado?, fecha_inicio?, fecha_finalizacion?, id_tecnico? }
+ *                             estado?, fecha_inicio?, fecha_finalizacion?,
+ *                             id_tecnico?, lat?, lng? }
  */
 export async function actualizarTarea(id, cambios = {}) {
   const body = {}
@@ -87,6 +98,14 @@ export async function actualizarTarea(id, cambios = {}) {
     body.id_tecnico = cambios.id_tecnico === '' || cambios.id_tecnico == null
       ? null
       : Number(cambios.id_tecnico)
+  }
+
+  // SCRUM-170: el validador del backend exige lat y lng como par. Basta con
+  // que venga una en `cambios` para mandar las dos; ambas en null borran la
+  // ubicación de la tarea.
+  if ('lat' in cambios || 'lng' in cambios) {
+    body.lat = cambios.lat ?? null
+    body.lng = cambios.lng ?? null
   }
 
   const { data } = await apiClient.patch(`/tareas/${id}`, body)

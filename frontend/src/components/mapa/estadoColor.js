@@ -25,6 +25,46 @@ export const ESTADO_LABEL = {
   cancelado:   'Cancelado',
 }
 
+export const PRIORIDAD_LABEL = {
+  urgente: 'Urgente',
+  alta:    'Alta',
+  media:   'Media',
+  baja:    'Baja',
+}
+
+/**
+ * Variante de <Badge> para cada estado/prioridad.
+ *
+ * Badge.jsx usa el prop `variant` como nombre de clase CSS, y Badge.module.css
+ * solo define success/info/warning/danger/muted. Pasarle el estado crudo
+ * ('pendiente', 'alta', ...) resolvía a `styles[...] === undefined` y el badge
+ * salía sin color y con la clase literal "undefined" en el DOM. Estos mapas
+ * traducen el valor del dominio a la variante que Badge sí conoce.
+ */
+export const ESTADO_BADGE_VARIANT = {
+  pendiente:   'warning',
+  en_progreso: 'info',
+  completado:  'success',
+  cancelado:   'danger',
+}
+
+export const PRIORIDAD_BADGE_VARIANT = {
+  urgente: 'danger',
+  alta:    'warning',
+  media:   'info',
+  baja:    'muted',
+}
+
+/** Variante de Badge para un estado dado (con respaldo neutro). */
+export function variantePorEstado(estado) {
+  return ESTADO_BADGE_VARIANT[estado] ?? 'muted'
+}
+
+/** Variante de Badge para una prioridad dada (con respaldo neutro). */
+export function variantePorPrioridad(prioridad) {
+  return PRIORIDAD_BADGE_VARIANT[prioridad] ?? 'muted'
+}
+
 /** Orden fijo para pintar la leyenda siempre igual, sin depender del orden
  * en que llegan las tareas del backend. */
 export const ORDEN_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'cancelado']

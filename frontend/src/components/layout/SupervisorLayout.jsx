@@ -75,7 +75,6 @@ const NAV_ITEMS = [
   // HU-165: mapa del equipo, con tareas agrupadas por técnico.
   { to: '/supervisor/mapa',             label: 'Mapa',       Icon: IconMapa },
   { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
-  { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
   { to: '/supervisor/reasignacion',     label: 'Reasignar',  Icon: IconReasignar },
   // Historial de lo cerrado por día, con evidencia. Antes el panel solo
   // mostraba las últimas cinco tareas y no había forma de auditar un día.

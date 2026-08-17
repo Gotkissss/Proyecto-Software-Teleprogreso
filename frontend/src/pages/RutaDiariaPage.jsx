@@ -8,6 +8,11 @@ import Modal from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import ModalFinalizarTarea from '../components/tareas/ModalFinalizarTarea'
+import {
+  ESTADO_LABEL,
+  variantePorEstado,
+  variantePorPrioridad,
+} from '../components/mapa/estadoColor'
 import { describirVencimiento } from '../utils/vencimiento'
 import styles from './RutaDiariaPage.module.css'
 
@@ -21,13 +26,6 @@ const IconPlay     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
 // SCRUM-158: botón "Ver en mapa" en el panel de detalle
 const IconMap      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>
-
-const ESTADO_LABEL = {
-  completado:  'Completado',
-  en_progreso: 'En Curso',
-  pendiente:   'Pendiente',
-  cancelado:   'Cancelado',
-}
 
 // Panel de detalle / modal de tarea
 function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa }) {
@@ -149,12 +147,15 @@ function ServicioCard({ servicio, onVerDetalle }) {
 
         <div className={styles.info}>
           <div className={styles.badges}>
-            <Badge label={ESTADO_LABEL[servicio.estado] ?? servicio.estado} variant={servicio.estado} />
+            <Badge
+              label={ESTADO_LABEL[servicio.estado] ?? servicio.estado}
+              variant={variantePorEstado(servicio.estado)}
+            />
             {servicio.prioridad === 'urgente' && (
-              <Badge label="Urgente" variant="urgente" />
+              <Badge label="Urgente" variant={variantePorPrioridad('urgente')} />
             )}
             {servicio.prioridad === 'alta' && servicio.estado !== 'completado' && (
-              <Badge label="Alta" variant="alta" />
+              <Badge label="Alta" variant={variantePorPrioridad('alta')} />
             )}
             {/* Cuánto queda para la fecha límite. El técnico veía la lista sin
                 ninguna señal de qué vence hoy y qué ya se pasó. */}

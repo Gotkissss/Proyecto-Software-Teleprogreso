@@ -21,21 +21,13 @@ import { useEffect, useRef } from 'react'
 import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../ui/Badge'
+import {
+  ESTADO_LABEL,
+  PRIORIDAD_LABEL,
+  variantePorEstado,
+  variantePorPrioridad,
+} from './estadoColor'
 import styles from './MarcadorTarea.module.css'
-
-const ESTADO_LABEL = {
-  completado:  'Completado',
-  en_progreso: 'En Curso',
-  pendiente:   'Pendiente',
-  cancelado:   'Cancelado',
-}
-
-const PRIORIDAD_LABEL = {
-  urgente: 'Urgente',
-  alta:    'Alta',
-  media:   'Media',
-  baja:    'Baja',
-}
 
 /**
  * Color del pin. El estado manda cuando la tarea ya no está abierta
@@ -80,7 +72,6 @@ function crearIcono(servicio) {
   })
 }
 
-// REEMPLAZAR POR:
 export default function MarcadorTarea({ servicio, autoAbrir = false }) {
   const markerRef = useRef(null)
 
@@ -99,11 +90,11 @@ export default function MarcadorTarea({ servicio, autoAbrir = false }) {
           <div className={styles.popupBadges}>
             <Badge
               label={ESTADO_LABEL[servicio.estado] ?? servicio.estado}
-              variant={servicio.estado}
+              variant={variantePorEstado(servicio.estado)}
             />
             <Badge
               label={PRIORIDAD_LABEL[servicio.prioridad] ?? servicio.prioridad}
-              variant={servicio.prioridad}
+              variant={variantePorPrioridad(servicio.prioridad)}
             />
           </div>
 

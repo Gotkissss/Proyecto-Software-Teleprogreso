@@ -25,15 +25,14 @@
 import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../ui/Badge'
-import { colorPorEstado, ESTADO_LABEL } from './estadoColor'
+import {
+  colorPorEstado,
+  ESTADO_LABEL,
+  PRIORIDAD_LABEL,
+  variantePorEstado,
+  variantePorPrioridad,
+} from './estadoColor'
 import styles from './MarcadorTareaSupervisor.module.css'
-
-const PRIORIDAD_LABEL = {
-  urgente: 'Urgente',
-  alta:    'Alta',
-  media:   'Media',
-  baja:    'Baja',
-}
 
 /** Ícono en forma de pin (SVG), coloreado según el estado de la tarea. */
 function crearIcono(servicio) {
@@ -77,11 +76,11 @@ export default function MarcadorTareaSupervisor({ servicio }) {
           <div className={styles.popupBadges}>
             <Badge
               label={ESTADO_LABEL[servicio.estado] ?? servicio.estado}
-              variant={servicio.estado}
+              variant={variantePorEstado(servicio.estado)}
             />
             <Badge
               label={PRIORIDAD_LABEL[servicio.prioridad] ?? servicio.prioridad}
-              variant={servicio.prioridad}
+              variant={variantePorPrioridad(servicio.prioridad)}
             />
           </div>
 

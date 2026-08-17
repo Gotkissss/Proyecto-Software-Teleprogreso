@@ -10,13 +10,14 @@
  * ---------------------------------------------------------------------------
  */
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   LIMITE_TAREAS_FALLBACK,
   crearTarea,
   getTecnicosDisponibles,
 } from '../api/tareaService'
+import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
 import Spinner from '../components/ui/Spinner'
 import styles from './NuevaTareaPage.module.css'
 
@@ -39,6 +40,10 @@ const FORM_INICIAL = {
   id_tecnico:         '',
   fecha_inicio:       '',
   fecha_finalizacion: '',
+  // SCRUM-171: ubicación exacta del servicio, fijada en el mapa. Es opcional;
+  // si el supervisor no marca el punto, la tarea se crea solo con dirección.
+  lat:                null,
+  lng:                null,
 }
 
 function validar(form) {
@@ -109,6 +114,24 @@ export default function NuevaTareaPage() {
     setErrores((prev) => ({ ...prev, [campo]: nuevosErrores[campo] || null }))
   }
 
+  /**
+   * SCRUM-171 — Sincroniza mapa ↔ dirección (ver SelectorUbicacionMapa).
+   *
+   * `direccion` llega como undefined mientras la geocodificación inversa
+   * sigue en curso, o cuando el punto se movió sin que Nominatim devolviera
+   * un texto: en esos casos no se pisa lo que el supervisor ya escribió.
+   */
+  const handleUbicacionCambiada = useCallback(({ lat, lng, direccion }) => {
+    setForm((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      direccion: direccion !== undefined ? direccion : prev.direccion,
+    }))
+    setErrores((prev) => ({ ...prev, lat: null, lng: null }))
+    setErrorServidor(null)
+  }, [])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -147,6 +170,8 @@ export default function NuevaTareaPage() {
         id_tecnico:         form.id_tecnico ? Number(form.id_tecnico) : null,
         fecha_inicio:       form.fecha_inicio       || null,
         fecha_finalizacion: form.fecha_finalizacion || null,
+        lat:                form.lat,
+        lng:                form.lng,
       })
 
       setExito(true)
@@ -279,6 +304,25 @@ export default function NuevaTareaPage() {
               value={form.direccion}
               onChange={(e) => handleChange('direccion', e.target.value)}
               disabled={cargando}
+            />
+          </div>
+
+          {/* ── Ubicación en el mapa (SCRUM-171) ──
+              Va sincronizada con el campo de arriba: fijar el marcador
+              rellena la dirección (geocodificación inversa) y escribir una
+              dirección mueve el marcador (geocodificación directa). El
+              técnico recibe así coordenadas exactas y no solo un texto. */}
+          <div className={styles.field}>
+            <label className={styles.label}>
+              Ubicación en el mapa <span className={styles.optional}>(opcional)</span>
+            </label>
+            <SelectorUbicacionMapa
+              direccion={form.direccion}
+              lat={form.lat}
+              lng={form.lng}
+              onCambiarUbicacion={handleUbicacionCambiada}
+              disabled={cargando}
+              error={errores.lat || errores.lng || null}
             />
           </div>
 

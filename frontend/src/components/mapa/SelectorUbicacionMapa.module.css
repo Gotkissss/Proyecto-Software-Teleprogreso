@@ -1,0 +1,98 @@
+/* SCRUM-171 — Selector de ubicación en mapa (NuevaTareaPage). */
+
+.wrap {
+  border-radius: var(--radius-lg);
+}
+
+.mapa {
+  height: 280px !important;
+  min-height: 280px !important;
+  cursor: crosshair;
+}
+
+.pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  min-height: 22px;
+}
+
+.mensaje {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.estado {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.aviso {
+  font-size: 0.8125rem;
+  color: var(--color-warning-dark);
+  font-weight: 500;
+}
+
+.error {
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+.ayuda {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.coordenadas {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.coordTexto {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.quitarBtn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  color: var(--color-danger);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.quitarBtn:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.pinWrap {
+  display: block;
+  color: var(--color-primary);
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.35));
+}
+
+.icon {
+  background: transparent;
+  border: none;
+}
