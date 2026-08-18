@@ -536,10 +536,25 @@ async def resetear_base_de_datos(db: AsyncSession) -> None:
 
 
 async def crear_tipos_pausa(db: AsyncSession) -> None:
-    """Siembra el catálogo de pausas que consume el router de descanso."""
+    """
+    Siembra el catálogo de pausas que consume el router de descanso.
+
+    Inserta solo los que falten. La migración 0005 crea la tabla y ya la deja
+    con estos mismos tres tipos, así que en una base recién migrada el catálogo
+    está completo antes de que el seed llegue aquí. Insertarlos a ciegas
+    reventaba con `duplicate key ... tipo_pausa_pkey` y, como el commit vive al
+    final del bloque de siembra, la excepción se llevaba por delante el seed
+    entero: la base quedaba sin empleados y el login devolvía 401 para todos.
+    Solo lo veía quien arrancaba con un volumen nuevo — con datos previos el
+    seed cortaba antes por `bd_ya_tiene_datos`.
+    """
     print("\n⏸️  Creando catálogo de tipos de pausa...")
 
-    for datos in TIPOS_PAUSA:
+    resultado = await db.execute(text("SELECT id_tipo_pausa FROM tipo_pausa"))
+    existentes = set(resultado.scalars().all())
+
+    nuevos = [datos for datos in TIPOS_PAUSA if datos["id"] not in existentes]
+    for datos in nuevos:
         db.add(
             TipoPausa(
                 id_tipo_pausa=datos["id"],
@@ -551,7 +566,7 @@ async def crear_tipos_pausa(db: AsyncSession) -> None:
         )
 
     await db.flush()
-    print(f"   ✅ {len(TIPOS_PAUSA)} tipos de pausa")
+    print(f"   ✅ {len(nuevos)} tipos de pausa nuevos ({len(existentes)} ya estaban)")
 
 
 async def bd_ya_tiene_datos(db: AsyncSession) -> bool:
