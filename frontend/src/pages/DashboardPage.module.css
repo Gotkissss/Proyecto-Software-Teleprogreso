@@ -412,5 +412,13 @@
 
 @media (max-width: 560px) {
   .tareaItem { flex-wrap: wrap; }
-  .tareaAcciones { width: 100%; justify-content: space-between; }
+  /* Las acciones también envuelven: en un teléfono la fecha de vencimiento,
+     el botón de evidencias y el badge de estado no caben en una línea y se
+     salían de la tarjeta. */
+  .tareaAcciones {
+    width: 100%;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+    justify-content: space-between;
+  }
 }

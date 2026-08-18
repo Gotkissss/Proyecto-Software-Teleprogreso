@@ -52,14 +52,21 @@
   gap: var(--space-3);
 }
 
-/* ── Variante supervisor: header desktop con blur y sombra ── */
+/* ── Variante supervisor ───────────────────────────── */
 .topBar.supervisor {
   padding: 0 var(--space-6);
   box-shadow: var(--shadow-xs);
-  backdrop-filter: saturate(180%) blur(8px);
+}
+
+/* La marca del supervisor vive en la barra lateral, así que el header solo
+   repite el título cuando esa barra se ha vuelto cajón y no queda nada
+   visible que identifique el panel. */
+.topBar.supervisor .brandText { display: none; }
+
+@media (max-width: 1024px) {
+  .topBar.supervisor .brandText { display: flex; }
 }
 
 @media (max-width: 768px) {
   .topBar.supervisor { padding: 0 var(--space-4); }
-  .topBar.supervisor .brandText { display: none; }
 }

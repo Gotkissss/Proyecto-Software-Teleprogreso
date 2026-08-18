@@ -2,16 +2,23 @@
  * components/layout/SupervisorLayout.jsx
  * ---------------------------------------------------------------------------
  * Layout para las rutas del supervisor — diseño desktop a ancho completo.
- * Usa los componentes compartidos LayoutHeader / LayoutBottomNav (misma
- * estructura que AppLayout) con variant="supervisor".
+ *
+ * La navegación vive en una barra lateral fija (LayoutSidebar) en vez de la
+ * píldora flotante que se usaba antes: con siete secciones la píldora se
+ * comía el ancho de la pantalla y tapaba el contenido al hacer scroll. En
+ * pantallas chicas la barra se pliega en cajón y se abre desde el header.
+ *
+ * El header (LayoutHeader) se mantiene compartido con AppLayout; aquí pierde
+ * el logo, porque la marca pasa a la barra lateral.
  * ---------------------------------------------------------------------------
  */
 
-import { Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useAlertasPendientesCount } from '../../hooks/useAlertasPendientesCount'
 import LayoutHeader from './shared/LayoutHeader'
-import LayoutBottomNav from './shared/LayoutBottomNav'
+import LayoutSidebar from './shared/LayoutSidebar'
 import UserMenu from './shared/UserMenu'
 import styles from './SupervisorLayout.module.css'
 
@@ -70,63 +77,144 @@ const IconHistorialTareas = () => (
   </svg>
 )
 
-const NAV_ITEMS = [
-  { to: '/supervisor/dashboard',        label: 'Panel',      Icon: IconDashboard },
-  // HU-165: mapa del equipo, con tareas agrupadas por técnico.
-  { to: '/supervisor/mapa',             label: 'Mapa',       Icon: IconMapa },
-  { to: '/supervisor/alertas',          label: 'Alertas',    Icon: IconAlertas },
-  { to: '/supervisor/reasignacion',     label: 'Reasignar',  Icon: IconReasignar },
-  // Historial de lo cerrado por día, con evidencia. Antes el panel solo
-  // mostraba las últimas cinco tareas y no había forma de auditar un día.
-  { to: '/supervisor/historial-tareas', label: 'Realizadas', Icon: IconHistorialTareas },
-  // El historial de asistencia no tiene entrada propia: vive como tab dentro
-  // de Empleados. Tener las dos puertas a la misma tabla obligaba al
-  // supervisor a recordar cuál de las dos usar, y la ruta suelta se quedaba
-  // sin el contexto del empleado que estaba consultando.
-  { to: '/supervisor/empleados',        label: 'Empleados',  Icon: IconEmpleados },
-  { to: '/supervisor/inventario',       label: 'Inventario', Icon: IconInventario },
+const IconMenu = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+)
+
+const IconLogout = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+)
+
+/* Los enlaces se agrupan por área: en vertical caben las siete secciones, y
+   sin separarlas la columna se lee como una lista plana donde cuesta ubicar
+   lo que se busca. Son los mismos destinos de siempre, nada nuevo.
+
+   `badgeKey` marca el enlace que lleva contador; el valor se inyecta al
+   renderizar para no repetir la lista completa en el componente. */
+const NAV_GROUPS = [
+  {
+    label: 'Operación',
+    items: [
+      { to: '/supervisor/dashboard', label: 'Panel',   Icon: IconDashboard },
+      // HU-165: mapa del equipo, con tareas agrupadas por técnico.
+      { to: '/supervisor/mapa',      label: 'Mapa',    Icon: IconMapa },
+      { to: '/supervisor/alertas',   label: 'Alertas', Icon: IconAlertas, badgeKey: 'alertas' },
+    ],
+  },
+  {
+    label: 'Trabajo',
+    items: [
+      { to: '/supervisor/reasignacion',     label: 'Reasignar',  Icon: IconReasignar },
+      // Historial de lo cerrado por día, con evidencia. Antes el panel solo
+      // mostraba las últimas cinco tareas y no había forma de auditar un día.
+      { to: '/supervisor/historial-tareas', label: 'Realizadas', Icon: IconHistorialTareas },
+    ],
+  },
+  {
+    label: 'Administración',
+    items: [
+      // El historial de asistencia no tiene entrada propia: vive como tab
+      // dentro de Empleados. Tener las dos puertas a la misma tabla obligaba
+      // al supervisor a recordar cuál de las dos usar, y la ruta suelta se
+      // quedaba sin el contexto del empleado que estaba consultando.
+      { to: '/supervisor/empleados',  label: 'Empleados',  Icon: IconEmpleados },
+      { to: '/supervisor/inventario', label: 'Inventario', Icon: IconInventario },
+    ],
+  },
 ]
 
 export default function SupervisorLayout() {
   const { user, logoutUser } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const alertasPendientes = useAlertasPendientesCount()
+  const [menuAbierto, setMenuAbierto] = useState(false)
 
   const displayRole = user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Supervisor'
 
+  // El cajón se cierra al navegar. LayoutSidebar ya lo cierra al pulsar uno
+  // de sus enlaces, pero no cubre los saltos que dispara la propia pantalla
+  // (el botón de alertas del header, por ejemplo).
+  useEffect(() => { setMenuAbierto(false) }, [pathname])
+
+  const grupos = NAV_GROUPS.map((grupo) => ({
+    ...grupo,
+    items: grupo.items.map((item) =>
+      item.badgeKey === 'alertas' ? { ...item, badge: alertasPendientes } : item
+    ),
+  }))
+
   return (
     <div className={styles.wrapper}>
-      <LayoutHeader
-        variant="supervisor"
-        logo={<img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />}
-        title="Teleprogreso"
-        subtitle={`Panel · ${displayRole}`}
-        right={
+      <LayoutSidebar
+        abierto={menuAbierto}
+        onCerrar={() => setMenuAbierto(false)}
+        groups={grupos}
+        brand={
           <>
-            <button
-              className={styles.iconBtn}
-              aria-label={`Ver alertas${alertasPendientes > 0 ? ` (${alertasPendientes} pendientes)` : ''}`}
-              title="Ver alertas"
-              onClick={() => navigate('/supervisor/alertas')}
-            >
-              <IconBell />
-              {alertasPendientes > 0 && (
-                <span className={styles.badge}>
-                  {alertasPendientes > 99 ? '99+' : alertasPendientes}
-                </span>
-              )}
-            </button>
-
-            <UserMenu user={user} onLogout={logoutUser} variant="supervisor" />
+            <img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />
+            <span className={styles.brand}>
+              <span className={styles.brandName}>Teleprogreso</span>
+              <span className={styles.brandSub}>Panel · {displayRole}</span>
+            </span>
           </>
+        }
+        footer={
+          <button className={styles.logoutBtn} onClick={logoutUser}>
+            <IconLogout />
+            Cerrar sesión
+          </button>
         }
       />
 
-      <main className={styles.main}>
-        <Outlet />
-      </main>
+      <div className={styles.content}>
+        <LayoutHeader
+          variant="supervisor"
+          title="Teleprogreso"
+          subtitle={`Panel · ${displayRole}`}
+          leading={
+            <button
+              className={styles.menuBtn}
+              aria-label="Abrir menú de navegación"
+              aria-expanded={menuAbierto}
+              onClick={() => setMenuAbierto(true)}
+            >
+              <IconMenu />
+            </button>
+          }
+          right={
+            <>
+              <button
+                className={styles.iconBtn}
+                aria-label={`Ver alertas${alertasPendientes > 0 ? ` (${alertasPendientes} pendientes)` : ''}`}
+                title="Ver alertas"
+                onClick={() => navigate('/supervisor/alertas')}
+              >
+                <IconBell />
+                {alertasPendientes > 0 && (
+                  <span className={styles.badge}>
+                    {alertasPendientes > 99 ? '99+' : alertasPendientes}
+                  </span>
+                )}
+              </button>
 
-      <LayoutBottomNav variant="supervisor" items={NAV_ITEMS} />
+              <UserMenu user={user} onLogout={logoutUser} variant="supervisor" />
+            </>
+          }
+        />
+
+        <main className={styles.main}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

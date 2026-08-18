@@ -85,7 +85,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      <LayoutBottomNav variant="app" items={NAV_ITEMS} />
+      <LayoutBottomNav items={NAV_ITEMS} />
     </div>
   )
 }
