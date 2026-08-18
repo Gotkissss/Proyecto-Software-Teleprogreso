@@ -492,13 +492,41 @@ def reset_solicitado() -> bool:
     """
     ¿Hay que borrar todo antes de sembrar?
 
-    Se activa con la variable de entorno SEED_RESET (true/1/yes) o con el flag
-    --reset. La variable de entorno existe para poder repoblar entornos
-    desplegados como Railway, donde no hay forma de tirar el volumen de la BD.
+    Dos vías, y no son equivalentes:
+
+      - Flag `--reset` en la línea de comandos. Es una acción manual y
+        deliberada (`railway run python seed.py --reset`), así que se respeta
+        siempre, en cualquier entorno.
+
+      - Variable de entorno SEED_RESET. Solo se honra FUERA de producción.
+
+    La distinción existe porque la variable vive en la configuración del
+    servicio y el contenedor la relee en cada arranque: dejarla en `true` por
+    olvido convertía cada push a la rama desplegada en un borrado completo de
+    la base, y la operación perdía los datos reales sin que nadie lo pidiera.
+    En producción se ignora y se avisa por consola en vez de obedecer.
     """
     if "--reset" in sys.argv:
         return True
-    return os.getenv("SEED_RESET", "").strip().lower() in ("1", "true", "yes", "si", "sí")
+
+    pedido_por_variable = os.getenv("SEED_RESET", "").strip().lower() in (
+        "1", "true", "yes", "si", "sí",
+    )
+    if not pedido_por_variable:
+        return False
+
+    if settings.es_produccion:
+        print(
+            "\n⚠️  SEED_RESET está en true pero el entorno es 'production': "
+            "se IGNORA para no borrar datos reales en cada despliegue."
+        )
+        print(
+            "   Si de verdad quieres repoblar producción, córrelo a mano una "
+            "sola vez: railway run python seed.py --reset"
+        )
+        return False
+
+    return True
 
 
 async def resetear_base_de_datos(db: AsyncSession) -> None:
@@ -536,10 +564,25 @@ async def resetear_base_de_datos(db: AsyncSession) -> None:
 
 
 async def crear_tipos_pausa(db: AsyncSession) -> None:
-    """Siembra el catálogo de pausas que consume el router de descanso."""
+    """
+    Siembra el catálogo de pausas que consume el router de descanso.
+
+    Inserta solo los que falten. La migración 0005 crea la tabla y ya la deja
+    con estos mismos tres tipos, así que en una base recién migrada el catálogo
+    está completo antes de que el seed llegue aquí. Insertarlos a ciegas
+    reventaba con `duplicate key ... tipo_pausa_pkey` y, como el commit vive al
+    final del bloque de siembra, la excepción se llevaba por delante el seed
+    entero: la base quedaba sin empleados y el login devolvía 401 para todos.
+    Solo lo veía quien arrancaba con un volumen nuevo — con datos previos el
+    seed cortaba antes por `bd_ya_tiene_datos`.
+    """
     print("\n⏸️  Creando catálogo de tipos de pausa...")
 
-    for datos in TIPOS_PAUSA:
+    resultado = await db.execute(text("SELECT id_tipo_pausa FROM tipo_pausa"))
+    existentes = set(resultado.scalars().all())
+
+    nuevos = [datos for datos in TIPOS_PAUSA if datos["id"] not in existentes]
+    for datos in nuevos:
         db.add(
             TipoPausa(
                 id_tipo_pausa=datos["id"],
@@ -551,7 +594,7 @@ async def crear_tipos_pausa(db: AsyncSession) -> None:
         )
 
     await db.flush()
-    print(f"   ✅ {len(TIPOS_PAUSA)} tipos de pausa")
+    print(f"   ✅ {len(nuevos)} tipos de pausa nuevos ({len(existentes)} ya estaban)")
 
 
 async def bd_ya_tiene_datos(db: AsyncSession) -> bool:
@@ -881,15 +924,24 @@ async def crear_historial_asistencia(
     un rango mensual mostraría tareas sin horas contra las cuales dividirlas y
     la productividad saldría disparada.
 
+    El día de HOY se recorta al reloj: no se siembra ningún evento que todavía
+    no ha ocurrido. Antes las horas de hoy eran fijas (entrada 08:00, almuerzo
+    ~12:30, salida ~17:00) sin importar a qué hora corriera el seed, y una
+    siembra de madrugada dejaba a un técnico contado como "en jornada" a la
+    01:42 con un almuerzo ya consumido que ocurriría once horas más tarde.
+
     El escenario incluye a propósito:
       - llegadas tarde (después de las 08:00) para el badge "Llegada tarde"
       - una jornada antigua sin hora_salida para el badge "Sin salida"
-      - la jornada de hoy abierta para un técnico (aparece "En curso")
       - un técnico SIN entrada hoy → dispara la alerta 'tecnico_sin_entrada'
     """
     print("\n🕒 Generando historial de asistencia...")
     jornadas = 0
     pausas = 0
+    omitidas_futuro = 0
+
+    # Reloj de la operación (no UTC): es la referencia para recortar hoy.
+    hora_ahora = ahora_local().time()
 
     # El último técnico de la lista nunca marca hoy: así siempre hay al menos
     # una alerta de "técnico sin entrada" que mostrar en la demo.
@@ -900,13 +952,15 @@ async def crear_historial_asistencia(
         if dia.weekday() >= 5:      # sábado y domingo no se trabaja
             continue
 
+        es_hoy = dia == HOY
+
         for indice, tecnico in enumerate(tecnicos):
-            if dia == HOY and tecnico.id_empleado == sin_entrada_hoy.id_empleado:
+            if es_hoy and tecnico.id_empleado == sin_entrada_hoy.id_empleado:
                 continue
 
             # Ausencia esporádica (~8 % de los días) para que el historial
             # no se vea artificialmente perfecto.
-            if dia != HOY and random.random() < 0.08:
+            if not es_hoy and random.random() < 0.08:
                 continue
 
             # Entrada entre 07:35 y 08:25 → algunas caen después de las 08:00
@@ -915,17 +969,29 @@ async def crear_historial_asistencia(
                 + timedelta(minutes=random.randint(-25, 25))
             ).time()
 
+            # Si esa hora todavía no llega, el técnico no ha marcado entrada:
+            # de madrugada el día de hoy sencillamente aún no existe.
+            if es_hoy and hora_entrada > hora_ahora:
+                omitidas_futuro += 1
+                continue
+
+            salida_prevista = (
+                datetime.combine(dia, time(17, 0))
+                + timedelta(minutes=random.randint(-20, 45))
+            ).time()
+
             # Una jornada antigua concreta queda sin cerrar (olvidó marcar salida)
             olvido_salida = delta == 6 and indice == 1
-            jornada_de_hoy_abierta = dia == HOY and indice == 0
 
-            if olvido_salida or jornada_de_hoy_abierta:
+            if olvido_salida:
                 hora_salida = None
+            elif es_hoy:
+                # Hoy la jornada sigue abierta solo mientras el reloj no haya
+                # pasado su hora de salida. Así "en jornada" en el panel del
+                # supervisor significa de verdad "está trabajando ahora".
+                hora_salida = salida_prevista if hora_ahora >= salida_prevista else None
             else:
-                hora_salida = (
-                    datetime.combine(dia, time(17, 0))
-                    + timedelta(minutes=random.randint(-20, 45))
-                ).time()
+                hora_salida = salida_prevista
 
             asistencia = Asistencia(
                 id_empleado=tecnico.id_empleado,
@@ -941,44 +1007,54 @@ async def crear_historial_asistencia(
             await db.flush()
             jornadas += 1
 
-            # Almuerzo (siempre) + pausa técnica ocasional
+            # Almuerzo (siempre) + pausa técnica ocasional. De hoy solo se
+            # registran las que ya terminaron: una pausa con hora futura hacía
+            # que la pantalla del técnico mostrara su almuerzo como gastado
+            # antes de haberlo tomado.
             almuerzo_inicio = (
                 datetime.combine(dia, time(12, 0))
                 + timedelta(minutes=random.randint(0, 40))
             )
             almuerzo_fin = almuerzo_inicio + timedelta(minutes=random.randint(40, 60))
-            db.add(
-                Descanso(
-                    id_asistencia=asistencia.id_asistencia,
-                    hora_inicio=almuerzo_inicio.time(),
-                    hora_fin=almuerzo_fin.time(),
-                    # El tipo tiene que ir: sin él la pantalla de Pausas
-                    # etiqueta la pausa como genérica y le aplica el límite
-                    # por defecto en vez del de almuerzo.
-                    tipo="almuerzo",
+            if not es_hoy or almuerzo_fin.time() <= hora_ahora:
+                db.add(
+                    Descanso(
+                        id_asistencia=asistencia.id_asistencia,
+                        hora_inicio=almuerzo_inicio.time(),
+                        hora_fin=almuerzo_fin.time(),
+                        # El tipo tiene que ir: sin él la pantalla de Pausas
+                        # etiqueta la pausa como genérica y le aplica el límite
+                        # por defecto en vez del de almuerzo.
+                        tipo="almuerzo",
+                    )
                 )
-            )
-            pausas += 1
+                pausas += 1
 
             if random.random() < 0.45:
                 tecnica_inicio = (
                     datetime.combine(dia, time(15, 0))
                     + timedelta(minutes=random.randint(0, 60))
                 )
-                db.add(
-                    Descanso(
-                        id_asistencia=asistencia.id_asistencia,
-                        hora_inicio=tecnica_inicio.time(),
-                        hora_fin=(
-                            tecnica_inicio + timedelta(minutes=random.randint(8, 15))
-                        ).time(),
-                        tipo="tecnica",
+                tecnica_fin = tecnica_inicio + timedelta(minutes=random.randint(8, 15))
+                if not es_hoy or tecnica_fin.time() <= hora_ahora:
+                    db.add(
+                        Descanso(
+                            id_asistencia=asistencia.id_asistencia,
+                            hora_inicio=tecnica_inicio.time(),
+                            hora_fin=tecnica_fin.time(),
+                            tipo="tecnica",
+                        )
                     )
-                )
-                pausas += 1
+                    pausas += 1
 
     await db.flush()
     print(f"   ✅ {jornadas} jornadas con {pausas} pausas registradas")
+    if omitidas_futuro:
+        print(
+            f"   ℹ️  {omitidas_futuro} jornadas de hoy no se sembraron: son las "
+            f"{hora_ahora.strftime('%H:%M')} y esos técnicos aún no habrían "
+            f"marcado entrada"
+        )
     print(
         f"   ℹ️  {sin_entrada_hoy.nombre} {sin_entrada_hoy.apellido} no marcó entrada hoy "
         f"(alimenta la alerta 'técnico sin entrada')"

@@ -117,18 +117,20 @@ migraciones.
 
 ### En Railway
 
-Railway no deja borrar el volumen de Postgres, así que el reset se dispara con
-una variable de entorno:
+Railway no deja borrar el volumen de Postgres, así que el reset se hace a mano
+desde la CLI, **una sola vez**, desde el directorio `backend/`:
 
-1. En el servicio del **backend** → *Variables* → agregar `SEED_RESET=true`.
-2. Hacer push a la rama que Railway despliega. Al arrancar, el contenedor
-   corre `alembic upgrade head` y luego `python seed.py`, que ve la variable,
-   vacía la base y la resiembra.
-3. Revisar los *Deploy Logs*: debe aparecer `🗑️ SEED_RESET activo` seguido de
-   `🎉 Seed completado exitosamente`.
-4. **Volver a poner `SEED_RESET=false`** (o eliminar la variable). Si se queda
-   en `true`, cada reinicio del contenedor borrará la base otra vez.
+```bash
+railway run python seed.py --reset
+```
 
-> Alternativa sin tocar variables: `railway run python seed.py --reset` desde
-> el directorio `backend/`.
+`SEED_RESET=true` **ya no funciona en producción**: la variable vive en la
+configuración del servicio y el contenedor la relee en cada arranque, así que
+dejarla puesta por olvido convertía cada push en un borrado completo de la
+base. Ahora `seed.py` la ignora cuando `ENVIRONMENT=production` y lo avisa en
+los *Deploy Logs*; el flag `--reset` sigue funcionando en todos los entornos
+porque es una ejecución puntual y deliberada, no algo que se repita solo.
+
+Fuera de producción (local, `ENVIRONMENT=development`) la variable se sigue
+respetando, y en local además está `docker compose down -v`.
  
