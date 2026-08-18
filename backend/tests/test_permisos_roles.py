@@ -65,7 +65,7 @@ def override_db(empleado, extra=None):
     return _fake
 
 
-# ─── 1. El gerente consulta, no registra ─────────────────────────────────────
+# ─── 1. El gerente consulta, no registra ───────────────────────────────────── 
 
 def test_roles_gestion_no_incluye_al_gerente():
     """
