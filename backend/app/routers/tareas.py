@@ -21,7 +21,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import DateTime, cast, delete, func, select
+from sqlalchemy import DateTime, and_, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from geoalchemy2 import Geometry
@@ -355,6 +355,48 @@ async def get_tareas(
     return tareas_response
 
 
+# ─── Visibilidad de las tareas en los mapas ──────────────────────────────────
+
+def _filtro_mapa_del_dia(fecha: date, hoy: date):
+    """
+    Condición SQL de "qué tareas se pintan en el mapa el día `fecha`".
+
+    Los dos mapas (el del técnico y el del supervisor) recortaban por
+    `fecha_inicio`, y eso fallaba por los dos lados:
+
+      - Una tarea ya completada seguía pintada todos los días de su rango de
+        planificación. Con unas semanas de trabajo cerrado el mapa se volvía
+        un muro de puntos verdes de cosas ya hechas.
+      - Una tarea pendiente cuya fecha ya había pasado (o todavía no llegaba)
+        desaparecía del mapa del supervisor, justo cuando más urge verla. Por
+        eso en "pendiente" salían dos y no todas.
+
+    Reglas nuevas:
+      - completado  → solo el día en que se cerró, según `fecha_completado`,
+        que es la marca real del cierre. Sin esa marca no se pinta: no se sabe
+        de qué día es.
+      - pendiente | en_progreso → es trabajo vivo: se pinta completo en la
+        vista de HOY sin importar su fecha planificada. En un día pasado no
+        aparece, porque ahí el mapa es el histórico de lo que se cerró ese día.
+      - cancelado   → nunca; no es trabajo por hacer ni trabajo hecho.
+    """
+    inicio_dia = datetime.combine(fecha, time.min)
+    fin_dia = inicio_dia + timedelta(days=1)
+
+    # `fecha_completado` NULL no entra en el rango: en SQL comparar contra NULL
+    # da NULL, no TRUE, así que las completadas sin marca quedan fuera solas.
+    cerradas_ese_dia = and_(
+        Tarea.estado_tarea == "completado",
+        Tarea.fecha_completado >= inicio_dia,
+        Tarea.fecha_completado < fin_dia,
+    )
+
+    if fecha != hoy:
+        return cerradas_ese_dia
+
+    return or_(Tarea.estado_tarea.in_(ESTADOS_ACTIVOS), cerradas_ese_dia)
+
+
 # ─── GET /tareas/mi-ruta ──────────────────────────────────────────────────────
 # Acceso: el empleado autenticado (solo ve sus propias tareas del día).
 
@@ -369,24 +411,28 @@ async def get_mi_ruta(
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
-    Devuelve solo las tareas de HOY asignadas al técnico autenticado, con sus
-    coordenadas (lat/lng) y estado, listas para pintar en el mapa.
+    Devuelve las tareas del técnico autenticado que corresponden al mapa de
+    HOY, con sus coordenadas (lat/lng) y los datos que el popup del marcador
+    necesita.
+
+    Qué entra y qué no lo decide `_filtro_mapa_del_dia`: todo lo que sigue
+    abierto, más lo que el técnico cerró hoy. Una tarea completada ayer ya no
+    aparece — vive en el historial, no en el mapa del día.
 
     "Hoy" se calcula con la hora de Guatemala (hoy_local), no en UTC.
     """
     coord = cast(Tarea.coordenada_servicio, Geometry)
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
+
+    hoy = hoy_local()
 
     query = (
-        select(
-            Tarea.id_tarea,
-            Tarea.estado_tarea,
-            func.ST_Y(coord).label("lat"),
-            func.ST_X(coord).label("lng"),
-        )
+        select(Tarea, lat_col, lng_col)
         .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
         .where(
             EmpleadoTarea.id_empleado == current_user.id_empleado,
-            Tarea.fecha_inicio == hoy_local(),
+            _filtro_mapa_del_dia(hoy, hoy),
         )
         .order_by(Tarea.id_tarea)
     )
@@ -394,8 +440,18 @@ async def get_mi_ruta(
     result = await db.execute(query)
 
     return [
-        TareaRutaResponse(id_tarea=id_tarea, estado_tarea=estado_tarea, lat=lat, lng=lng)
-        for id_tarea, estado_tarea, lat, lng in result.all()
+        TareaRutaResponse(
+            id_tarea=tarea.id_tarea,
+            titulo=tarea.titulo,
+            descripcion=tarea.descripcion,
+            direccion_servicio=tarea.direccion_servicio,
+            estado_tarea=tarea.estado_tarea,
+            prioridad=tarea.prioridad,
+            fecha_completado=tarea.fecha_completado,
+            lat=lat,
+            lng=lng,
+        )
+        for tarea, lat, lng in result.all()
     ]
 
 
@@ -415,12 +471,15 @@ async def get_mapa_supervisor(
     id_tecnico: Annotated[Optional[int], Query()] = None,
 ):
     """
-    Devuelve las tareas de una fecha (hoy en hora de Guatemala por defecto)
-    con sus coordenadas y el técnico asignado, para que el supervisor las
-    pinte en el mapa agrupadas por técnico.
+    Devuelve las tareas que corresponden al mapa de una fecha (hoy en hora de
+    Guatemala por defecto), con sus coordenadas y el técnico asignado, para que
+    el supervisor las pinte agrupadas por técnico.
 
     Filtros:
-    - fecha: compara contra fecha_inicio. Si no se envía, usa hoy_local().
+    - fecha: qué día se está mirando. En el día de HOY entra todo el trabajo
+      abierto del equipo —sin importar si su fecha planificada ya venció o
+      todavía no llega— más lo que se cerró hoy. En un día pasado entra solo lo
+      que se cerró ese día. El detalle está en `_filtro_mapa_del_dia`.
     - id_tecnico: si se envía, solo devuelve las tareas de ese técnico.
 
     Roles: admin | supervisor | gerente.
@@ -434,7 +493,7 @@ async def get_mapa_supervisor(
     query = (
         select(Tarea, lat_col, lng_col)
         .options(selectinload(Tarea.empleados).selectinload(EmpleadoTarea.empleado))
-        .where(Tarea.fecha_inicio == fecha_filtro)
+        .where(_filtro_mapa_del_dia(fecha_filtro, hoy_local()))
     )
 
     if id_tecnico is not None:
@@ -466,7 +525,12 @@ async def get_mapa_supervisor(
         tareas_response.append(
             TareaMapaSupervisorResponse(
                 id_tarea=tarea.id_tarea,
+                titulo=tarea.titulo,
+                descripcion=tarea.descripcion,
+                direccion_servicio=tarea.direccion_servicio,
                 estado_tarea=tarea.estado_tarea,
+                prioridad=tarea.prioridad,
+                fecha_completado=tarea.fecha_completado,
                 lat=lat,
                 lng=lng,
                 tecnico=tecnico,

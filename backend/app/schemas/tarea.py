@@ -112,22 +112,37 @@ class TareaResponse(BaseModel):
         from_attributes = True
 
 
-# Ruta diaria: respuesta liviana solo con lo que el mapa necesita pintar
+# Ruta diaria: lo que el mapa del técnico necesita para pintar el pin y
+# rellenar su popup (título, dirección, tipo de servicio y prioridad). Sigue
+# siendo más liviana que TareaResponse: no arrastra fechas de planificación ni
+# el técnico asignado, que en este mapa siempre es el usuario autenticado.
 class TareaRutaResponse(BaseModel):
-    id_tarea:     int
-    estado_tarea: str
-    lat:          Optional[float] = None
-    lng:          Optional[float] = None
+    id_tarea:           int
+    titulo:             str
+    descripcion:        Optional[str]      = None
+    direccion_servicio: Optional[str]      = None
+    estado_tarea:       str
+    prioridad:          str
+    # Momento real de cierre: es lo que deja al mapa mostrar una tarea como
+    # completada solo el día en que se completó.
+    fecha_completado:   Optional[datetime] = None
+    lat:                Optional[float]    = None
+    lng:                Optional[float]    = None
 
 
-# Mapa del supervisor: igual de liviana que TareaRutaResponse, pero con el
-# tecnico asignado para que el frontend pueda agrupar los marcadores por él.
+# Mapa del supervisor: los mismos campos de la ruta del técnico más el técnico
+# asignado, para que el frontend pueda agrupar los marcadores por él.
 class TareaMapaSupervisorResponse(BaseModel):
-    id_tarea:     int
-    estado_tarea: str
-    lat:          Optional[float]           = None
-    lng:          Optional[float]           = None
-    tecnico:      Optional[TecnicoResponse] = None
+    id_tarea:           int
+    titulo:             str
+    descripcion:        Optional[str]             = None
+    direccion_servicio: Optional[str]             = None
+    estado_tarea:       str
+    prioridad:          str
+    fecha_completado:   Optional[datetime]        = None
+    lat:                Optional[float]           = None
+    lng:                Optional[float]           = None
+    tecnico:            Optional[TecnicoResponse] = None
 
 
 # 🔹 UPDATE ESTADO

@@ -2,10 +2,11 @@
 """
 Pruebas de GET /tareas/mi-ruta — SCRUM-160/184.
 
-Es el endpoint que alimenta el mapa de ruta del técnico: devuelve solo las
-tareas de HOY del empleado autenticado, con lat/lng listas para pintar.
+Es el endpoint que alimenta el mapa de ruta del técnico: devuelve las tareas
+del empleado autenticado que van en el mapa de HOY, con lat/lng listas para
+pintar.
 
-Dos cosas lo hacen delicado y son las que se fijan aquí:
+Tres cosas lo hacen delicado y son las que se fijan aquí:
 
   1. No recibe ningún parámetro de empleado. El recorte sale de `current_user`,
      así que un técnico no puede pedir la ruta de otro ni "probando" con un
@@ -13,12 +14,17 @@ Dos cosas lo hacen delicado y son las que se fijan aquí:
   2. "Hoy" es el día en hora de Guatemala, no en UTC. El contenedor corre en
      UTC: con `date.today()` la ruta cambiaba de día a las 18:00 hora local y
      el técnico se quedaba con el mapa vacío en plena jornada.
+  3. Una tarea completada se pinta solo el día en que se cerró. El recorte va
+     por `fecha_completado`, no por `fecha_inicio`: con `fecha_inicio` el punto
+     verde seguía en el mapa todos los días de su rango y el mapa del técnico
+     se llenaba de trabajo ya hecho.
 
 Como la sesión está mockeada, el filtrado se comprueba sobre el SQL generado,
 igual que en test_tareas_visibilidad.py.
 """
 
 import inspect
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,8 +36,21 @@ from app.routers.tareas import get_mi_ruta
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def _tarea(id_tarea, estado, **campos):
+    """Fila ORM simulada con lo mínimo que arma la respuesta del mapa."""
+    return SimpleNamespace(
+        id_tarea=id_tarea,
+        titulo=campos.get("titulo", f"Tarea {id_tarea}"),
+        descripcion=campos.get("descripcion"),
+        direccion_servicio=campos.get("direccion_servicio"),
+        estado_tarea=estado,
+        prioridad=campos.get("prioridad", "media"),
+        fecha_completado=campos.get("fecha_completado"),
+    )
+
+
 def _db_con_filas(filas):
-    """AsyncSession simulada: `filas` son tuplas (id, estado, lat, lng)."""
+    """AsyncSession simulada: `filas` son tuplas (tarea, lat, lng)."""
     resultado = MagicMock()
     resultado.all.return_value = filas
 
@@ -92,13 +111,45 @@ def test_el_endpoint_no_acepta_un_empleado_por_parametro():
 # ─── Recorte por día ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_filtra_por_el_dia_de_hoy_en_hora_local():
+async def test_las_completadas_se_recortan_por_el_dia_en_que_se_cerraron():
     db = _db_con_filas([])
 
     await get_mi_ruta(db=db, current_user=_empleado())
 
+    sql = _sql_de(db)
+
     # hoy_local(), no date.today(): en UTC el día cambia 6 horas antes.
-    assert f"fecha_inicio = '{hoy_local()}'" in _sql_de(db)
+    assert f"fecha_completado >= '{hoy_local()}" in sql
+    assert f"fecha_completado < '{hoy_local() + timedelta(days=1)}" in sql
+
+    # El recorte del mapa ya no depende de la fecha planificada: con
+    # `fecha_inicio` una tarea cerrada seguía pintada días enteros.
+    # (Aparece en el SELECT porque se trae la fila entera; lo que importa es
+    # que no forme parte del WHERE.)
+    assert "fecha_inicio" not in sql.split("WHERE", 1)[1]
+
+
+@pytest.mark.asyncio
+async def test_el_trabajo_abierto_entra_sin_importar_su_fecha_planificada():
+    """
+    Pendiente y en progreso son trabajo vivo: van al mapa aunque su fecha ya
+    se haya pasado. Antes una tarea vencida desaparecía del mapa justo cuando
+    más urgía verla.
+    """
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado())
+
+    assert "estado_tarea IN ('pendiente', 'en_progreso')" in _sql_de(db)
+
+
+@pytest.mark.asyncio
+async def test_las_canceladas_no_entran_al_mapa():
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado())
+
+    assert "cancelado" not in _sql_de(db)
 
 
 @pytest.mark.asyncio
@@ -156,8 +207,8 @@ async def test_lat_es_ST_Y_y_lng_es_ST_X():
 @pytest.mark.asyncio
 async def test_devuelve_las_paradas_con_sus_coordenadas():
     db = _db_con_filas([
-        (1, "pendiente", 14.4744, -90.4425),
-        (2, "en_progreso", 14.4751, -90.4437),
+        (_tarea(1, "pendiente"), 14.4744, -90.4425),
+        (_tarea(2, "en_progreso"), 14.4751, -90.4437),
     ])
 
     ruta = await get_mi_ruta(db=db, current_user=_empleado())
@@ -172,10 +223,38 @@ async def test_devuelve_las_paradas_con_sus_coordenadas():
 
 
 @pytest.mark.asyncio
+async def test_la_parada_trae_lo_que_el_popup_del_mapa_necesita():
+    """
+    El popup del marcador muestra título, dirección y prioridad. Si el
+    endpoint solo devolviera id/estado/lat/lng, el mapa tendría que pedir
+    otra vez la lista completa de tareas para rellenarlo.
+    """
+    db = _db_con_filas([
+        (
+            _tarea(
+                3,
+                "pendiente",
+                titulo="Instalación fibra óptica",
+                direccion_servicio="Calle 15, Fraijanes",
+                prioridad="urgente",
+            ),
+            14.47,
+            -90.44,
+        ),
+    ])
+
+    ruta = await get_mi_ruta(db=db, current_user=_empleado())
+
+    assert ruta[0].titulo == "Instalación fibra óptica"
+    assert ruta[0].direccion_servicio == "Calle 15, Fraijanes"
+    assert ruta[0].prioridad == "urgente"
+
+
+@pytest.mark.asyncio
 async def test_una_tarea_sin_ubicacion_no_rompe_la_ruta():
     # La coordenada es opcional (SCRUM-169): las tareas viejas solo tienen
     # dirección escrita. El mapa las omite, pero la respuesta no debe fallar.
-    db = _db_con_filas([(5, "pendiente", None, None)])
+    db = _db_con_filas([(_tarea(5, "pendiente"), None, None)])
 
     ruta = await get_mi_ruta(db=db, current_user=_empleado())
 

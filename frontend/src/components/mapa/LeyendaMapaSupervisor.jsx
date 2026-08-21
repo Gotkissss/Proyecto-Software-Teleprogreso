@@ -16,6 +16,11 @@
  * MarcadorTareaSupervisor, así el color de cada pin siempre coincide con
  * el de la leyenda.
  *
+ * `estados` acota qué filas se listan. Por defecto van los cuatro estados,
+ * pero el mapa no pinta todos siempre: las canceladas nunca entran, y en un
+ * día pasado solo se ve lo que se cerró ese día. Listar filas que ese mapa no
+ * puede pintar deja un "Cancelado 0" fijo que solo hace ruido.
+ *
  * Uso como hijo de un contenedor con position:relative (el mismo
  * styles.mapWrap que envuelve a <MapaBase> en MapaSupervisorPage):
  *   <div className={styles.mapWrap}>
@@ -26,8 +31,8 @@
 import { ESTADO_COLOR, ESTADO_LABEL, ORDEN_ESTADOS } from './estadoColor'
 import styles from './LeyendaMapaSupervisor.module.css'
 
-export default function LeyendaMapaSupervisor({ servicios = [] }) {
-  const conteoPorEstado = ORDEN_ESTADOS.map((estado) => ({
+export default function LeyendaMapaSupervisor({ servicios = [], estados = ORDEN_ESTADOS }) {
+  const conteoPorEstado = estados.map((estado) => ({
     estado,
     label: ESTADO_LABEL[estado],
     color: ESTADO_COLOR[estado],

@@ -18,6 +18,7 @@
  */
 
 import apiClient from './client'
+import { esDelDia, hoyISO } from '../utils/fecha'
 
 /**
  * Obtiene la ruta diaria del técnico autenticado.
@@ -133,15 +134,8 @@ export const getTareasCompletadas = async (filtros = {}) => {
 export function esTareaDeHoy(servicio) {
   if (servicio.estado === 'cancelado') return false
   if (servicio.estado !== 'completado') return true
-  if (!servicio.fecha_completado) return false
 
-  const cerrada = new Date(servicio.fecha_completado)
-  const hoy = new Date()
-  return (
-    cerrada.getFullYear() === hoy.getFullYear() &&
-    cerrada.getMonth() === hoy.getMonth() &&
-    cerrada.getDate() === hoy.getDate()
-  )
+  return esDelDia(servicio.fecha_completado, hoyISO())
 }
 
 /**
@@ -159,37 +153,36 @@ function _inferirTipo(titulo = '', descripcion = '') {
 }
 
 /**
- * Servicios de la ruta de HOY con coordenadas (lat/lng) para pintarlos en
- * el mapa (SCRUM-162).
+ * Paradas del mapa de HOY, con coordenadas (lat/lng) para pintarlas
+ * (SCRUM-162).
  *
- * Reutiliza el mismo endpoint (/tareas) y el mismo filtro "hoy" que
- * getMiRuta — la única diferencia es que este sí incluye lat/lng, que el
- * backend ya expone en cada tarea (ver TareaResponse) pero que getMiRuta no
- * necesitaba para la vista de lista. Se agrega esta función nueva en vez de
- * tocar getMiRuta para no arriesgar la pantalla "Mi Ruta", que ya funciona
- * en producción.
+ * Va contra GET /tareas/mi-ruta, no contra /tareas. El recorte del día lo
+ * hace el backend en SQL (ver `_filtro_mapa_del_dia` en routers/tareas.py):
+ * entra todo lo que sigue abierto más lo que el técnico cerró HOY, y una
+ * tarea completada ayer ya no vuelve a pintarse. Antes se traían las últimas
+ * 500 tareas del técnico y se filtraban aquí, con dos problemas: el mapa
+ * arrastraba semanas de puntos ya completados, y a partir de unos cientos de
+ * tareas cerradas el corte de 500 (ordenado de la más reciente hacia atrás)
+ * empezaba a comerse las tareas abiertas más viejas.
  *
- * @param {number} idTecnico - ID del empleado autenticado (de useAuth)
- * @returns {Promise<Array>} servicios del día (con y sin coordenadas; el
- *   consumidor decide si descarta los que no se pueden ubicar en el mapa)
+ * El técnico no viaja como parámetro: el backend lo saca del token, así que
+ * nadie puede pedir la ruta de un compañero por query string.
+ *
+ * @returns {Promise<Array>} paradas del día (con y sin coordenadas; el
+ *   consumidor decide si descarta las que no se pueden ubicar en el mapa)
  */
-export const getServiciosMapa = async (idTecnico) => {
-  const params = {}
-  if (idTecnico) params.id_tecnico = idTecnico
+export const getServiciosMapa = async () => {
+  const { data } = await apiClient.get('/tareas/mi-ruta')
 
-  const { data: tareas } = await apiClient.get('/tareas', { params })
-
-  return tareas
-    .map((t) => ({
-      id_servicio:      t.id_tarea,
-      estado:           t.estado_tarea,
-      prioridad:        t.prioridad ?? 'media',
-      nombre:           t.titulo,
-      direccion:        t.direccion_servicio ?? 'Dirección no especificada',
-      tipo:             _inferirTipo(t.titulo, t.descripcion),
-      lat:              t.lat ?? null,
-      lng:              t.lng ?? null,
-      fecha_completado: t.fecha_completado ?? null,
-    }))
-    .filter((s) => esTareaDeHoy(s))
+  return (Array.isArray(data) ? data : []).map((t) => ({
+    id_servicio:      t.id_tarea,
+    estado:           t.estado_tarea,
+    prioridad:        t.prioridad ?? 'media',
+    nombre:           t.titulo,
+    direccion:        t.direccion_servicio ?? 'Dirección no especificada',
+    tipo:             _inferirTipo(t.titulo, t.descripcion),
+    lat:              t.lat ?? null,
+    lng:              t.lng ?? null,
+    fecha_completado: t.fecha_completado ?? null,
+  }))
 }

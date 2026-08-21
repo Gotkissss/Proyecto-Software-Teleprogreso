@@ -5,12 +5,16 @@
  * y prioridad.
  *
  * Usa el mismo patrón de carga (fetch + loading/error) que RutaDiariaPage,
- * y getServiciosMapa (rutaService.js) para traer las tareas de hoy con
+ * y getServiciosMapa (rutaService.js) para traer las paradas de hoy con
  * coordenadas.
+ *
+ * Qué es "de hoy" lo decide el backend (GET /tareas/mi-ruta): las tareas que
+ * siguen abiertas más las que el técnico cerró HOY. Una tarea completada deja
+ * de pintarse al día siguiente — antes el punto verde se quedaba en el mapa y
+ * con las semanas la ruta del día quedaba enterrada bajo trabajo ya hecho.
  */
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { getServiciosMapa } from '../api/rutaService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTarea from '../components/mapa/MarcadorTarea'
@@ -54,7 +58,6 @@ const AVISO_UBICACION = {
 }
 
 export default function MapaPage() {
-  const { user } = useAuth()
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -79,14 +82,16 @@ export default function MapaPage() {
     setLoading(true)
     try {
       setError(null)
-      const data = await getServiciosMapa(user?.id_empleado)
+      // Sin argumentos: el técnico sale del token en el backend, así que no
+      // hay forma de pedir la ruta de un compañero desde el cliente.
+      const data = await getServiciosMapa()
       setServicios(data)
     } catch (err) {
       setError(err?.response?.data?.detail || 'No se pudo cargar el mapa de la ruta.')
     } finally {
       setLoading(false)
     }
-  }, [user?.id_empleado])
+  }, [])
 
   useEffect(() => {
     fetchServicios()

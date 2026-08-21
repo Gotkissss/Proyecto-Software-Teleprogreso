@@ -1,7 +1,7 @@
 /**
- * HU-165 — Vista "Mapa" en SupervisorLayout: todas las tareas del equipo
- * sobre un mapa, agrupadas por técnico (con casillas para mostrar/ocultar
- * a cada uno) y con filtros de fecha y de técnico.
+ * HU-165 — Vista "Mapa" en SupervisorLayout: las tareas del equipo sobre un
+ * mapa, agrupadas por técnico (con casillas para mostrar/ocultar a cada uno)
+ * y con filtros de fecha y de técnico.
  *
  * Reutiliza <MapaBase> igual que MapaPage (vista del técnico), pero:
  *   - Colorea los pines por ESTADO (no por prioridad) — ver
@@ -10,10 +10,14 @@
  *     como capas independientes en un <LayersControl> nativo de Leaflet:
  *     el supervisor puede apagar/encender técnicos concretos sin perder
  *     de vista el resto del mapa.
- *   - Trae TODAS las tareas del equipo (GET /tareas sin id_tecnico: el
- *     backend ya permite eso a supervisor/admin/gerente, ver
- *     routers/tareas.py) y filtra en el cliente por fecha/técnico, para
- *     no perder los conteos de las otras capas al cambiar un filtro.
+ *
+ * Qué entra en el mapa lo decide el backend (GET /tareas/mapa-supervisor):
+ * en el día de HOY, todo el trabajo abierto del equipo más lo que se cerró
+ * hoy; en un día pasado, solo lo que se cerró ese día. Antes el recorte se
+ * hacía aquí, contra el rango [fecha_inicio, fecha_finalizacion] de cada
+ * tarea, y por eso el mapa mostraba dos pendientes en vez de todas: las
+ * vencidas y las programadas para otro día se caían, y con ellas los técnicos
+ * que solo tenían ese tipo de trabajo desaparecían del control de capas.
  *
  * HU-166 (leyenda + contador) se agrega como overlay sobre el propio mapa
  * vía <LeyendaMapaSupervisor>, dentro del mismo contenedor con position:relative
@@ -21,12 +25,13 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LayerGroup, LayersControl } from 'react-leaflet'
-import { getTareas, getTecnicosDisponibles } from '../api/tareaService'
+import { getMapaSupervisor, getTecnicosDisponibles } from '../api/tareaService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTareaSupervisor from '../components/mapa/MarcadorTareaSupervisor'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
 import LeyendaMapaSupervisor from '../components/mapa/LeyendaMapaSupervisor'
 import PageState from '../components/ui/PageState'
+import { hoyISO } from '../utils/fecha'
 import styles from './MapaSupervisorPage.module.css'
 
 const IconMapa = () => (
@@ -36,6 +41,12 @@ const IconMapa = () => (
     <line x1="15" y1="6" x2="15" y2="21" />
   </svg>
 )
+
+/** Estados que puede pintar el mapa en la vista de HOY. */
+const ESTADOS_HOY = ['pendiente', 'en_progreso', 'completado']
+
+/** En un día pasado el mapa es el histórico de lo que se cerró ese día. */
+const ESTADOS_DIA_PASADO = ['completado']
 
 /** Intenta inferir el tipo de servicio a partir del título o descripción
  * (mismo criterio que rutaService.js, para que el popup muestre lo mismo
@@ -50,33 +61,6 @@ function inferirTipo(titulo = '', descripcion = '') {
   return 'Servicio'
 }
 
-/** Date → "YYYY-MM-DD" en hora local. */
-function aISO(fecha) {
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
-  const dia = String(fecha.getDate()).padStart(2, '0')
-  return `${fecha.getFullYear()}-${mes}-${dia}`
-}
-
-/** "2026-07-31T10:00:00" → "2026-07-31" (o null si no hay fecha). */
-function soloFecha(fechaHora) {
-  return fechaHora ? String(fechaHora).slice(0, 10) : null
-}
-
-/**
- * ¿Esta tarea está vigente en `fechaISO`?
- * Vigente = fechaISO cae dentro de [fecha_inicio, fecha_finalizacion]. Si
- * falta fecha_inicio se usa fecha_asignacion como respaldo, y si falta
- * fecha_finalizacion se asume que dura un solo día (el mismo del inicio).
- * Una tarea sin ninguna fecha registrada no se oculta: se asume vigente
- * en vez de desaparecer del mapa por datos incompletos.
- */
-function tareaVigenteEnFecha(tarea, fechaISO) {
-  const inicio = soloFecha(tarea.fecha_inicio) ?? soloFecha(tarea.fecha_asignacion)
-  if (!inicio) return true
-  const fin = soloFecha(tarea.fecha_finalizacion) ?? inicio
-  return fechaISO >= inicio && fechaISO <= fin
-}
-
 /** tarea (backend) → servicio (forma que consumen los componentes de mapa). */
 function tareaAServicio(t) {
   return {
@@ -89,54 +73,60 @@ function tareaAServicio(t) {
     lat:         t.lat ?? null,
     lng:         t.lng ?? null,
     tecnico:     t.tecnico ?? null,
-    fecha_inicio:        t.fecha_inicio ?? null,
-    fecha_finalizacion:  t.fecha_finalizacion ?? null,
-    fecha_asignacion:    t.fecha_asignacion ?? null,
+    fecha_completado: t.fecha_completado ?? null,
   }
 }
 
 export default function MapaSupervisorPage() {
   const [tareas, setTareas]     = useState([])
   const [tecnicos, setTecnicos] = useState([])
+  // `loading` solo cubre la primera carga: al cambiar de fecha se recarga sin
+  // desmontar el mapa, para no parpadear ni perder el zoom en cada clic.
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
 
   // Filtros: fecha (por defecto hoy) y técnico (por defecto todos).
-  const [fecha, setFecha]         = useState(aISO(new Date()))
+  const [fecha, setFecha]         = useState(hoyISO())
   const [idTecnico, setIdTecnico] = useState('')
 
-  const fetchDatos = useCallback(async () => {
-    setLoading(true)
+  const esHoy = fecha === hoyISO()
+
+  // El selector de técnico se llena con TODOS los técnicos activos, no solo
+  // con los que hoy tienen trabajo: el supervisor lo usa también para
+  // comprobar que a alguien no le quedó nada asignado.
+  useEffect(() => {
+    let vigente = true
+    getTecnicosDisponibles()
+      .then((lista) => { if (vigente) setTecnicos(lista) })
+      .catch(() => { if (vigente) setTecnicos([]) })
+    return () => { vigente = false }
+  }, [])
+
+  const fetchTareas = useCallback(async () => {
     try {
       setError(null)
-      // Sin id_tecnico: el backend devuelve todo el equipo a supervisor/
-      // admin/gerente (ver routers/tareas.py). El filtro por técnico se
-      // aplica en el cliente junto con el de fecha, para no perder de vista
-      // los conteos por técnico al cambiar de filtro.
-      const [listaTareas, listaTecnicos] = await Promise.all([
-        getTareas(),
-        getTecnicosDisponibles(),
-      ])
-      setTareas(Array.isArray(listaTareas) ? listaTareas.map(tareaAServicio) : [])
-      setTecnicos(listaTecnicos)
+      const lista = await getMapaSupervisor(fecha)
+      setTareas(lista.map(tareaAServicio))
     } catch (err) {
       setError(err?.response?.data?.detail || 'No se pudo cargar el mapa del equipo.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fecha])
 
   useEffect(() => {
-    fetchDatos()
-  }, [fetchDatos])
+    fetchTareas()
+  }, [fetchTareas])
 
-  // Tareas que pasan los filtros de fecha/técnico, tengan o no coordenadas
-  // (se usa para mensajes de "sin ubicación").
+  // Tareas que pasan el filtro de técnico, tengan o no coordenadas (se usa
+  // para el aviso de "sin ubicación"). La fecha ya la recortó el backend.
+  //
+  // El filtro por técnico se aplica aquí y no en la petición para no perder
+  // de vista los conteos de las otras capas al cambiarlo.
   const filtradas = useMemo(() => {
-    return tareas
-      .filter((s) => tareaVigenteEnFecha(s, fecha))
-      .filter((s) => !idTecnico || String(s.tecnico?.id_empleado) === idTecnico)
-  }, [tareas, fecha, idTecnico])
+    if (!idTecnico) return tareas
+    return tareas.filter((s) => String(s.tecnico?.id_empleado) === idTecnico)
+  }, [tareas, idTecnico])
 
   const conUbicacion = useMemo(
     () => filtradas.filter((s) => s.lat != null && s.lng != null),
@@ -175,7 +165,7 @@ export default function MapaSupervisorPage() {
         loading={loading}
         loadingLabel="Cargando el mapa del equipo..."
         error={error}
-        onRetry={fetchDatos}
+        onRetry={fetchTareas}
         errorTitle="No se pudo cargar el mapa"
       />
     )
@@ -186,7 +176,9 @@ export default function MapaSupervisorPage() {
       <header className={styles.header}>
         <h1 className={styles.title}>Mapa</h1>
         <p className={styles.subtitle}>
-          Ubicación de las tareas del equipo, agrupadas por técnico.
+          {esHoy
+            ? 'Todo el trabajo abierto del equipo y lo que se cerró hoy, agrupado por técnico.'
+            : 'Lo que el equipo cerró ese día, agrupado por técnico.'}
         </p>
       </header>
 
@@ -197,7 +189,7 @@ export default function MapaSupervisorPage() {
           <input
             type="date"
             value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
+            onChange={(e) => setFecha(e.target.value || hoyISO())}
           />
         </label>
 
@@ -241,14 +233,21 @@ export default function MapaSupervisorPage() {
 
           {/* HU-166: leyenda de colores por estado + contador de tareas
               visibles, superpuesta sobre el propio mapa. */}
-          <LeyendaMapaSupervisor servicios={conUbicacion} />
+          <LeyendaMapaSupervisor
+            servicios={conUbicacion}
+            estados={esHoy ? ESTADOS_HOY : ESTADOS_DIA_PASADO}
+          />
         </div>
       ) : (
         <PageState
           empty
           emptyIcon={<IconMapa />}
           emptyTitle="Sin tareas para mostrar"
-          emptyDescription="No hay tareas con ubicación que coincidan con la fecha y el técnico seleccionados."
+          emptyDescription={
+            esHoy
+              ? 'No hay tareas con ubicación registrada que coincidan con el técnico seleccionado.'
+              : 'Ese día no se cerró ninguna tarea con ubicación registrada.'
+          }
         />
       )}
 

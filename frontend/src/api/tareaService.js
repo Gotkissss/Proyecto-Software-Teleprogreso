@@ -18,6 +18,29 @@ export async function getTareas(params = {}) {
 }
 
 /**
+ * Tareas que van al mapa del supervisor/admin para un día dado.
+ *
+ * Va contra GET /tareas/mapa-supervisor, que hace el recorte en SQL:
+ *   - En HOY entra todo el trabajo abierto del equipo (pendiente y en curso),
+ *     tenga la fecha planificada que tenga, más lo que se cerró hoy.
+ *   - En un día pasado entra solo lo que se cerró ese día.
+ *
+ * Antes esta pantalla pedía /tareas y recortaba en el cliente por el rango
+ * [fecha_inicio, fecha_finalizacion]. Eso dejaba fuera del mapa las tareas
+ * pendientes vencidas y las programadas para otro día —en "pendiente" salían
+ * dos de seis— y arrastraba en el mapa las ya completadas durante todos los
+ * días de su rango.
+ *
+ * @param {string} fecha - día a mirar, en formato "YYYY-MM-DD"
+ */
+export async function getMapaSupervisor(fecha) {
+  const { data } = await apiClient.get('/tareas/mapa-supervisor', {
+    params: fecha ? { fecha } : {},
+  })
+  return Array.isArray(data) ? data : []
+}
+
+/**
  * Cambia el estado de una tarea
  * @param {number} id
  * @param {string} estado - 'pendiente' | 'en_curso' | 'finalizado'
