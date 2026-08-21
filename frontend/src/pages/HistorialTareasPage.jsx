@@ -23,6 +23,7 @@ import { useAuth } from '../context/AuthContext'
 import { urlArchivo } from '../api/client'
 import { getTareasCompletadas } from '../api/rutaService'
 import { getTecnicosDisponibles } from '../api/tareaService'
+import FotoEvidencia from '../components/tareas/FotoEvidencia'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
@@ -113,18 +114,24 @@ function TareaCompletadaCard({ tarea, mostrarTecnico }) {
           {tarea.evidencias.map((ev) => (
             <div key={ev.id_incidencia} className={styles.evidencia}>
               {ev.foto_evidencia && (
-                <button
-                  type="button"
-                  className={styles.fotoBtn}
-                  onClick={() => setFotoAmpliada(urlArchivo(ev.foto_evidencia))}
-                  title="Ver la foto en grande"
-                >
-                  <img
-                    src={urlArchivo(ev.foto_evidencia)}
-                    alt={`Evidencia de ${tarea.titulo}`}
-                    loading="lazy"
-                  />
-                </button>
+                // Si el archivo ya no está en el servidor, <FotoEvidencia>
+                // avisa en lugar de dejar una miniatura rota, y se queda sin
+                // el botón: abrir el visor sobre una imagen que no carga solo
+                // enseña un rectángulo negro.
+                <FotoEvidencia
+                  src={urlArchivo(ev.foto_evidencia)}
+                  alt={`Evidencia de ${tarea.titulo}`}
+                  envolver={(img) => (
+                    <button
+                      type="button"
+                      className={styles.fotoBtn}
+                      onClick={() => setFotoAmpliada(urlArchivo(ev.foto_evidencia))}
+                      title="Ver la foto en grande"
+                    >
+                      {img}
+                    </button>
+                  )}
+                />
               )}
               <p className={styles.evidenciaTexto}>{ev.descripcion}</p>
             </div>

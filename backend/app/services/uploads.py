@@ -6,13 +6,15 @@ Centraliza la validación (extensión + tamaño) y la escritura en disco que ant
 vivía duplicada en el endpoint de imagen de activos, para que el upload de
 fotos de evidencia use exactamente las mismas reglas.
 
-Los archivos se guardan bajo `backend/static/<subcarpeta>/` y se sirven desde
+Los archivos se guardan bajo `<STATIC_DIR>/<subcarpeta>/` y se sirven desde
 la ruta pública `/static/<subcarpeta>/<archivo>` que monta main.py.
 
-Nota de despliegue: el disco de Railway es efímero, así que las imágenes se
-pierden en cada redeploy. Para producción real habría que mover esto a un
-almacenamiento externo (S3, Cloudinary); la firma de `guardar_imagen` no
-cambiaría, solo su implementación.
+Dónde cae `STATIC_DIR` es lo que decide si las fotos sobreviven a un deploy.
+El disco del contenedor es efímero: en Railway cada deploy y cada reinicio
+arrancan un contenedor nuevo y vacío, así que una foto escrita dentro de la
+imagen desaparece y su URL pasa a devolver 404 — la evidencia queda como una
+imagen rota y no hay forma de recuperarla. Apuntando `STATIC_DIR` al punto de
+montaje de un volumen persistente los archivos se quedan donde están.
 -----------------------------------------------------------------------------
 """
 
@@ -21,14 +23,27 @@ import uuid
 
 from fastapi import HTTPException, UploadFile, status
 
+from app.core.config import settings
+
 # Extensiones y tamaño máximo permitidos para cualquier imagen del sistema.
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_FILE_SIZE_MB = 5
 
-# backend/static — mismo directorio que monta main.py en /static
-STATIC_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "static")
-)
+# Respaldo cuando no hay STATIC_DIR configurado: `backend/static`, junto al
+# código. Es lo correcto en local y en docker-compose.
+_STATIC_POR_DEFECTO = os.path.join(os.path.dirname(__file__), "..", "..", "static")
+
+
+def resolver_static_root(configurado: str | None) -> str:
+    """Carpeta de subidas: la configurada, o `backend/static` si no hay ninguna."""
+    return os.path.abspath(configurado or _STATIC_POR_DEFECTO)
+
+
+# Mismo directorio que monta main.py en /static. Se resuelve una sola vez aquí
+# para que el que escribe los archivos y el que los sirve no puedan
+# desincronizarse: apuntando a carpetas distintas, la subida responde 200 y la
+# imagen sale rota, que es de los fallos más difíciles de ver.
+STATIC_ROOT = resolver_static_root(settings.STATIC_DIR)
 
 
 def _ruta_en_disco(url_publica: str) -> str:

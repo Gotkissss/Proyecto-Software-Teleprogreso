@@ -106,6 +106,27 @@ class LimiteFrecuencia(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+def _sandbox_para(ruta: str) -> str:
+    """
+    Directiva `sandbox` de la CSP, según lo que se esté sirviendo.
+
+    `sandbox` a secas mete la respuesta en un origen opaco. Para el JSON de la
+    API da igual, pero al abrir la URL de una foto directamente en el navegador
+    (el "ver en grande" de la evidencia, o pegar el enlace en una pestaña) esa
+    respuesta se convierte en un documento, y con origen opaco el `img-src
+    'self'` de la misma CSP deja de coincidir consigo mismo: la página sale en
+    blanco, sin imagen y sin ningún error que explique por qué.
+
+    `allow-same-origin` devuelve el origen real y nada más: sin
+    `allow-scripts`, `allow-forms` ni `allow-popups`, un HTML que se colara
+    entre las subidas sigue sin poder ejecutar nada. Se aplica solo a /static,
+    que es donde viven los archivos que un usuario puede llegar a abrir.
+    """
+    if ruta.startswith("/static"):
+        return "sandbox allow-same-origin"
+    return "sandbox"
+
+
 class CabecerasSeguridad(BaseHTTPMiddleware):
     """
     Añade cabeceras de seguridad a todas las respuestas.
@@ -147,7 +168,7 @@ class CabecerasSeguridad(BaseHTTPMiddleware):
             cabeceras.setdefault(
                 "Content-Security-Policy",
                 "default-src 'none'; img-src 'self' data:; frame-ancestors 'none'; "
-                "base-uri 'none'; form-action 'none'; sandbox",
+                f"base-uri 'none'; form-action 'none'; {_sandbox_para(request.url.path)}",
             )
 
         # HSTS solo tiene sentido servido por https y solo en producción.

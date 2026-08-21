@@ -17,6 +17,7 @@ import PageState from '../ui/PageState'
 import { useToast } from '../ui/Toast'
 import { urlArchivo } from '../../api/client'
 import { eliminarIncidencia, getIncidencias } from '../../api/incidenciaService'
+import FotoEvidencia from './FotoEvidencia'
 import styles from './ModalEvidencias.module.css'
 
 const IconSinFoto = () => (
@@ -128,16 +129,25 @@ export default function ModalEvidencias({
               <li key={evidencia.id_incidencia} className={styles.item}>
                 {foto ? (
                   // Se abre en pestaña nueva para verla a tamaño completo sin
-                  // montar un visor propio.
-                  <a
-                    href={foto}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.fotoLink}
-                    title="Ver la foto a tamaño completo"
-                  >
-                    <img src={foto} alt="Evidencia de la tarea" className={styles.foto} />
-                  </a>
+                  // montar un visor propio. Si el archivo ya no está en el
+                  // servidor, <FotoEvidencia> quita también el enlace: llevar
+                  // a una pestaña en blanco confunde más que avisar.
+                  <FotoEvidencia
+                    src={foto}
+                    alt="Evidencia de la tarea"
+                    imgClassName={styles.foto}
+                    envolver={(img) => (
+                      <a
+                        href={foto}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.fotoLink}
+                        title="Ver la foto a tamaño completo"
+                      >
+                        {img}
+                      </a>
+                    )}
+                  />
                 ) : (
                   <div className={styles.sinFoto}>
                     <IconSinFoto />

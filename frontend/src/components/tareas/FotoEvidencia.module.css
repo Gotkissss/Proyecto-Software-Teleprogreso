@@ -1,0 +1,29 @@
+/* Aviso que ocupa el hueco de una foto de evidencia que no se pudo cargar.
+   Mismo tamaño y mismo tratamiento visual que el bloque "Sin foto adjunta"
+   de ModalEvidencias, para que la lista no se descuadre al fallar una. */
+.noDisponible {
+  flex-shrink: 0;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-bg-alt);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.noDisponible svg {
+  width: 26px;
+  height: 26px;
+}
+
+.texto {
+  font-size: var(--text-xs);
+  line-height: 1.3;
+}

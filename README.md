@@ -134,3 +134,31 @@ porque es una ejecución puntual y deliberada, no algo que se repita solo.
 Fuera de producción (local, `ENVIRONMENT=development`) la variable se sigue
 respetando, y en local además está `docker compose down -v`.
  
+
+## 📷 Fotos de evidencia: dónde se guardan
+
+Las fotos de evidencia y las imágenes de activos se escriben en disco y se
+sirven en `/static/...`. La carpeta sale de la variable `STATIC_DIR`; si no se
+define, se usa `backend/static`, que es lo correcto en local y en
+`docker compose`.
+
+**En Railway hay que apuntarla a un volumen.** El disco del contenedor es
+efímero: cada deploy y cada reinicio arrancan un contenedor nuevo y vacío, así
+que sin volumen todas las fotos subidas hasta ese momento desaparecen y sus
+URLs pasan a devolver 404. En la pantalla se ve como una evidencia rota, sin
+mensaje de error, y el archivo ya no se puede recuperar.
+
+Configuración, una sola vez, en el servicio del **backend**:
+
+1. Pestaña **Variables** → añadir `STATIC_DIR` con el valor `/data/static`.
+2. Pestaña **Settings** → **Volumes** → **Add Volume**, con *Mount path*
+   `/data`.
+3. Redesplegar.
+
+El backend crea `/data/static` al arrancar si no existe, así que no hace falta
+preparar nada dentro del volumen.
+
+Las fotos subidas **antes** de montar el volumen ya no están: sus registros en
+la base siguen apuntando a archivos que se perdieron, y hay que volver a
+subirlas. Desde la pantalla se reconocen porque ahora avisan con "No se pudo
+cargar la foto" en lugar de dejar una miniatura rota.

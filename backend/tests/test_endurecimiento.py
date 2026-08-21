@@ -166,6 +166,37 @@ def test_cabeceras_de_seguridad_presentes():
     assert "default-src 'none'" in res.headers["Content-Security-Policy"]
 
 
+def test_la_api_se_sirve_en_un_origen_opaco():
+    """El JSON de la API no necesita origen propio: cuanto más encerrado, mejor."""
+    csp = client.get("/health").headers["Content-Security-Policy"]
+
+    assert "sandbox" in csp
+    assert "allow-same-origin" not in csp
+
+
+def test_una_imagen_subida_conserva_su_origen_pero_no_puede_ejecutar_nada():
+    """
+    Las fotos de evidencia se abren a tamaño completo en una pestaña nueva, y
+    ahí la respuesta pasa a ser un documento. Con `sandbox` a secas ese
+    documento queda en un origen opaco, así que el `img-src 'self'` de la misma
+    cabecera deja de casar consigo mismo: la pestaña sale en blanco, sin imagen
+    y sin ningún error que lo explique.
+
+    `allow-same-origin` devuelve el origen y nada más: sin `allow-scripts` ni
+    `allow-forms`, un HTML colado entre las subidas sigue sin ejecutar nada.
+    """
+    # 404 porque el archivo no existe; las cabeceras se añaden igual y es lo
+    # único que se está comprobando aquí.
+    csp = client.get("/static/incidencias/inexistente.jpg").headers[
+        "Content-Security-Policy"
+    ]
+
+    assert "sandbox allow-same-origin" in csp
+    assert "allow-scripts" not in csp
+    assert "allow-forms" not in csp
+    assert "default-src 'none'" in csp
+
+
 # ─── 5. Corte por tamaño del cuerpo ──────────────────────────────────────────
 
 def test_body_demasiado_grande_rechazado():

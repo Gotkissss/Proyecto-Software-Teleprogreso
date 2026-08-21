@@ -71,6 +71,21 @@ class Settings(BaseSettings):
     # la memoria del proceso enviando gigabytes.
     MAX_REQUEST_BODY_MB: int = 10
 
+    # ── Almacenamiento de las imágenes subidas ───────────────────────────────
+    # Carpeta donde se escriben las fotos de evidencia y las imágenes de
+    # activos, y que main.py publica en /static.
+    #
+    # Se configura por entorno porque el disco del contenedor es EFÍMERO: en
+    # Railway cada deploy (y cada reinicio) arranca un contenedor nuevo y
+    # vacío, así que las fotos guardadas dentro de la imagen desaparecen y sus
+    # URLs pasan a devolver 404 — la evidencia queda como una foto rota, sin
+    # aviso, y ya no hay forma de recuperarla.
+    #
+    # Apuntando esta variable al punto de montaje de un volumen persistente
+    # (p.e. STATIC_DIR=/data/static) los archivos sobreviven a los deploys.
+    # Sin definirla se usa `backend/static`, que es lo correcto en local.
+    STATIC_DIR: str = ""
+
     # Zona horaria de la operación. El contenedor corre en UTC, así que sin
     # esto las fechas guardadas (cierre de tarea, entrada, pausas) quedan 6
     # horas adelantadas respecto de lo que ve el usuario, y el trabajo hecho

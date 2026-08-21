@@ -45,6 +45,10 @@ from app.routers.activos    import router as activos_router
 from app.routers.alertas    import router as alertas_router
 from app.routers.reportes   import router as reportes_router
 
+# Carpeta de las imagenes subidas (STATIC_DIR). Vive en el servicio de uploads
+# para que escritura y publicacion no puedan apuntar a sitios distintos.
+from app.services.uploads import STATIC_ROOT
+
 # En produccion no se publica la documentacion interactiva: es un mapa completo
 # de la superficie de ataque (rutas, parametros, esquemas) servido a cualquiera
 # que pase por ahi. En desarrollo sigue disponible igual que siempre.
@@ -103,11 +107,17 @@ app.add_middleware(LimiteFrecuencia)
 # 5. Corte por tamaño de cuerpo (el mas externo: se decide sin leer nada).
 app.add_middleware(LimiteTamanoBody)
 
-# ── Archivos estaticos para imagenes de activos ───────────────────────
-# Crea el directorio si no existe para no fallar en arranque
-static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-os.makedirs(static_dir, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# ── Archivos estaticos: fotos de evidencia e imagenes de activos ──────
+# La carpeta la resuelve services/uploads.py a partir de STATIC_DIR, y se
+# reutiliza aqui a proposito: si el que escribe las fotos y el que las sirve
+# apuntaran a rutas distintas, la subida responderia 200 y la imagen saldria
+# rota sin ningun error visible.
+#
+# En Railway hay que apuntar STATIC_DIR al montaje de un volumen persistente;
+# si no, cada deploy arranca con la carpeta vacia y las fotos ya subidas pasan
+# a devolver 404.
+os.makedirs(STATIC_ROOT, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
 # ── Manejadores globales de error ─────────────────────────────────────────────
 register_exception_handlers(app)
