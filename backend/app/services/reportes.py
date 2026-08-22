@@ -22,7 +22,9 @@ from app.schemas.reporte import (
     ProductividadEmpleado,
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
+    ReporteResumenResponse,
     ReporteTareasCompletadasResponse,
+    ResumenEmpleado,
     TareasCompletadasEmpleado,
 )
 from app.services.asistencia import calcular_jornada, formatear_hhmm
@@ -106,6 +108,7 @@ def _agregar_asistencias(jornadas: list[Asistencia]) -> dict[int, dict]:
                 "jornadas_abiertas": 0,
                 "minutos_trabajados": 0,
                 "minutos_pausa": 0,
+                "descansos": 0,
             },
         )
 
@@ -120,6 +123,10 @@ def _agregar_asistencias(jornadas: list[Asistencia]) -> dict[int, dict]:
         datos["jornadas_abiertas"] += int(resumen.jornada_activa)
         datos["minutos_trabajados"] += resumen.minutos_trabajados
         datos["minutos_pausa"] += resumen.minutos_pausa
+        # Cuantas pausas tomo, no solo cuanto duraron: "3 descansos de 15 min"
+        # y "un descanso de 45" son la misma cifra de minutos y dos cosas muy
+        # distintas para quien revisa la jornada.
+        datos["descansos"] += resumen.total_pausas
 
     return por_empleado
 
@@ -216,10 +223,92 @@ async def obtener_reporte_asistencia(
         fecha_fin=fecha_fin,
         total_empleados=len(items),
         total_jornadas=sum(item.jornadas for item in items),
+        total_jornadas_abiertas=sum(item.jornadas_abiertas for item in items),
         total_minutos_trabajados=total_minutos_trabajados,
         total_minutos_pausa=total_minutos_pausa,
+        total_descansos=sum(item.descansos for item in items),
         total_horas_trabajadas=formatear_hhmm(total_minutos_trabajados),
         total_horas_pausa=formatear_hhmm(total_minutos_pausa),
+        items=items,
+    )
+
+
+def _tareas_por_hora(tareas: int, minutos: int) -> float:
+    """Tareas cerradas por hora efectivamente trabajada (sin pausas)."""
+    return round((tareas * 60) / minutos, 2) if minutos else 0.0
+
+
+async def obtener_reporte_resumen(
+    db: AsyncSession,
+    fecha_inicio: date,
+    fecha_fin: date,
+    id_empleado: int | None = None,
+) -> ReporteResumenResponse:
+    """
+    Resumen operativo: una fila por empleado con todo lo del periodo.
+
+    A diferencia de `obtener_reporte_productividad`, aqui no se filtra por rol:
+    la asistencia y las pausas son de toda la plantilla, no solo de los
+    tecnicos. Un empleado que no cierra tareas aparece igual, con 0 en esa
+    columna, porque el reporte contesta "que hizo cada quien en estas fechas".
+    """
+    asistencias = await _cargar_asistencias(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_empleado=id_empleado,
+    )
+    tareas, total_tareas = await _cargar_tareas(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_tecnico=id_empleado,
+    )
+
+    items: list[ResumenEmpleado] = []
+    for id_actual in asistencias.keys() | tareas.keys():
+        datos_asistencia = asistencias.get(id_actual, {})
+        datos_tareas = tareas.get(id_actual, {})
+        minutos = datos_asistencia.get("minutos_trabajados", 0)
+        minutos_descanso = datos_asistencia.get("minutos_pausa", 0)
+        completadas = datos_tareas.get("tareas_completadas", 0)
+
+        items.append(
+            ResumenEmpleado(
+                id_empleado=id_actual,
+                nombre_empleado=(
+                    datos_asistencia.get("nombre_empleado")
+                    or datos_tareas["nombre_empleado"]
+                ),
+                jornadas=datos_asistencia.get("jornadas", 0),
+                jornadas_abiertas=datos_asistencia.get("jornadas_abiertas", 0),
+                minutos_trabajados=minutos,
+                horas_trabajadas=formatear_hhmm(minutos),
+                descansos=datos_asistencia.get("descansos", 0),
+                minutos_descanso=minutos_descanso,
+                horas_descanso=formatear_hhmm(minutos_descanso),
+                tareas_completadas=completadas,
+                tareas_por_hora=_tareas_por_hora(completadas, minutos),
+            )
+        )
+
+    items.sort(key=lambda item: item.nombre_empleado)
+    total_minutos = sum(item.minutos_trabajados for item in items)
+    total_minutos_descanso = sum(item.minutos_descanso for item in items)
+
+    return ReporteResumenResponse(
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        total_empleados=len(items),
+        total_jornadas=sum(item.jornadas for item in items),
+        total_jornadas_abiertas=sum(item.jornadas_abiertas for item in items),
+        total_minutos_trabajados=total_minutos,
+        total_horas_trabajadas=formatear_hhmm(total_minutos),
+        total_descansos=sum(item.descansos for item in items),
+        total_minutos_descanso=total_minutos_descanso,
+        total_horas_descanso=formatear_hhmm(total_minutos_descanso),
+        total_tareas_completadas=total_tareas,
+        tareas_por_hora=_tareas_por_hora(total_tareas, total_minutos),
         items=items,
     )
 
@@ -299,11 +388,7 @@ async def obtener_reporte_productividad(
                 minutos_trabajados=minutos,
                 horas_trabajadas=formatear_hhmm(minutos),
                 tareas_completadas=completadas,
-                tareas_por_hora=(
-                    round((completadas * 60) / minutos, 2)
-                    if minutos
-                    else 0.0
-                ),
+                tareas_por_hora=_tareas_por_hora(completadas, minutos),
             )
         )
 
@@ -320,10 +405,6 @@ async def obtener_reporte_productividad(
         total_minutos_trabajados=total_minutos,
         total_horas_trabajadas=formatear_hhmm(total_minutos),
         total_tareas_completadas=total_tareas,
-        tareas_por_hora=(
-            round((total_tareas * 60) / total_minutos, 2)
-            if total_minutos
-            else 0.0
-        ),
+        tareas_por_hora=_tareas_por_hora(total_tareas, total_minutos),
         items=items,
     )

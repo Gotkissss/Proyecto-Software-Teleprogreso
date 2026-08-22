@@ -18,6 +18,7 @@ from app.models.empleado import Empleado
 from app.schemas.reporte import (
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
+    ReporteResumenResponse,
     ReporteTareasCompletadasResponse,
 )
 from app.services.exportacion_reportes import (
@@ -29,10 +30,15 @@ from app.services.exportacion_reportes import (
 from app.services.reportes import (
     obtener_reporte_asistencia,
     obtener_reporte_productividad,
+    obtener_reporte_resumen,
     obtener_reporte_tareas_completadas,
 )
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
+
+# Reportes que miran a la persona (asistencia, pausas): se filtran con
+# `empleado`. El resto mira el trabajo cerrado y se filtra con `tecnico`.
+TIPOS_FILTRADOS_POR_EMPLEADO = ("resumen", "asistencia")
 
 FechaInicio = Annotated[
     date,
@@ -57,6 +63,38 @@ def _validar_rango(fecha_inicio: date, fecha_fin: date) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La fecha de inicio no puede ser posterior a la fecha de fin.",
         )
+
+
+@router.get(
+    "/resumen",
+    response_model=ReporteResumenResponse,
+    summary="Resumen operativo por empleado",
+)
+async def get_reporte_resumen(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_gerente)],
+    fecha_inicio: FechaInicio,
+    fecha_fin: FechaFin,
+    empleado: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="ID del empleado a incluir en el reporte.",
+        ),
+    ] = None,
+):
+    """
+    Devuelve, por empleado y para el rango pedido, sus jornadas y horas
+    trabajadas, cuantos descansos tomo y cuanto tiempo estuvo en ellos, y
+    cuantas tareas cerro.
+    """
+    _validar_rango(fecha_inicio, fecha_fin)
+    return await obtener_reporte_resumen(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        id_empleado=empleado,
+    )
 
 
 @router.get(
@@ -166,21 +204,30 @@ async def exportar_reporte(
 
     _validar_rango(fecha_inicio, fecha_fin)
 
-    if tipo == "asistencia":
+    if tipo in TIPOS_FILTRADOS_POR_EMPLEADO:
         if tecnico is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "El reporte de asistencia usa el filtro 'empleado', "
+                    f"El reporte '{tipo}' usa el filtro 'empleado', "
                     "no 'tecnico'."
                 ),
             )
-        reporte = await obtener_reporte_asistencia(
-            db,
-            fecha_inicio,
-            fecha_fin,
-            id_empleado=empleado,
-        )
+
+        if tipo == "resumen":
+            reporte = await obtener_reporte_resumen(
+                db,
+                fecha_inicio,
+                fecha_fin,
+                id_empleado=empleado,
+            )
+        else:
+            reporte = await obtener_reporte_asistencia(
+                db,
+                fecha_inicio,
+                fecha_fin,
+                id_empleado=empleado,
+            )
     else:
         if empleado is not None:
             raise HTTPException(

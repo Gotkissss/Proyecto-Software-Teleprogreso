@@ -13,12 +13,11 @@ import { getTareas } from '../api/tareaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
-import Spinner from '../components/ui/Spinner'
 import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import ModalExportarReporte from '../components/reportes/ModalExportarReporte'
 import { describirVencimiento } from '../utils/vencimiento'
-import { exportarReporteAsistenciaMes } from '../utils/exportarAsistenciaExcel'
 import styles from './DashboardPage.module.css'
 
 const IconFoto = () => (
@@ -89,8 +88,8 @@ export default function DashboardPage() {
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
   // Tarea abierta en la ficha de detalle (clic en la tarjeta)
   const [tareaDetalle, setTareaDetalle] = useState(null)
-  // Descarga rápida de asistencia del mes (adelanto de la página de Reportes)
-  const [exportando, setExportando] = useState(false)
+  // Diálogo de exportación (reporte + rango de fechas + persona)
+  const [exportarAbierto, setExportarAbierto] = useState(false)
 
 
   const fetchData = useCallback(async () => {
@@ -146,24 +145,6 @@ export default function DashboardPage() {
     fetchData()
   }, [fetchData])
 
-  /**
-   * Botón "Exportar reporte": descarga la asistencia de TODA la plantilla
-   * del mes actual en Excel, sin salir del dashboard. Es un adelanto de la
-   * página completa de Reportes (con filtros de rango/empleado) prevista
-   * para el próximo sprint.
-   */
-  const handleExportarReporte = async () => {
-    setExportando(true)
-    try {
-      const { archivo } = await exportarReporteAsistenciaMes()
-      toast.success(`Reporte descargado: ${archivo}.`)
-    } catch (err) {
-      console.error('Error al exportar reporte de asistencia:', err)
-      toast.error('No se pudo generar el reporte. Intenta de nuevo.')
-    } finally {
-      setExportando(false)
-    }
-  }
 
   if (loading || error) {
     return (
@@ -187,19 +168,15 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Descarga rápida del mes actual. Es un adelanto de la página
-            completa de Reportes (con filtros de rango/empleado) prevista
-            para el próximo sprint; por ahora resuelve el caso más pedido:
-            "el mes tal cual". */}
+        {/* Abre el diálogo de exportación: reporte, rango de fechas y, si
+            se quiere, una sola persona. Antes este botón descargaba siempre
+            lo mismo (asistencia del mes en curso) sin preguntar nada. */}
         <button
           className={styles.exportarBtn}
-          onClick={handleExportarReporte}
-          disabled={exportando}
-          title="Descarga la asistencia de toda la plantilla de este mes en Excel"
+          onClick={() => setExportarAbierto(true)}
+          title="Elegir reporte y rango de fechas para descargar en Excel"
         >
-          {exportando
-            ? <><Spinner size="sm" color="white" /> Generando...</>
-            : <><IconDescarga /> Exportar reporte</>}
+          <IconDescarga /> Exportar reporte
         </button>
       </div>
 
@@ -355,6 +332,16 @@ export default function DashboardPage() {
         onClose={() => setTareaEvidencias(null)}
         puedeEliminar
         onCambio={fetchData}
+      />
+
+      {/* Los técnicos ya cargados alimentan el filtro por persona, para no
+          pedir la plantilla otra vez solo para llenar un desplegable. */}
+      <ModalExportarReporte
+        open={exportarAbierto}
+        onClose={() => setExportarAbierto(false)}
+        empleados={tecnicosList}
+        onExportado={(archivo) => toast.success(`Reporte descargado: ${archivo}.`)}
+        onError={(mensaje) => toast.error(mensaje)}
       />
     </div>
   )

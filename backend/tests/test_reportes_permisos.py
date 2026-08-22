@@ -5,7 +5,7 @@ Pruebas de control de acceso del router de Reportes — SCRUM-184.
 El módulo tiene una asimetría deliberada que conviene dejar fijada, porque a
 simple vista parece un error:
 
-  - Los tres reportes en JSON son de GERENCIA (`require_gerente` → admin y
+  - Los reportes en JSON son de GERENCIA (`require_gerente` → admin y
     gerente). Traen el desempeño individual de cada empleado y no son datos
     de operación diaria.
   - La descarga en Excel sí admite al SUPERVISOR, porque su dashboard tiene
@@ -25,6 +25,7 @@ from app.routers.reportes import router
 
 
 RUTAS_SOLO_GERENCIA = [
+    "/reportes/resumen",
     "/reportes/asistencia",
     "/reportes/tareas-completadas",
     "/reportes/productividad",

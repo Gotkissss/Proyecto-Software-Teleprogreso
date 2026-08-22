@@ -13,6 +13,7 @@ from app.routers.reportes import (
     _validar_rango,
     get_reporte_asistencia,
     get_reporte_productividad,
+    get_reporte_resumen,
     get_reporte_tareas_completadas,
 )
 from app.services.reportes import (
@@ -20,6 +21,7 @@ from app.services.reportes import (
     consulta_tareas_completadas_por_rango,
     obtener_reporte_asistencia,
     obtener_reporte_productividad,
+    obtener_reporte_resumen,
     obtener_reporte_tareas_completadas,
 )
 
@@ -27,9 +29,9 @@ FECHA_INICIO = date(2026, 8, 1)
 FECHA_FIN = date(2026, 8, 15)
 
 
-def _descanso(inicio: time, fin: time):
+def _descanso(inicio: time, fin: time, id_descanso: int = 1):
     return SimpleNamespace(
-        id_descanso=1,
+        id_descanso=id_descanso,
         hora_inicio=inicio,
         hora_fin=fin,
     )
@@ -146,6 +148,146 @@ async def test_reporte_asistencia_agrega_jornadas_y_pausas_por_empleado():
     assert reporte.total_horas_trabajadas == "12:00"
     assert reporte.items[0].nombre_empleado == "Ana Lopez"
     assert reporte.items[0].jornadas == 2
+
+
+@pytest.mark.asyncio
+async def test_reporte_asistencia_cuenta_cuantos_descansos_se_tomaron():
+    """Los minutos de pausa ya se sumaban; cuantas pausas fueron, no."""
+    jornadas = [
+        _jornada(
+            2,
+            "Ana",
+            "Lopez",
+            time(8, 0),
+            time(17, 0),
+            [
+                _descanso(time(10, 0), time(10, 15), id_descanso=1),
+                _descanso(time(12, 0), time(12, 30), id_descanso=2),
+            ],
+        ),
+        _jornada(
+            2,
+            "Ana",
+            "Lopez",
+            time(8, 0),
+            time(12, 0),
+            [_descanso(time(9, 0), time(9, 15), id_descanso=3)],
+        ),
+    ]
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_resultado_escalars(jornadas))
+
+    reporte = await obtener_reporte_asistencia(db, FECHA_INICIO, FECHA_FIN)
+
+    assert reporte.items[0].descansos == 3
+    assert reporte.total_descansos == 3
+    assert reporte.total_minutos_pausa == 60
+
+
+# ─── Resumen operativo ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_resumen_junta_jornadas_descansos_y_tareas_por_empleado():
+    jornadas = [
+        _jornada(
+            2,
+            "Ana",
+            "Lopez",
+            time(8, 0),
+            time(17, 0),
+            [_descanso(time(12, 0), time(13, 0))],
+        ),
+    ]
+    filas_tareas = [
+        SimpleNamespace(id_tarea=10, id_empleado=2, nombre="Ana", apellido="Lopez"),
+        SimpleNamespace(id_tarea=11, id_empleado=2, nombre="Ana", apellido="Lopez"),
+    ]
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _resultado_escalars(jornadas),
+            _resultado_filas(filas_tareas),
+        ]
+    )
+
+    reporte = await obtener_reporte_resumen(db, FECHA_INICIO, FECHA_FIN)
+
+    item = reporte.items[0]
+    assert item.nombre_empleado == "Ana Lopez"
+    assert item.jornadas == 1
+    assert item.minutos_trabajados == 480      # 9 h menos 1 h de pausa
+    assert item.horas_trabajadas == "08:00"
+    assert item.descansos == 1
+    assert item.minutos_descanso == 60
+    assert item.horas_descanso == "01:00"
+    assert item.tareas_completadas == 2
+    assert item.tareas_por_hora == 0.25
+    assert reporte.total_tareas_completadas == 2
+    assert reporte.total_horas_descanso == "01:00"
+
+
+@pytest.mark.asyncio
+async def test_resumen_incluye_a_quien_trabajo_sin_cerrar_tareas():
+    """El reporte contesta "que hizo cada quien": un empleado sin tareas
+    cerradas sigue apareciendo, con 0, no desaparece de la planilla."""
+    jornadas = [_jornada(5, "Luis", "Perez", time(8, 0), time(16, 0))]
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _resultado_escalars(jornadas),
+            _resultado_filas([]),
+        ]
+    )
+
+    reporte = await obtener_reporte_resumen(db, FECHA_INICIO, FECHA_FIN)
+
+    assert reporte.total_empleados == 1
+    assert reporte.items[0].nombre_empleado == "Luis Perez"
+    assert reporte.items[0].tareas_completadas == 0
+    assert reporte.items[0].tareas_por_hora == 0.0
+
+
+@pytest.mark.asyncio
+async def test_resumen_no_filtra_la_asistencia_por_rol():
+    """A diferencia de productividad, el resumen es de toda la plantilla: la
+    asistencia y las pausas no son exclusivas de los tecnicos."""
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[_resultado_escalars([]), _resultado_filas([])]
+    )
+
+    await obtener_reporte_resumen(db, FECHA_INICIO, FECHA_FIN, id_empleado=7)
+
+    consulta_asistencias = str(db.execute.await_args_list[0].args[0])
+    assert "empleado.rol" not in consulta_asistencias
+    assert "asistencia.id_empleado = " in consulta_asistencias
+
+
+@pytest.mark.asyncio
+async def test_endpoint_resumen_envia_filtro_de_empleado_al_servicio():
+    db = MagicMock()
+    gerente = SimpleNamespace(id_empleado=4, rol="gerente")
+    respuesta_esperada = MagicMock()
+
+    with patch(
+        "app.routers.reportes.obtener_reporte_resumen",
+        new=AsyncMock(return_value=respuesta_esperada),
+    ) as servicio:
+        respuesta = await get_reporte_resumen(
+            db,
+            gerente,
+            FECHA_INICIO,
+            FECHA_FIN,
+            empleado=7,
+        )
+
+    assert respuesta is respuesta_esperada
+    servicio.assert_awaited_once_with(
+        db,
+        FECHA_INICIO,
+        FECHA_FIN,
+        id_empleado=7,
+    )
 
 
 @pytest.mark.asyncio

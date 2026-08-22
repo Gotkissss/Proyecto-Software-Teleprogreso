@@ -15,10 +15,12 @@ from openpyxl.utils import get_column_letter
 from app.schemas.reporte import (
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
+    ReporteResumenResponse,
     ReporteTareasCompletadasResponse,
 )
 
 TIPOS_REPORTES_EXPORTABLES = (
+    "resumen",
     "asistencia",
     "tareas-completadas",
     "productividad",
@@ -111,6 +113,54 @@ def _crear_libro(
     return contenido.getvalue()
 
 
+def _excel_resumen(reporte: ReporteResumenResponse) -> bytes:
+    filas = [
+        (
+            item.id_empleado,
+            item.nombre_empleado,
+            item.jornadas,
+            item.jornadas_abiertas,
+            timedelta(minutes=item.minutos_trabajados),
+            item.descansos,
+            timedelta(minutes=item.minutos_descanso),
+            item.tareas_completadas,
+            item.tareas_por_hora,
+        )
+        for item in reporte.items
+    ]
+
+    return _crear_libro(
+        titulo="Resumen operativo",
+        nombre_hoja="Resumen",
+        reporte=reporte,
+        encabezados=(
+            "ID empleado",
+            "Empleado",
+            "Jornadas",
+            "Jornadas sin cerrar",
+            "Horas trabajadas",
+            "Descansos tomados",
+            "Tiempo en descanso",
+            "Tareas completadas",
+            "Tareas por hora",
+        ),
+        filas=filas,
+        fila_total=(
+            None,
+            "TOTAL",
+            reporte.total_jornadas,
+            reporte.total_jornadas_abiertas,
+            timedelta(minutes=reporte.total_minutos_trabajados),
+            reporte.total_descansos,
+            timedelta(minutes=reporte.total_minutos_descanso),
+            reporte.total_tareas_completadas,
+            reporte.tareas_por_hora,
+        ),
+        columnas_duracion=(5, 7),
+        columnas_decimal=(9,),
+    )
+
+
 def _excel_asistencia(reporte: ReporteAsistenciaResponse) -> bytes:
     filas = [
         (
@@ -119,6 +169,7 @@ def _excel_asistencia(reporte: ReporteAsistenciaResponse) -> bytes:
             item.jornadas,
             item.jornadas_abiertas,
             timedelta(minutes=item.minutos_trabajados),
+            item.descansos,
             timedelta(minutes=item.minutos_pausa),
         )
         for item in reporte.items
@@ -132,20 +183,24 @@ def _excel_asistencia(reporte: ReporteAsistenciaResponse) -> bytes:
             "ID empleado",
             "Empleado",
             "Jornadas",
-            "Jornadas abiertas",
+            # "Jornadas abiertas" se leia como "turnos disponibles". Son las
+            # que quedaron con entrada marcada y sin salida.
+            "Jornadas sin cerrar",
             "Horas trabajadas",
-            "Horas de pausa",
+            "Descansos tomados",
+            "Tiempo en descanso",
         ),
         filas=filas,
         fila_total=(
             None,
             "TOTAL",
             reporte.total_jornadas,
-            sum(item.jornadas_abiertas for item in reporte.items),
+            reporte.total_jornadas_abiertas,
             timedelta(minutes=reporte.total_minutos_trabajados),
+            reporte.total_descansos,
             timedelta(minutes=reporte.total_minutos_pausa),
         ),
-        columnas_duracion=(5, 6),
+        columnas_duracion=(5, 7),
     )
 
 
@@ -213,6 +268,7 @@ def _excel_productividad(reporte: ReporteProductividadResponse) -> bytes:
 def generar_excel_reporte(tipo: str, reporte) -> bytes:
     """Genera el XLSX correspondiente al tipo de reporte solicitado."""
     generadores = {
+        "resumen": _excel_resumen,
         "asistencia": _excel_asistencia,
         "tareas-completadas": _excel_tareas_completadas,
         "productividad": _excel_productividad,

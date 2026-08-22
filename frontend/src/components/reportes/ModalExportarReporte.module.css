@@ -1,0 +1,200 @@
+/* ============================================================
+   ModalExportarReporte — qué reporte, de qué fechas y de quién
+   ============================================================ */
+
+.bloque {
+  border: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ── Selección de reporte ──────────────────────────────── */
+
+.opciones {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.opcion:hover {
+  border-color: var(--color-border-hover);
+}
+
+.opcionActiva {
+  border-color: var(--color-primary, #1e88e5);
+  background: var(--gradient-primary-soft);
+}
+
+.opcion input {
+  margin-top: 3px;
+  accent-color: var(--color-primary, #1e88e5);
+  flex-shrink: 0;
+}
+
+.opcionTitulo {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.opcionDesc {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+/* ── Periodo ───────────────────────────────────────────── */
+
+.atajos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.atajo {
+  padding: 7px 14px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.atajo:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
+}
+
+.atajoActivo {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: #fff;
+}
+
+.fechas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+@media (max-width: 480px) {
+  .fechas { grid-template-columns: 1fr; }
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.campo input,
+.select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  transition: var(--transition);
+}
+
+.campo input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--color-primary, #1e88e5);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.error {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.nota {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Acciones ──────────────────────────────────────────── */
+
+.btnSecundario,
+.btnPrimario {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 11px 20px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btnSecundario {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.btnSecundario:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-text-secondary);
+}
+
+.btnPrimario {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.btnPrimario:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.btnSecundario:disabled,
+.btnPrimario:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}

@@ -18,7 +18,9 @@ from app.schemas.reporte import (
     ProductividadEmpleado,
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
+    ReporteResumenResponse,
     ReporteTareasCompletadasResponse,
+    ResumenEmpleado,
     TareasCompletadasEmpleado,
 )
 from app.services.exportacion_reportes import (
@@ -63,6 +65,8 @@ def _reporte_asistencia():
         total_jornadas=2,
         total_minutos_trabajados=720,
         total_minutos_pausa=60,
+        total_jornadas_abiertas=0,
+        total_descansos=3,
         total_horas_trabajadas="12:00",
         total_horas_pausa="01:00",
         items=[
@@ -73,8 +77,41 @@ def _reporte_asistencia():
                 jornadas_abiertas=0,
                 minutos_trabajados=720,
                 minutos_pausa=60,
+                descansos=3,
                 horas_trabajadas="12:00",
                 horas_pausa="01:00",
+            )
+        ],
+    )
+
+
+def _reporte_resumen():
+    return ReporteResumenResponse(
+        fecha_inicio=FECHA_INICIO,
+        fecha_fin=FECHA_FIN,
+        total_empleados=1,
+        total_jornadas=2,
+        total_jornadas_abiertas=1,
+        total_minutos_trabajados=720,
+        total_horas_trabajadas="12:00",
+        total_descansos=3,
+        total_minutos_descanso=60,
+        total_horas_descanso="01:00",
+        total_tareas_completadas=3,
+        tareas_por_hora=0.25,
+        items=[
+            ResumenEmpleado(
+                id_empleado=7,
+                nombre_empleado="Ana Lopez",
+                jornadas=2,
+                jornadas_abiertas=1,
+                minutos_trabajados=720,
+                horas_trabajadas="12:00",
+                descansos=3,
+                minutos_descanso=60,
+                horas_descanso="01:00",
+                tareas_completadas=3,
+                tareas_por_hora=0.25,
             )
         ],
     )
@@ -133,7 +170,42 @@ def test_excel_asistencia_contiene_duraciones_y_totales():
     assert hoja["B6"].value == "TOTAL"
     assert hoja["E6"].value == timedelta(hours=12)
     assert hoja.freeze_panes == "A5"
-    assert hoja.auto_filter.ref == "A4:F5"
+    assert hoja.auto_filter.ref == "A4:G5"
+
+
+def test_excel_asistencia_nombra_las_jornadas_sin_cerrar_y_cuenta_descansos():
+    """"Jornadas abiertas" se leia como turnos disponibles, no como jornadas
+    sin marcar salida; y el numero de descansos no aparecia por ningun lado."""
+    contenido = generar_excel_reporte("asistencia", _reporte_asistencia())
+    hoja = load_workbook(BytesIO(contenido))["Asistencia"]
+
+    assert hoja["D4"].value == "Jornadas sin cerrar"
+    assert hoja["F4"].value == "Descansos tomados"
+    assert hoja["F5"].value == 3
+    assert hoja["G4"].value == "Tiempo en descanso"
+    assert hoja["G5"].value == timedelta(hours=1)
+
+
+def test_excel_resumen_junta_horas_descansos_y_tareas_en_una_fila():
+    contenido = generar_excel_reporte("resumen", _reporte_resumen())
+    hoja = load_workbook(BytesIO(contenido))["Resumen"]
+
+    assert hoja["A1"].value == "Resumen operativo"
+    assert hoja["A2"].value == "Periodo: 2026-08-01 al 2026-08-15"
+
+    assert hoja["B5"].value == "Ana Lopez"
+    assert hoja["C5"].value == 2                      # jornadas
+    assert hoja["D5"].value == 1                      # sin cerrar
+    assert hoja["E5"].value == timedelta(hours=12)    # trabajadas
+    assert hoja["E5"].number_format == "[h]:mm"
+    assert hoja["F5"].value == 3                      # descansos tomados
+    assert hoja["G5"].value == timedelta(hours=1)     # tiempo en descanso
+    assert hoja["H5"].value == 3                      # tareas cerradas
+    assert hoja["I5"].value == 0.25
+    assert hoja["I5"].number_format == "0.00"
+
+    assert hoja["B6"].value == "TOTAL"
+    assert hoja["H6"].value == 3
 
 
 def test_excel_tareas_completadas_contiene_conteos():
@@ -283,6 +355,7 @@ async def test_endpoint_rechaza_tipo_desconocido():
     ("tipo", "empleado", "tecnico"),
     [
         ("asistencia", None, 7),
+        ("resumen", None, 7),
         ("productividad", 7, None),
     ],
 )
