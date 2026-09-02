@@ -8,17 +8,30 @@
   color: var(--color-text-secondary);
 }
 
+/* El ícono vive en un círculo tintado: sin él, un trazo gris suelto en medio
+   de la página parecía contenido roto en vez de un estado deliberado. */
 .icon {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-alt);
+  border-radius: var(--radius-full);
   color: var(--color-text-muted);
   margin-bottom: var(--space-4);
 }
-.icon svg { width: 100%; height: 100%; }
+.icon svg { width: 26px; height: 26px; }
+
+.error .icon {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
 
 .title {
   margin: 0 0 var(--space-2);
-  font-size: 1.05rem;
+  font-size: var(--text-xl);
+  font-weight: 700;
   color: var(--color-text);
 }
 
@@ -26,7 +39,7 @@
 
 .desc {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   max-width: 420px;
 }
 

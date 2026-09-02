@@ -1,20 +1,21 @@
 /**
  * components/layout/shared/LayoutBottomNav.jsx
  * ---------------------------------------------------------------------------
- * Nav inferior compartido por AppLayout (técnico) y SupervisorLayout.
- * Misma estructura DOM para ambos: <nav> con un <NavLink> por item.
- * variant="app" -> barra fija de ancho completo (estilo tab bar móvil).
- * variant="supervisor" -> píldora flotante (estilo desktop), colapsa a
- * barra completa en pantallas chicas vía CSS (ver módulo de estilos).
+ * Tab bar inferior del técnico: barra fija de ancho completo, un <NavLink>
+ * por item.
+ *
+ * Antes tenía además una variante "supervisor" en forma de píldora flotante.
+ * El panel de supervisor pasó a navegar con barra lateral (LayoutSidebar),
+ * así que esa variante y sus estilos se retiraron.
  * ---------------------------------------------------------------------------
  */
 
 import { NavLink } from 'react-router-dom'
 import styles from './LayoutBottomNav.module.css'
 
-export default function LayoutBottomNav({ items, variant = 'app' }) {
+export default function LayoutBottomNav({ items }) {
   return (
-    <nav className={`${styles.bottomNav} ${variant === 'supervisor' ? styles.pill : ''}`}>
+    <nav className={styles.bottomNav} aria-label="Navegación principal">
       {items.map(({ to, label, Icon }) => (
         <NavLink
           key={to}

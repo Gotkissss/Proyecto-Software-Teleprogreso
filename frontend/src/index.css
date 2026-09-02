@@ -108,9 +108,10 @@
   /* ── Alturas ──────────────────────────────────────── */
   --nav-height:        68px;
   --bottom-nav-height: 70px;
-}
+  /* Ancho de la barra lateral del panel de supervisor. */
+  --sidebar-width:     248px;
 
-/* ── Escala tipográfica (tamaños de texto) ────────── */
+  /* ── Escala tipográfica (tamaños de texto) ────────── */
   --text-xs:   0.6875rem;
   --text-sm:   0.75rem;
   --text-base: 0.8125rem;
@@ -123,6 +124,11 @@
   --z-bottom-nav:   40;
   --z-dropdown-backdrop: 40;
   --z-dropdown:     60;
+  --z-sidebar:      45;
+  --z-sidebar-backdrop: 44;
+  --z-modal:        100;
+  --z-toast:        110;
+}
 
 /* Reset */
 *, *::before, *::after {
@@ -197,6 +203,98 @@ a {
   border: 2px solid var(--color-bg);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-border-hover); }
+
+/* Foco visible solo al navegar con teclado: los estados :hover/:active de
+   cada componente ya cubren el uso con mouse o dedo. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Botones base (ver frontend/GUIA-ESTILO.md) ─────────────────────────────
+   Un solo estilo de botón para toda la app. Son clases globales para que
+   cada pantalla las herede sin redefinirlas: en JSX directamente
+   `className="btn btn-primary"`, o desde un CSS Module con
+   `composes: btn btn-primary from global;` si el botón necesita ajustes.
+   ------------------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-text-on-primary);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg);
+}
+
+.btn-danger {
+  background: var(--gradient-accent);
+  color: var(--color-text-on-primary);
+}
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-accent);
+}
+
+.btn-success {
+  background: var(--gradient-success);
+  color: var(--color-text-on-primary);
+}
+.btn-success:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Acciones terciarias (cancelar, cerrar): sin relleno ni borde. */
+.btn-ghost {
+  background: none;
+  color: var(--color-text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Tamaños alternativos */
+.btn-sm { min-height: 32px; padding: 0 var(--space-3); font-size: var(--text-base); }
+.btn-lg { min-height: 48px; padding: 0 var(--space-6); font-size: var(--text-lg); border-radius: var(--radius-lg); }
 
 /* Utilidades comunes */
 .sr-only {

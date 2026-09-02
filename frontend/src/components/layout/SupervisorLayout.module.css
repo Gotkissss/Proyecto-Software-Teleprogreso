@@ -1,25 +1,80 @@
 /* ===================================================
    SupervisorLayout — solo lo específico del supervisor
-   (header/nav compartidos viven en ./shared)
+   (header/barra lateral compartidos viven en ./shared)
    =================================================== */
 
+/* Dos columnas: barra lateral fija + contenido. En pantallas chicas la barra
+   sale del flujo (ver LayoutSidebar) y el contenido pasa a ocupar todo. */
 .wrapper {
   display: flex;
-  flex-direction: column;
   min-height: 100vh;
   width: 100%;
   background: var(--color-bg);
 }
 
+.content {
+  flex: 1;
+  min-width: 0;          /* sin esto una tabla ancha estira toda la columna */
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Marca dentro de la barra lateral ─────────────── */
 .logo {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
   background: var(--color-primary-50);
   border-radius: var(--radius-md);
   padding: 4px;
+  flex-shrink: 0;
 }
 
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+.brandName {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.brandSub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Cerrar sesión (pie de la barra lateral) ──────── */
+.logoutBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.logoutBtn:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+}
+.logoutBtn svg { width: 18px; height: 18px; }
+
+/* ── Acciones del header ──────────────────────────── */
 .iconBtn {
   position: relative;
   width: 40px;
@@ -39,6 +94,27 @@
   color: var(--color-primary);
 }
 .iconBtn svg { width: 18px; height: 18px; }
+
+/* Abre la barra lateral cuando esta se ha vuelto cajón; en escritorio la
+   barra ya está a la vista y el botón sobra. */
+.menuBtn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--color-text-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.menuBtn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.menuBtn svg { width: 20px; height: 20px; }
 
 .badge {
   position: absolute;
@@ -66,9 +142,13 @@
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-6) calc(var(--bottom-nav-height) + var(--space-8));
+  padding: var(--space-8) var(--space-6);
+}
+
+@media (max-width: 1024px) {
+  .menuBtn { display: inline-flex; }
 }
 
 @media (max-width: 768px) {
-  .main { padding: var(--space-5) var(--space-4) calc(var(--bottom-nav-height) + var(--space-6)); }
+  .main { padding: var(--space-5) var(--space-4); }
 }

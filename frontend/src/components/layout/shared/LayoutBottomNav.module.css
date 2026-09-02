@@ -1,11 +1,17 @@
 /* ===================================================
-   LayoutBottomNav — estructura compartida (técnico/supervisor)
-   =================================================== */
+   LayoutBottomNav — tab bar inferior del técnico
+   ===================================================
 
-/* Base: tab bar de ancho completo (variante "app" / técnico) */
+   Pensada para uso con una mano en móvil: cada item ocupa toda la altura
+   de la barra (~70px de target táctil), el estado activo se marca con una
+   píldora tintada alrededor del ícono (visible con el pulgar encima, cosa
+   que un simple cambio de color no logra) y la barra respeta el área segura
+   de los teléfonos con gesto de home. */
+
 .bottomNav {
   display: flex;
-  height: var(--bottom-nav-height);
+  min-height: var(--bottom-nav-height);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   position: sticky;
@@ -19,98 +25,39 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
+  padding: var(--space-2) 0;
   text-decoration: none;
   color: var(--color-text-muted);
-  transition: color var(--transition), background var(--transition);
+  transition: color var(--transition);
   -webkit-tap-highlight-color: transparent;
 }
 .navItem:hover { color: var(--color-text-secondary); }
+.navItem:active .navIcon { transform: scale(0.92); }
 
-.navIcon { display: flex; }
+/* La píldora existe siempre (transparente) para que al activarse solo cambie
+   el color y no salte el layout. */
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  transition: background var(--transition), transform var(--transition);
+}
 .navIcon svg { width: 22px; height: 22px; }
 
 .navLabel {
   font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.active { color: var(--color-primary); }
-
-/* ── Variante supervisor: píldora flotante de ancho auto ── */
-.bottomNav.pill {
-  position: fixed;
-  bottom: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
-  height: auto;
-  width: auto;
-  gap: var(--space-1);
-  padding: 6px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-lg);
-}
-
-.bottomNav.pill .navItem {
-  flex: none;
-  flex-direction: row;
-  gap: var(--space-2);
-  padding: 10px var(--space-5);
-  border-radius: var(--radius-full);
-  color: var(--color-text-secondary);
-}
-.bottomNav.pill .navItem:hover {
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-.bottomNav.pill .navLabel {
-  font-size: var(--text-md);
   font-weight: 600;
-  text-transform: none;
-  letter-spacing: normal;
-  line-height: 1;
-}
-.bottomNav.pill .navIcon svg { width: 18px; height: 18px; }
-
-.bottomNav.pill .active {
-  background: var(--gradient-primary);
-  color: white;
-  box-shadow: var(--shadow-primary-sm);
-}
-.bottomNav.pill .active:hover {
-  background: var(--gradient-primary);
-  color: white;
+  letter-spacing: 0.01em;
 }
 
-/* Colapsa a barra completa en pantallas chicas, igual que la variante app */
-@media (max-width: 768px) {
-  .bottomNav.pill {
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    transform: none;
-    width: 100%;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    padding: var(--space-2);
-    justify-content: space-around;
-  }
-  .bottomNav.pill .navItem {
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px 10px;
-    border-radius: var(--radius-md);
-  }
-  .bottomNav.pill .navLabel {
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.01em;
-  }
-  .bottomNav.pill .navIcon svg { width: 22px; height: 22px; }
+.active { color: var(--color-primary-deep); }
+.active .navIcon {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
 }
+.active .navLabel { font-weight: 700; }

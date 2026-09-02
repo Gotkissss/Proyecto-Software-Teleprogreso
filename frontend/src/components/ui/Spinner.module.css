@@ -11,10 +11,11 @@
 .md  { width: 24px; height: 24px; border-width: 3px; }
 .lg  { width: 40px; height: 40px; border-width: 4px; }
 
-/* Colores */
-.primary { border-top-color: var(--color-primary); }
-.white   { border-top-color: #ffffff; }
-.muted   { border-top-color: var(--color-text-muted); }
+/* Colores: el arco lleva el color del variante y el resto del anillo queda
+   como pista tenue, para que el giro se lea aunque el fondo sea claro. */
+.primary { border-color: var(--color-primary-light);   border-top-color: var(--color-primary); }
+.white   { border-color: rgba(255, 255, 255, 0.25);    border-top-color: #ffffff; }
+.muted   { border-color: var(--color-bg-alt);          border-top-color: var(--color-text-muted); }
 
 @keyframes spin {
   to { transform: rotate(360deg); }

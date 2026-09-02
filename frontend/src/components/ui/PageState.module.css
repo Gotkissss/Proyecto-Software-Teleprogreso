@@ -17,21 +17,7 @@
   color: var(--color-text-secondary);
 }
 
+/* Hereda el botón base global (index.css) — sin estilos propios. */
 .retryBtn {
-  padding: 10px 20px;
-  background: var(--gradient-primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: var(--text-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.retryBtn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-  box-shadow: var(--shadow-primary-sm);
+  composes: btn btn-primary from global;
 }

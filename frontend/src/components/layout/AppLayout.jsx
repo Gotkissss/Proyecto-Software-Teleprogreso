@@ -76,8 +76,10 @@ export default function AppLayout() {
       <LayoutHeader
         variant="app"
         logo={<span className={styles.logoBox}><IconLogo /></span>}
-        title="Teleprogreso"
-        subtitle={`Hola, ${primerNombre}`}
+        // En móvil el saludo pesa más que repetir la marca (el logo ya
+        // identifica la app): el técnico ve su nombre como título.
+        title={`Hola, ${primerNombre}`}
+        subtitle="Teleprogreso · Técnico"
         right={<UserMenu user={user} onLogout={logoutUser} variant="app" />}
       />
 
@@ -85,7 +87,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      <LayoutBottomNav variant="app" items={NAV_ITEMS} />
+      <LayoutBottomNav items={NAV_ITEMS} />
     </div>
   )
 }
