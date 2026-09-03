@@ -1,0 +1,30 @@
+.miniatura {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.miniaturaImg {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.miniaturaLabel {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--color-text-secondary);
+}

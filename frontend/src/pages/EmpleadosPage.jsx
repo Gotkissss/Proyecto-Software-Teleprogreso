@@ -1,119 +1,29 @@
 /**
  * pages/EmpleadosPage.jsx
  * ---------------------------------------------------------------------------
- * Gestión de empleados para supervisor/admin.
- * Funcionalidades:
- *   - Tabla con columnas: nombre, correo, rol, estado y fecha de contratación
- *   - Filtros por rol y por estado; ordenamiento por columna
- *   - Botón "Editar" → panel lateral con formulario
- *   - Botón "Desactivar/Activar" → modal de confirmación
- *   - Botón "Nuevo empleado" → PanelCrearEmpleado con validación client-side
- *   - Integración POST /empleados, manejo correo duplicado y confirmación visual
+ * Gestión de empleados y consulta de historial de asistencia.
+ * Arquitectura modular:
+ *   - TablaEmpleados (components/empleados/TablaEmpleados)
+ *   - ModalCrearEmpleado (components/empleados/ModalCrearEmpleado)
+ *   - ModalEditarEmpleado (components/empleados/ModalEditarEmpleado)
+ *   - ModalConfirmarToggle (components/empleados/ModalConfirmarToggle)
+ *   - HistorialAsistenciaTable (components/asistencia/HistorialAsistenciaTable)
  * ---------------------------------------------------------------------------
  */
 
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import apiClient from '../api/client'
-import Spinner from '../components/ui/Spinner'
-import Badge from '../components/ui/Badge'
-import Modal, { ModalActions } from '../components/ui/Modal'
+import { useAuth } from '../context/AuthContext'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
+import TablaEmpleados from '../components/empleados/TablaEmpleados'
+import ModalCrearEmpleado from '../components/empleados/ModalCrearEmpleado'
+import ModalEditarEmpleado from '../components/empleados/ModalEditarEmpleado'
+import ModalConfirmarToggle from '../components/empleados/ModalConfirmarToggle'
 import HistorialAsistenciaTable from '../components/asistencia/HistorialAsistenciaTable'
 import styles from './EmpleadosPage.module.css'
 
-
-const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
-
-const ROL_LABEL = {
-  admin:      'Admin',
-  supervisor: 'Supervisor',
-  tecnico:    'Técnico',
-  gerente:    'Gerente',
-}
-
-const ROL_VARIANT = {
-  admin:      'danger',
-  supervisor: 'info',
-  tecnico:    'muted',
-  gerente:    'warning',
-}
-
-const IconEdit   = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-  </svg>
-)
-const IconToggleOff = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="5" width="22" height="14" rx="7" ry="7"/>
-    <circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/>
-  </svg>
-)
-const IconToggleOn = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="5" width="22" height="14" rx="7" ry="7"/>
-    <circle cx="16" cy="12" r="3" fill="currentColor" stroke="none"/>
-  </svg>
-)
-const IconSearch  = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/>
-    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-)
-const IconX = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <line x1="18" y1="6" x2="6" y2="18"/>
-    <line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-)
-const IconUser = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
-  </svg>
-)
-const IconAlert = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-    <line x1="12" y1="9" x2="12" y2="13"/>
-    <line x1="12" y1="17" x2="12.01" y2="17"/>
-  </svg>
-)
-const IconCheck = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-)
-const IconPlus = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <line x1="12" y1="5" x2="12" y2="19"/>
-    <line x1="5" y1="12" x2="19" y2="12"/>
-  </svg>
-)
-const IconKey = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="7.5" cy="15.5" r="4.5"/>
-    <path d="M10.7 12.3 21 2"/>
-    <path d="m16.5 6.5 3 3"/>
-  </svg>
-)
-const IconEye = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-)
-const IconEyeOff = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-    <line x1="1" y1="1" x2="23" y2="23"/>
-  </svg>
-)
 const IconUserPlus = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -122,870 +32,240 @@ const IconUserPlus = () => (
     <line x1="23" y1="11" x2="17" y2="11"/>
   </svg>
 )
-const IconChevronUp   = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="18 15 12 9 6 15"/>
-  </svg>
-)
-const IconChevronDown = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-)
-const IconChevronsUpDown = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <polyline points="7 15 12 20 17 15"/>
-    <polyline points="7 9 12 4 17 9"/>
-  </svg>
-)
 
-/* ═══════════════════════════════════════════════════════════════
-   SCRUM-65 / SCRUM-66 — Panel Crear Empleado
-   ═══════════════════════════════════════════════════════════════ */
-const FORM_INICIAL = {
-  nombre:            '',
-  apellido:          '',
-  correo:            '',
-  telefono:          '',
-  rol:               'tecnico',
-  estado:            'activo',
-  contrasena:        '',
-  confirmar_contrasena: '',
-  fecha_contratacion:'',
-}
-
-function validarFormulario(form) {
-  const errores = {}
-  if (!form.nombre.trim()) errores.nombre = 'El nombre es obligatorio.'
-  else if (form.nombre.trim().length < 2) errores.nombre = 'El nombre debe tener al menos 2 caracteres.'
-  if (!form.apellido.trim()) errores.apellido = 'El apellido es obligatorio.'
-  else if (form.apellido.trim().length < 2) errores.apellido = 'El apellido debe tener al menos 2 caracteres.'
-  if (!form.correo.trim()) errores.correo = 'El correo electrónico es obligatorio.'
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) errores.correo = 'Ingresa un correo electrónico válido.'
-  if (form.telefono.trim()) {
-    const digitos = form.telefono.replace(/\D/g, '')
-    if (digitos.length < 7) errores.telefono = 'El teléfono debe tener al menos 7 dígitos.'
-    else if (!/^[0-9+\-() ]+$/.test(form.telefono.trim())) errores.telefono = 'Solo se permiten dígitos, espacios, +, - y ().'
-  }
-  if (!form.contrasena) errores.contrasena = 'La contraseña es obligatoria.'
-  else if (form.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres.'
-  else if (!/[A-Z]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos una letra mayúscula.'
-  else if (!/[a-z]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos una letra minúscula.'
-  else if (!/[0-9]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos un número.'
-  if (!form.confirmar_contrasena) errores.confirmar_contrasena = 'Confirma la contraseña.'
-  else if (form.contrasena !== form.confirmar_contrasena) errores.confirmar_contrasena = 'Las contraseñas no coinciden.'
-  if (!form.fecha_contratacion) errores.fecha_contratacion = 'La fecha de contratación es obligatoria.'
-  else {
-    const hoy = new Date(); hoy.setHours(0,0,0,0)
-    const fecha = new Date(form.fecha_contratacion + 'T12:00:00')
-    if (fecha > hoy) errores.fecha_contratacion = 'La fecha no puede ser en el futuro.'
-  }
-  return errores
-}
-
-function getPasswordStrength(pass) {
-  if (!pass) return { level: 0, label: '', color: '' }
-  let score = 0
-  if (pass.length >= 8)  score++
-  if (pass.length >= 12) score++
-  if (/[A-Z]/.test(pass)) score++
-  if (/[a-z]/.test(pass)) score++
-  if (/[0-9]/.test(pass)) score++
-  if (/[^A-Za-z0-9]/.test(pass)) score++
-  if (score <= 2) return { level: 1, label: 'Débil',  color: '#ef4444' }
-  if (score <= 4) return { level: 2, label: 'Media',  color: '#f97316' }
-  return              { level: 3, label: 'Fuerte', color: '#16a34a' }
-}
-
-function PanelCrearEmpleado({ onCreado, onCerrar, empleadosExistentes }) {
-  const [form,          setForm]          = useState(FORM_INICIAL)
-  const [errores,       setErrores]       = useState({})
-  const [cargando,      setCargando]      = useState(false)
-  const [errorServidor, setErrorServidor] = useState(null)
-  const [showPass,      setShowPass]      = useState(false)
-  const [showConfirm,   setShowConfirm]   = useState(false)
-  const [tocados,       setTocados]       = useState({})
-  const strength = getPasswordStrength(form.contrasena)
-
-  const handleChange = (campo, valor) => {
-    setForm(prev => ({ ...prev, [campo]: valor }))
-    setErrorServidor(null)
-    if (tocados[campo]) {
-      const nuevosErrores = validarFormulario({ ...form, [campo]: valor })
-      setErrores(prev => ({ ...prev, [campo]: nuevosErrores[campo] || null }))
-    }
-  }
-  const handleBlur = (campo) => {
-    setTocados(prev => ({ ...prev, [campo]: true }))
-    const nuevosErrores = validarFormulario(form)
-    setErrores(prev => ({ ...prev, [campo]: nuevosErrores[campo] || null }))
-  }
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const todosTocados = Object.keys(FORM_INICIAL).reduce((acc, k) => ({ ...acc, [k]: true }), {})
-    setTocados(todosTocados)
-    const erroresValidacion = validarFormulario(form)
-    setErrores(erroresValidacion)
-    if (Object.keys(erroresValidacion).length > 0) return
-    if (empleadosExistentes.some(e => e.correo.toLowerCase() === form.correo.trim().toLowerCase())) {
-      setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado en el sistema.' }))
-      return
-    }
-    setCargando(true); setErrorServidor(null)
-    try {
-      const payload = {
-        nombre: form.nombre.trim(), apellido: form.apellido.trim(),
-        correo: form.correo.trim().toLowerCase(), telefono: form.telefono.trim() || null,
-        rol: form.rol, contrasena: form.contrasena, fecha_contratacion: form.fecha_contratacion,
-      }
-      const { data } = await apiClient.post('/empleados', payload)
-      onCreado(data)
-    } catch (err) {
-      const status = err?.response?.status
-      const detail = err?.response?.data?.detail
-      if (status === 409) {
-        setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado en el sistema.' }))
-      } else if (status === 400 || status === 422) {
-        if (Array.isArray(detail)) {
-          const errBack = {}
-          detail.forEach(d => { const campo = d.loc?.[d.loc.length - 1]; if (campo && campo in FORM_INICIAL) errBack[campo] = d.msg || d.message })
-          if (Object.keys(errBack).length > 0) { setErrores(prev => ({ ...prev, ...errBack })); return }
-        }
-        const msg = typeof detail === 'string' ? detail : ''
-        if (msg.toLowerCase().includes('correo') || msg.toLowerCase().includes('email') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
-          setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado en el sistema.' })); return
-        }
-        setErrorServidor(msg || 'Los datos enviados no son válidos.')
-      } else {
-        setErrorServidor('Error al conectar con el servidor. Intenta de nuevo.')
-      }
-    } finally { setCargando(false) }
-  }
-  const campoTieneError = (campo) => tocados[campo] && errores[campo]
-
-  return (
-    <Modal open onClose={onCerrar} title="Nuevo empleado" width={620}>
-        <p className={styles.editPanelSubtitle}>Completa todos los campos obligatorios</p>
-        {errorServidor && (
-          <div className={styles.editErrorBanner}><IconAlert /><span>{errorServidor}</span></div>
-        )}
-        <form className={styles.editForm} onSubmit={handleSubmit} noValidate>
-          <div className={styles.formSectionLabel}>Datos personales</div>
-          <div className={styles.editFormGrid}>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Nombre <span className={styles.required}>*</span></label>
-              <input type="text" className={`${styles.editInput} ${campoTieneError('nombre') ? styles.editInputError : ''}`} value={form.nombre} onChange={e => handleChange('nombre', e.target.value)} onBlur={() => handleBlur('nombre')} disabled={cargando} placeholder="Ej: Juan" autoComplete="given-name" />
-              {campoTieneError('nombre') && <p className={styles.editFieldError}>{errores.nombre}</p>}
-            </div>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Apellido <span className={styles.required}>*</span></label>
-              <input type="text" className={`${styles.editInput} ${campoTieneError('apellido') ? styles.editInputError : ''}`} value={form.apellido} onChange={e => handleChange('apellido', e.target.value)} onBlur={() => handleBlur('apellido')} disabled={cargando} placeholder="Ej: Pérez García" autoComplete="family-name" />
-              {campoTieneError('apellido') && <p className={styles.editFieldError}>{errores.apellido}</p>}
-            </div>
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Correo electrónico <span className={styles.required}>*</span></label>
-            <input type="email" className={`${styles.editInput} ${campoTieneError('correo') ? styles.editInputError : ''}`} value={form.correo} onChange={e => handleChange('correo', e.target.value)} onBlur={() => handleBlur('correo')} disabled={cargando} placeholder="usuario@teleprogreso.com" autoComplete="email" />
-            {campoTieneError('correo') && <p className={styles.editFieldError}>{errores.correo}</p>}
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Teléfono <span className={styles.optional}>(opcional)</span></label>
-            <input type="tel" className={`${styles.editInput} ${campoTieneError('telefono') ? styles.editInputError : ''}`} value={form.telefono} onChange={e => handleChange('telefono', e.target.value)} onBlur={() => handleBlur('telefono')} disabled={cargando} placeholder="Ej: 5550-0001" autoComplete="tel" />
-            {campoTieneError('telefono') && <p className={styles.editFieldError}>{errores.telefono}</p>}
-          </div>
-          <div className={styles.formSectionLabel}>Rol y estado</div>
-          <div className={styles.editFormGrid}>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Rol <span className={styles.required}>*</span></label>
-              <select className={styles.editSelect} value={form.rol} onChange={e => handleChange('rol', e.target.value)} disabled={cargando}>
-                {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
-              </select>
-            </div>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Fecha de contratación <span className={styles.required}>*</span></label>
-              <input type="date" className={`${styles.editInput} ${campoTieneError('fecha_contratacion') ? styles.editInputError : ''}`} value={form.fecha_contratacion} onChange={e => handleChange('fecha_contratacion', e.target.value)} onBlur={() => handleBlur('fecha_contratacion')} disabled={cargando} max={new Date().toISOString().split('T')[0]} />
-              {campoTieneError('fecha_contratacion') && <p className={styles.editFieldError}>{errores.fecha_contratacion}</p>}
-            </div>
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Estado inicial</label>
-            <div className={styles.estadoToggleGroup}>
-              {['activo', 'inactivo'].map(est => (
-                <button key={est} type="button" className={`${styles.estadoToggleBtn} ${form.estado === est ? styles.estadoToggleBtnActive : ''} ${est === 'activo' ? styles.estadoToggleBtnActivo : styles.estadoToggleBtnInactivo}`} onClick={() => handleChange('estado', est)} disabled={cargando}>
-                  <span className={styles.estadoToggleDot} />{est.charAt(0).toUpperCase() + est.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className={styles.formSectionLabel}>Contraseña de acceso</div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Contraseña <span className={styles.required}>*</span></label>
-            <div className={styles.passWrap}>
-              <input type={showPass ? 'text' : 'password'} className={`${styles.editInput} ${styles.editInputWithIcon} ${campoTieneError('contrasena') ? styles.editInputError : ''}`} value={form.contrasena} onChange={e => handleChange('contrasena', e.target.value)} onBlur={() => handleBlur('contrasena')} disabled={cargando} placeholder="Mínimo 8 caracteres" autoComplete="new-password" />
-              <button type="button" className={styles.passEyeBtn} onClick={() => setShowPass(v => !v)} tabIndex={-1} aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
-                {showPass ? <IconEyeOff /> : <IconEye />}
-              </button>
-            </div>
-            {form.contrasena && (
-              <div className={styles.strengthBar}>
-                <div className={styles.strengthSegments}>
-                  {[1,2,3].map(lvl => <div key={lvl} className={styles.strengthSegment} style={{ background: strength.level >= lvl ? strength.color : '#e2e8f0' }} />)}
-                </div>
-                <span className={styles.strengthLabel} style={{ color: strength.color }}>{strength.label}</span>
-              </div>
-            )}
-            {campoTieneError('contrasena') && <p className={styles.editFieldError}>{errores.contrasena}</p>}
-            {!campoTieneError('contrasena') && <p className={styles.passHint}>Mín. 8 caracteres, una mayúscula, una minúscula y un número.</p>}
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Confirmar contraseña <span className={styles.required}>*</span></label>
-            <div className={styles.passWrap}>
-              <input type={showConfirm ? 'text' : 'password'} className={`${styles.editInput} ${styles.editInputWithIcon} ${campoTieneError('confirmar_contrasena') ? styles.editInputError : ''}`} value={form.confirmar_contrasena} onChange={e => handleChange('confirmar_contrasena', e.target.value)} onBlur={() => handleBlur('confirmar_contrasena')} disabled={cargando} placeholder="Repite la contraseña" autoComplete="new-password" />
-              <button type="button" className={styles.passEyeBtn} onClick={() => setShowConfirm(v => !v)} tabIndex={-1} aria-label={showConfirm ? 'Ocultar confirmación' : 'Mostrar confirmación'}>
-                {showConfirm ? <IconEyeOff /> : <IconEye />}
-              </button>
-            </div>
-            {campoTieneError('confirmar_contrasena') && <p className={styles.editFieldError}>{errores.confirmar_contrasena}</p>}
-          </div>
-          <ModalActions>
-            <button type="button" className={styles.editCancelBtn} onClick={onCerrar} disabled={cargando}>Cancelar</button>
-            <button type="submit" className={styles.editSaveBtn} disabled={cargando}>
-              {cargando ? <><Spinner size="sm" color="white" /> Creando...</> : <><IconUserPlus /> Crear empleado</>}
-            </button>
-          </ModalActions>
-        </form>
-    </Modal>
-  )
-}
-
-function ModalConfirmacion({ empleado, onConfirmar, onCancelar, cargando }) {
-  const esActivo    = empleado.estado === 'activo'
-  const nuevoEstado = esActivo ? 'inactivo' : 'activo'
-  return (
-    <Modal
-      open
-      onClose={onCancelar}
-      title={esActivo ? 'Desactivar empleado' : 'Activar empleado'}
-      width={420}
-    >
-        <div className={`${styles.modalIconWrap} ${esActivo ? styles.modalIconDanger : styles.modalIconSuccess}`}>
-          {esActivo ? <IconAlert /> : <IconCheck />}
-        </div>
-        <p className={styles.modalDesc}>
-          {esActivo
-            ? <><strong>{empleado.nombre} {empleado.apellido}</strong> no podrá iniciar sesión mientras esté inactivo.</>
-            : <>¿Deseas activar nuevamente a <strong>{empleado.nombre} {empleado.apellido}</strong>?</>
-          }
-        </p>
-        <ModalActions>
-          <button className={styles.modalCancelBtn} onClick={onCancelar} disabled={cargando}>Cancelar</button>
-          <button className={`${styles.modalConfirmBtn} ${esActivo ? styles.modalConfirmDanger : styles.modalConfirmSuccess}`} onClick={() => onConfirmar(empleado.id_empleado, nuevoEstado)} disabled={cargando}>
-            {cargando ? <><Spinner size="sm" color="white" /> Procesando...</> : esActivo ? 'Sí, desactivar' : 'Sí, activar'}
-          </button>
-        </ModalActions>
-    </Modal>
-  )
-}
-
-function PanelEditar({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
-  const [form, setForm] = useState({ nombre: empleado.nombre ?? '', apellido: empleado.apellido ?? '', correo: empleado.correo ?? '', telefono: empleado.telefono ?? '', rol: empleado.rol ?? 'tecnico' })
-  const [errores, setErrores] = useState({})
-  const handleChange = (campo, valor) => { setForm(prev => ({ ...prev, [campo]: valor })); if (errores[campo]) setErrores(prev => ({ ...prev, [campo]: null })) }
-  const validar = () => {
-    const e = {}
-    if (!form.nombre.trim())   e.nombre   = 'El nombre es obligatorio.'
-    if (!form.apellido.trim()) e.apellido  = 'El apellido es obligatorio.'
-    if (!form.correo.trim())   e.correo    = 'El correo es obligatorio.'
-    if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) e.correo = 'Ingresa un correo válido.'
-    if (form.telefono && !/^[0-9+\-() ]{7,}$/.test(form.telefono.trim())) e.telefono = 'Teléfono inválido (mín. 7 dígitos).'
-    setErrores(e)
-    return Object.keys(e).length === 0
-  }
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (!validar()) return
-    const cambios = {}
-    if (form.nombre.trim()   !== empleado.nombre)              cambios.nombre   = form.nombre.trim()
-    if (form.apellido.trim() !== empleado.apellido)            cambios.apellido = form.apellido.trim()
-    if (form.correo.trim()   !== empleado.correo)              cambios.correo   = form.correo.trim()
-    if (form.rol             !== empleado.rol)                 cambios.rol      = form.rol
-    if (form.telefono.trim() !== (empleado.telefono ?? ''))    cambios.telefono = form.telefono.trim() || null
-    if (Object.keys(cambios).length === 0) { onCerrar(); return }
-    onGuardar(empleado.id_empleado, cambios)
-  }
-  return (
-    <Modal open onClose={onCerrar} title="Editar empleado" width={620}>
-        <p className={styles.editPanelSubtitle}>ID #{empleado.id_empleado} — {empleado.correo}</p>
-        {errorMsg && <div className={styles.editErrorBanner}><IconAlert /><span>{errorMsg}</span></div>}
-        <form className={styles.editForm} onSubmit={handleSubmit} noValidate>
-          <div className={styles.editFormGrid}>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Nombre <span className={styles.required}>*</span></label>
-              <input type="text" className={`${styles.editInput} ${errores.nombre ? styles.editInputError : ''}`} value={form.nombre} onChange={e => handleChange('nombre', e.target.value)} disabled={cargando} placeholder="Ej: Juan" />
-              {errores.nombre && <p className={styles.editFieldError}>{errores.nombre}</p>}
-            </div>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Apellido <span className={styles.required}>*</span></label>
-              <input type="text" className={`${styles.editInput} ${errores.apellido ? styles.editInputError : ''}`} value={form.apellido} onChange={e => handleChange('apellido', e.target.value)} disabled={cargando} placeholder="Ej: Pérez García" />
-              {errores.apellido && <p className={styles.editFieldError}>{errores.apellido}</p>}
-            </div>
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Correo electrónico <span className={styles.required}>*</span></label>
-            <input type="email" className={`${styles.editInput} ${errores.correo ? styles.editInputError : ''}`} value={form.correo} onChange={e => handleChange('correo', e.target.value)} disabled={cargando} placeholder="usuario@teleprogreso.com" />
-            {errores.correo && <p className={styles.editFieldError}>{errores.correo}</p>}
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Teléfono</label>
-            <input type="tel" className={`${styles.editInput} ${errores.telefono ? styles.editInputError : ''}`} value={form.telefono} onChange={e => handleChange('telefono', e.target.value)} disabled={cargando} placeholder="Ej: 5550-0001" />
-            {errores.telefono && <p className={styles.editFieldError}>{errores.telefono}</p>}
-          </div>
-          <div className={styles.editField}>
-            <label className={styles.editLabel}>Rol</label>
-            <select className={styles.editSelect} value={form.rol} onChange={e => handleChange('rol', e.target.value)} disabled={cargando}>
-              {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
-            </select>
-          </div>
-          <ModalActions>
-            <button type="button" className={styles.editCancelBtn} onClick={onCerrar} disabled={cargando}>Cancelar</button>
-            <button type="submit" className={styles.editSaveBtn} disabled={cargando}>
-              {cargando ? <><Spinner size="sm" color="white" /> Guardando...</> : 'Guardar cambios'}
-            </button>
-          </ModalActions>
-        </form>
-
-        <SeccionContrasena empleado={empleado} bloqueado={cargando} />
-    </Modal>
-  )
-}
-
-
-/**
- * Bloque de restablecimiento de contraseña dentro del modal de edición.
- *
- * Va en su propio formulario y con su propia llamada al backend
- * (PATCH /empleados/{id}/contrasena) en vez de mezclarse con los demás campos:
- * cambiar una contraseña es una acción que no debe ocurrir "de paso" al
- * guardar un teléfono. Empieza plegado por la misma razón.
- */
-function SeccionContrasena({ empleado, bloqueado }) {
-  const toast = useToast()
-  const [abierto,     setAbierto]     = useState(false)
-  const [clave,       setClave]       = useState('')
-  const [confirmar,   setConfirmar]   = useState('')
-  const [visible,     setVisible]     = useState(false)
-  const [guardando,   setGuardando]   = useState(false)
-  const [error,       setError]       = useState(null)
-
-  const limpiar = () => { setClave(''); setConfirmar(''); setError(null); setVisible(false) }
-
-  const cerrar = () => { setAbierto(false); limpiar() }
-
-  // Se valida aquí lo mismo que valida el backend, para dar el aviso sin
-  // gastar una petición. El backend vuelve a comprobarlo igualmente.
-  const problema = () => {
-    if (clave.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
-    if (clave !== clave.trim()) return 'No puede empezar ni terminar con espacios.'
-    if (clave !== confirmar) return 'Las contraseñas no coinciden.'
-    return null
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const fallo = problema()
-    if (fallo) { setError(fallo); return }
-
-    setGuardando(true); setError(null)
-    try {
-      const { data } = await apiClient.patch(
-        `/empleados/${empleado.id_empleado}/contrasena`,
-        { contrasena: clave, contrasena_confirmacion: confirmar },
-      )
-      toast.success(data?.detail || 'Contraseña actualizada correctamente.')
-      cerrar()
-    } catch (err) {
-      const detail = err?.response?.data?.detail
-      setError(
-        Array.isArray(detail)
-          ? detail.map(d => d.message || d.msg).join(', ')
-          : detail || 'No se pudo actualizar la contraseña.'
-      )
-    } finally { setGuardando(false) }
-  }
-
-  // Mismo medidor que usa el modal "Nuevo empleado", para que la clave se
-  // evalúe igual se cree o se restablezca.
-  const fuerza = getPasswordStrength(clave)
-
-  return (
-    <div className={styles.pwdSection}>
-      {!abierto ? (
-        <button
-          type="button"
-          className={styles.pwdToggleBtn}
-          onClick={() => setAbierto(true)}
-          disabled={bloqueado}
-        >
-          <IconKey />
-          <span>Restablecer contraseña</span>
-        </button>
-      ) : (
-        <form className={styles.pwdForm} onSubmit={handleSubmit} noValidate>
-          <div className={styles.pwdHeader}>
-            <IconKey />
-            <div>
-              <p className={styles.pwdTitle}>Restablecer contraseña</p>
-              <p className={styles.pwdHint}>
-                Se asigna una clave nueva a {empleado.nombre}. Entrégasela en persona
-                o por un medio seguro; el sistema no se la envía.
-              </p>
-            </div>
-          </div>
-
-          {error && <div className={styles.pwdError}><IconAlert /><span>{error}</span></div>}
-
-          <div className={styles.editFormGrid}>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Contraseña nueva <span className={styles.required}>*</span></label>
-              <div className={styles.passWrap}>
-                <input
-                  type={visible ? 'text' : 'password'}
-                  className={`${styles.editInput} ${styles.editInputWithIcon}`}
-                  value={clave}
-                  onChange={e => { setClave(e.target.value); setError(null) }}
-                  disabled={guardando}
-                  autoComplete="new-password"
-                  placeholder="Mínimo 8 caracteres"
-                />
-                <button
-                  type="button"
-                  className={styles.passEyeBtn}
-                  onClick={() => setVisible(v => !v)}
-                  tabIndex={-1}
-                  aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {visible ? <IconEyeOff /> : <IconEye />}
-                </button>
-              </div>
-              {clave && (
-                <div className={styles.strengthBar}>
-                  <div className={styles.strengthSegments}>
-                    {[1, 2, 3].map(lvl => (
-                      <div
-                        key={lvl}
-                        className={styles.strengthSegment}
-                        style={{ background: fuerza.level >= lvl ? fuerza.color : '#e2e8f0' }}
-                      />
-                    ))}
-                  </div>
-                  <span className={styles.strengthLabel} style={{ color: fuerza.color }}>
-                    {fuerza.label}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className={styles.editField}>
-              <label className={styles.editLabel}>Repetir contraseña <span className={styles.required}>*</span></label>
-              <input
-                type={visible ? 'text' : 'password'}
-                className={`${styles.editInput} ${confirmar && clave !== confirmar ? styles.editInputError : ''}`}
-                value={confirmar}
-                onChange={e => { setConfirmar(e.target.value); setError(null) }}
-                disabled={guardando}
-                autoComplete="new-password"
-                placeholder="Vuelve a escribirla"
-              />
-              {confirmar && clave !== confirmar && (
-                <p className={styles.editFieldError}>Las contraseñas no coinciden.</p>
-              )}
-            </div>
-          </div>
-
-          <ModalActions>
-            <button type="button" className={styles.editCancelBtn} onClick={cerrar} disabled={guardando}>
-              Cancelar
-            </button>
-            <button type="submit" className={styles.pwdSaveBtn} disabled={guardando || !clave || !confirmar}>
-              {guardando ? <><Spinner size="sm" color="white" /> Guardando...</> : 'Actualizar contraseña'}
-            </button>
-          </ModalActions>
-        </form>
-      )}
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════
-   COMPONENTE PRINCIPAL
-   ══════════════════════════════════════════════════════════════ */
 export default function EmpleadosPage() {
+  const { user } = useAuth()
   const toast = useToast()
-
-  // SCRUM-137: tab "Historial" con la tabla filtrable por fechas
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tabActiva, setTabActiva] = useState(
-    searchParams.get('tab') === 'historial' ? 'historial' : 'empleados'
-  )
-  const cambiarTab = (tab) => {
-    setTabActiva(tab)
-    setSearchParams(tab === 'historial' ? { tab: 'historial' } : {}, { replace: true })
+
+  const tabActiva = searchParams.get('tab') === 'historial' ? 'historial' : 'empleados'
+  const setTab = (tab) => {
+    setSearchParams(tab === 'historial' ? { tab: 'historial' } : {})
   }
 
-  const [empleados,      setEmpleados]      = useState([])
-  const [loading,        setLoading]        = useState(true)
-  const [error,          setError]          = useState(null)
-  const [busqueda,       setBusqueda]       = useState('')
-  const [filtroRol,      setFiltroRol]      = useState('todos')
-  const [filtroEstado,   setFiltroEstado]   = useState('todos')   // SCRUM-75
-  const [sortConfig,     setSortConfig]     = useState({ key: null, dir: 'asc' }) // SCRUM-75
+  const esAdmin = user?.rol === 'admin'
 
-  const [empleadoEditar, setEmpleadoEditar] = useState(null)
-  const [editCargando,   setEditCargando]   = useState(false)
-  const [editError,      setEditError]      = useState(null)
+  const [empleados,        setEmpleados]        = useState([])
+  const [cargando,         setCargando]         = useState(true)
+  const [error,            setError]            = useState(null)
 
-  const [empleadoToggle, setEmpleadoToggle] = useState(null)
-  const [toggleCargando, setToggleCargando] = useState(false)
+  // Filtros y ordenamiento para la tabla
+  const [busqueda,         setBusqueda]         = useState('')
+  const [filtroRol,        setFiltroRol]        = useState('todos')
+  const [filtroEstado,     setFiltroEstado]     = useState('todos')
+  const [sortCol,          setSortCol]          = useState('nombre')
+  const [sortDir,          setSortDir]          = useState('asc')
 
-  const [mostrarCrear,   setMostrarCrear]   = useState(false)
+  // Modales
+  const [mostrarCrear,     setMostrarCrear]     = useState(false)
+  const [empleadoEditar,   setEmpleadoEditar]   = useState(null)
+  const [empleadoToggle,   setEmpleadoToggle]   = useState(null)
+  const [cargandoAccion,   setCargandoAccion]   = useState(false)
+  const [errorModal,       setErrorModal]       = useState(null)
 
   const fetchEmpleados = useCallback(async () => {
-    setLoading(true); setError(null)
+    setCargando(true)
+    setError(null)
     try {
       const { data } = await apiClient.get('/empleados')
-      setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
+      setEmpleados(Array.isArray(data) ? data : [])
     } catch (err) {
-      setError(err?.response?.data?.detail || 'No se pudieron cargar los empleados.')
-    } finally { setLoading(false) }
+      setError(err?.response?.data?.detail || 'No se pudo cargar la lista de empleados.')
+    } finally {
+      setCargando(false)
+    }
   }, [])
 
   useEffect(() => {
     fetchEmpleados()
   }, [fetchEmpleados])
 
-  const handleEmpleadoCreado = (nuevoEmpleado) => {
-    setEmpleados(prev => [nuevoEmpleado, ...prev])
+  // Manejador de ordenamiento
+  const handleSort = (col) => {
+    if (sortCol === col) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
+
+  // Filtrado y ordenamiento de empleados
+  const empleadosFiltrados = useMemo(() => {
+    let result = [...empleados]
+
+    if (filtroRol !== 'todos') {
+      result = result.filter(e => e.rol === filtroRol)
+    }
+
+    if (filtroEstado !== 'todos') {
+      result = result.filter(e => e.estado === filtroEstado)
+    }
+
+    if (busqueda.trim()) {
+      const q = busqueda.toLowerCase().trim()
+      result = result.filter(e =>
+        `${e.nombre} ${e.apellido}`.toLowerCase().includes(q) ||
+        e.correo?.toLowerCase().includes(q) ||
+        e.telefono?.toLowerCase().includes(q)
+      )
+    }
+
+    result.sort((a, b) => {
+      let valA = a[sortCol] ?? ''
+      let valB = b[sortCol] ?? ''
+      if (typeof valA === 'string') valA = valA.toLowerCase()
+      if (typeof valB === 'string') valB = valB.toLowerCase()
+
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1
+      if (valA > valB) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return result
+  }, [empleados, filtroRol, filtroEstado, busqueda, sortCol, sortDir])
+
+  // Handlers para modales
+  const handleEmpleadoCreado = (nuevo) => {
+    setEmpleados(prev => [nuevo, ...prev])
     setMostrarCrear(false)
-    toast.success(`Empleado ${nuevoEmpleado.nombre} ${nuevoEmpleado.apellido} creado correctamente.`)
+    toast.success(`Empleado ${nuevo.nombre} ${nuevo.apellido} registrado exitosamente.`)
   }
 
   const handleGuardarEdicion = async (id, cambios) => {
-    setEditCargando(true); setEditError(null)
+    setCargandoAccion(true)
+    setErrorModal(null)
     try {
       const { data } = await apiClient.patch(`/empleados/${id}`, cambios)
       setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...data } : e))
       setEmpleadoEditar(null)
-      toast.success('Empleado actualizado correctamente.')
+      toast.success('Datos del empleado actualizados.')
     } catch (err) {
-      const detail = err?.response?.data?.detail
-      setEditError(Array.isArray(detail) ? detail.map(d => d.message || d.msg).join(', ') : detail || 'Error al guardar los cambios.')
-    } finally { setEditCargando(false) }
-  }
-
-  const handleToggleEstado = async (id, nuevoEstado) => {
-    setToggleCargando(true)
-    try {
-      const { data } = await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
-      // Al desactivar, el backend suelta el vehículo y cierra la jornada
-      // abierta, pero NO desasigna las tareas: hacerlo borraría a quién se le
-      // habían dado. Devuelve cuántas quedaron para que se avise aquí; si no,
-      // ese trabajo se queda en manos de alguien que ya no puede entrar y
-      // nadie se entera.
-      setEmpleados(prev => prev.map(e =>
-        e.id_empleado === id
-          ? { ...e, estado: data.estado, placa_vehiculo: data.vehiculo_liberado ? null : e.placa_vehiculo }
-          : e
-      ))
-
-      if (nuevoEstado === 'activo') {
-        toast.success('Empleado activado correctamente.')
-      } else {
-        const sueltos = []
-        if (data.vehiculo_liberado) sueltos.push(`se liberó el vehículo ${data.vehiculo_liberado}`)
-        if (data.jornadas_cerradas > 0) sueltos.push('se cerró su jornada abierta')
-
-        toast.success(
-          `Empleado desactivado${sueltos.length ? `; ${sueltos.join(' y ')}` : ''}.`
-        )
-
-        if (data.tareas_activas_sin_reasignar > 0) {
-          toast.error(
-            `Atención: quedan ${data.tareas_activas_sin_reasignar} tarea` +
-            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} activa` +
-            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} asignada` +
-            `${data.tareas_activas_sin_reasignar === 1 ? '' : 's'} a este empleado. ` +
-            'Reasígnalas desde Reasignación de servicios.'
-          )
-        }
-      }
-      setEmpleadoToggle(null)
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || 'No se pudo cambiar el estado del empleado.')
-      setEmpleadoToggle(null)
-    } finally { setToggleCargando(false) }
-  }
-
-  // SCRUM-75: Ordenamiento por columna
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc',
-    }))
-  }
-
-  const SortIcon = ({ colKey }) => {
-    if (sortConfig.key !== colKey) return <span className={styles.sortIconNeutral}><IconChevronsUpDown /></span>
-    return sortConfig.dir === 'asc'
-      ? <span className={styles.sortIconActive}><IconChevronUp /></span>
-      : <span className={styles.sortIconActive}><IconChevronDown /></span>
-  }
-
-  // SCRUM-74 + SCRUM-75: filtrado y ordenamiento
-  const empleadosFiltrados = (() => {
-    let lista = empleados.filter(e => {
-      const texto = busqueda.toLowerCase()
-      const coincideBusqueda =
-        !texto ||
-        e.nombre.toLowerCase().includes(texto)   ||
-        e.apellido.toLowerCase().includes(texto) ||
-        e.correo.toLowerCase().includes(texto)
-      const coincideRol    = filtroRol    === 'todos' || e.rol    === filtroRol
-      const coincideEstado = filtroEstado === 'todos' || e.estado === filtroEstado
-      return coincideBusqueda && coincideRol && coincideEstado
-    })
-
-    if (sortConfig.key) {
-      lista = [...lista].sort((a, b) => {
-        let valA, valB
-        if (sortConfig.key === 'nombre_completo') {
-          valA = `${a.nombre} ${a.apellido}`.toLowerCase()
-          valB = `${b.nombre} ${b.apellido}`.toLowerCase()
-        } else {
-          valA = String(a[sortConfig.key] ?? '').toLowerCase()
-          valB = String(b[sortConfig.key] ?? '').toLowerCase()
-        }
-        if (valA < valB) return sortConfig.dir === 'asc' ? -1 : 1
-        if (valA > valB) return sortConfig.dir === 'asc' ?  1 : -1
-        return 0
-      })
+      setErrorModal(err?.response?.data?.detail || 'No se pudieron guardar los cambios.')
+    } finally {
+      setCargandoAccion(false)
     }
+  }
 
-    return lista
-  })()
-
-  const totalActivos   = empleados.filter(e => e.estado === 'activo').length
-  const totalInactivos = empleados.filter(e => e.estado === 'inactivo').length
-
-  const mostrarEstadoPagina =
-    tabActiva === 'empleados' && (loading || (error && empleados.length === 0))
-
-  if (mostrarEstadoPagina) {
-    return (
-      <PageState
-        loading={loading}
-        loadingLabel="Cargando empleados..."
-        error={empleados.length === 0 ? error : null}
-        onRetry={fetchEmpleados}
-        errorTitle="No se pudieron cargar los empleados"
-      />
-    )
+  const handleConfirmarToggle = async (id, nuevoEstado) => {
+    setCargandoAccion(true)
+    try {
+      await apiClient.patch(`/empleados/${id}/estado`, { estado: nuevoEstado })
+      setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, estado: nuevoEstado } : e))
+      setEmpleadoToggle(null)
+      toast.success(
+        nuevoEstado === 'activo'
+          ? 'Empleado activado correctamente.'
+          : 'Empleado desactivado.'
+      )
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al cambiar el estado del empleado.')
+    } finally {
+      setCargandoAccion(false)
+    }
   }
 
   return (
     <div className={styles.page}>
+      {/* ── Encabezado ── */}
       <div className={styles.pageHeader}>
-        <div className={styles.pageHeaderLeft}>
-          <h1 className={styles.title}>Gestión de Empleados</h1>
+        <div>
+          <h1 className={styles.title}>Gestión de Personal</h1>
           <p className={styles.subtitle}>
-            {empleados.length} empleados en total ·{' '}
-            <span className={styles.countActivos}>{totalActivos} activos</span>
-            {totalInactivos > 0 && (
-              <> · <span className={styles.countInactivos}>{totalInactivos} inactivos</span></>
-            )}
+            Administración de colaboradores, roles y registro de asistencia
           </p>
         </div>
-        {tabActiva === 'empleados' && (
-          <button className={styles.btnNuevoEmpleado} onClick={() => setMostrarCrear(true)}>
-            <IconPlus /><span>Nuevo empleado</span>
+
+        {esAdmin && tabActiva === 'empleados' && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setMostrarCrear(true)}
+          >
+            <IconUserPlus /> Nuevo empleado
           </button>
         )}
       </div>
 
-      {/* SCRUM-137: Tabs Empleados / Historial de asistencia */}
-      <div className={styles.tabs} role="tablist">
+      {/* ── Tabs de Navegación ── */}
+      <div className={styles.tabs}>
         <button
-          role="tab"
-          aria-selected={tabActiva === 'empleados'}
+          type="button"
           className={`${styles.tabBtn} ${tabActiva === 'empleados' ? styles.tabBtnActive : ''}`}
-          onClick={() => cambiarTab('empleados')}
+          onClick={() => setTab('empleados')}
         >
-          Empleados
+          Colaboradores ({empleados.length})
         </button>
         <button
-          role="tab"
-          aria-selected={tabActiva === 'historial'}
+          type="button"
           className={`${styles.tabBtn} ${tabActiva === 'historial' ? styles.tabBtnActive : ''}`}
-          onClick={() => cambiarTab('historial')}
+          onClick={() => setTab('historial')}
         >
           Historial de asistencia
         </button>
       </div>
 
-      {tabActiva === 'historial' && <HistorialAsistenciaTable showHeader={false} />}
-
-      {tabActiva === 'empleados' && (<>
-
-      {/* El aviso de éxito sale por el toast global (components/ui/Toast). */}
-      {error && empleados.length > 0 && (
-        <div className={styles.errorBanner}>{error}</div>
-      )}
-
-      {/* SCRUM-75: Toolbar con búsqueda + filtro rol + filtro estado */}
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          <span className={styles.searchIcon}><IconSearch /></span>
-          <input
-            type="search"
-            className={styles.searchInput}
-            placeholder="Buscar por nombre, apellido o correo..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-          />
-          {busqueda && (
-            <button className={styles.searchClear} onClick={() => setBusqueda('')} aria-label="Limpiar búsqueda">
-              <IconX />
-            </button>
-          )}
-        </div>
-        <div className={styles.filters}>
-          <select className={styles.filterSelect} value={filtroRol} onChange={e => setFiltroRol(e.target.value)}>
-            <option value="todos">Todos los roles</option>
-            {ROLES.map(r => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
-          </select>
-          <select className={styles.filterSelect} value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
-            <option value="todos">Todos los estados</option>
-            <option value="activo">Activo</option>
-            <option value="inactivo">Inactivo</option>
-          </select>
-        </div>
+      {/* ── Contenido de pestañas ── */}
+      <div className={styles.tabContent}>
+        {tabActiva === 'empleados' ? (
+          cargando || error ? (
+            <PageState
+              loading={cargando}
+              loadingLabel="Cargando colaboradores..."
+              error={error}
+              onRetry={fetchEmpleados}
+              errorTitle="No se pudo cargar la lista de personal"
+            />
+          ) : (
+            <TablaEmpleados
+              empleados={empleadosFiltrados}
+              busqueda={busqueda}
+              onBusquedaChange={setBusqueda}
+              filtroRol={filtroRol}
+              onFiltroRolChange={setFiltroRol}
+              filtroEstado={filtroEstado}
+              onFiltroEstadoChange={setFiltroEstado}
+              sortCol={sortCol}
+              sortDir={sortDir}
+              onSort={handleSort}
+              onEditar={emp => { setErrorModal(null); setEmpleadoEditar(emp) }}
+              onToggle={emp => setEmpleadoToggle(emp)}
+              esAdmin={esAdmin}
+              totalFiltrados={empleadosFiltrados.length}
+              totalGeneral={empleados.length}
+            />
+          )
+        ) : (
+          <HistorialAsistenciaTable />
+        )}
       </div>
 
-      {empleadosFiltrados.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}><IconUser /></div>
-          <p className={styles.emptyMsg}>
-            {busqueda || filtroRol !== 'todos' || filtroEstado !== 'todos'
-              ? 'No se encontraron empleados con esos criterios.'
-              : 'No hay empleados registrados.'}
-          </p>
-          {(busqueda || filtroRol !== 'todos' || filtroEstado !== 'todos') && (
-            <button className={styles.emptyResetBtn} onClick={() => { setBusqueda(''); setFiltroRol('todos'); setFiltroEstado('todos') }}>
-              Limpiar filtros
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            {/* SCRUM-75: Headers con ordenamiento */}
-            <thead className={styles.thead}>
-              <tr>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('nombre_completo')}>
-                  <span>Empleado</span><SortIcon colKey="nombre_completo" />
-                </th>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('correo')}>
-                  <span>Correo</span><SortIcon colKey="correo" />
-                </th>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('rol')}>
-                  <span>Rol</span><SortIcon colKey="rol" />
-                </th>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('estado')}>
-                  <span>Estado</span><SortIcon colKey="estado" />
-                </th>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('fecha_contratacion')}>
-                  <span>Contratación</span><SortIcon colKey="fecha_contratacion" />
-                </th>
-                <th className={`${styles.th} ${styles.thSortable}`} onClick={() => handleSort('placa_vehiculo')}>
-                  <span>Vehículo</span><SortIcon colKey="placa_vehiculo" />
-                </th>
-                <th className={`${styles.th} ${styles.thAcciones}`}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {empleadosFiltrados.map(emp => {
-                const esActivo = emp.estado === 'activo'
-                return (
-                  <tr key={emp.id_empleado} className={`${styles.tr} ${!esActivo ? styles.trInactivo : ''}`}>
-                    {/* SCRUM-74: Nombre */}
-                    <td className={styles.td}>
-                      <div className={styles.empleadoCell}>
-                        <div className={`${styles.avatar} ${!esActivo ? styles.avatarInactivo : ''}`}>
-                          {emp.nombre[0]?.toUpperCase()}{emp.apellido[0]?.toUpperCase()}
-                        </div>
-                        <span className={styles.empleadoNombre}>{emp.nombre} {emp.apellido}</span>
-                      </div>
-                    </td>
-                    {/* SCRUM-74: Correo */}
-                    <td className={`${styles.td} ${styles.tdCorreo}`} title={emp.correo}>
-                      <span className={styles.empleadoCorreo}>{emp.correo}</span>
-                    </td>
-                    {/* SCRUM-74: Rol */}
-                    <td className={styles.td}>
-                      <Badge label={ROL_LABEL[emp.rol] ?? emp.rol} variant={ROL_VARIANT[emp.rol] ?? 'muted'} />
-                    </td>
-                    {/* SCRUM-74: Estado */}
-                    <td className={styles.td}>
-                      <span className={`${styles.estadoBadge} ${esActivo ? styles.estadoActivo : styles.estadoInactivo}`}>
-                        <span className={styles.estadoDot} />
-                        {esActivo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    {/* SCRUM-74: Fecha de contratación */}
-                    <td className={styles.td}>
-                      <span className={styles.fechaText}>
-                        {emp.fecha_contratacion
-                          ? new Date(emp.fecha_contratacion + 'T12:00:00').toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : <span className={styles.sinDato}>—</span>}
-                      </span>
-                    </td>
-                    <td className={styles.td}>
-                        {emp.placa_vehiculo
-                          ? <span className={styles.placaVehiculo}>{emp.placa_vehiculo}</span>
-                          : <span className={styles.sinDato}>—</span>}
-                    </td>
-                    <td className={`${styles.td} ${styles.tdAcciones}`}>
-                      <button className={styles.btnEditar} onClick={() => { setEditError(null); setEmpleadoEditar(emp) }} title={`Editar a ${emp.nombre}`}>
-                        <IconEdit /><span>Editar</span>
-                      </button>
-                      <button
-                        className={`${styles.btnToggle} ${esActivo ? styles.btnDesactivar : styles.btnActivar}`}
-                        onClick={() => setEmpleadoToggle(emp)}
-                        title={esActivo ? 'Desactivar' : 'Activar'}
-                      >
-                        {esActivo ? <IconToggleOff /> : <IconToggleOn />}
-                        <span>{esActivo ? 'Desactivar' : 'Activar'}</span>
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <p className={styles.resultCount}>
-            Mostrando {empleadosFiltrados.length} de {empleados.length} empleados
-          </p>
-        </div>
-      )}
-
-      </>)}
-
+      {/* ── Modales de Empleados ── */}
       {mostrarCrear && (
-        <PanelCrearEmpleado onCreado={handleEmpleadoCreado} onCerrar={() => setMostrarCrear(false)} empleadosExistentes={empleados} />
+        <ModalCrearEmpleado
+          onCreado={handleEmpleadoCreado}
+          onCerrar={() => setMostrarCrear(false)}
+          empleadosExistentes={empleados}
+        />
       )}
+
       {empleadoEditar && (
-        <PanelEditar empleado={empleadoEditar} onGuardar={handleGuardarEdicion} onCerrar={() => { setEmpleadoEditar(null); setEditError(null) }} cargando={editCargando} errorMsg={editError} />
+        <ModalEditarEmpleado
+          empleado={empleadoEditar}
+          onGuardar={handleGuardarEdicion}
+          onCerrar={() => setEmpleadoEditar(null)}
+          cargando={cargandoAccion}
+          errorMsg={errorModal}
+        />
       )}
+
       {empleadoToggle && (
-        <ModalConfirmacion empleado={empleadoToggle} onConfirmar={handleToggleEstado} onCancelar={() => setEmpleadoToggle(null)} cargando={toggleCargando} />
+        <ModalConfirmarToggle
+          empleado={empleadoToggle}
+          onConfirmar={handleConfirmarToggle}
+          onCancelar={() => setEmpleadoToggle(null)}
+          cargando={cargandoAccion}
+        />
       )}
     </div>
   )

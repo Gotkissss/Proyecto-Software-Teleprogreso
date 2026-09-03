@@ -1,0 +1,171 @@
+.tableCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.tableResponsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--text-md);
+}
+
+.th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.thSortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+}
+
+.thSortable:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+}
+
+.thContent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.thActions {
+  text-align: right;
+}
+
+.sortNeutral {
+  color: var(--color-text-muted);
+  display: inline-flex;
+}
+
+.sortActive {
+  color: var(--color-primary);
+  display: inline-flex;
+}
+
+.tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition);
+}
+
+.tr:last-child {
+  border-bottom: none;
+}
+
+.tr:hover {
+  background: var(--color-primary-50);
+}
+
+.td {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+}
+
+.tdActions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionBtns {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.activoCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.activoNombre {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tipoTag {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+}
+
+.textoSecundario {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.cantidadNum {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cantidadBaja {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.stockBarWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 140px;
+}
+
+.stockBar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-bg-alt);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.stockBarFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 300ms ease;
+}
+
+.stockBarOk {
+  background: var(--color-success);
+}
+
+.stockBarBajo {
+  background: var(--color-danger);
+}
+
+.tableFooter {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-alt);
+  border-top: 1px solid var(--color-border);
+}
+
+.resultCount {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
