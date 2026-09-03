@@ -172,7 +172,7 @@ export default function DashboardPage() {
             se quiere, una sola persona. Antes este botón descargaba siempre
             lo mismo (asistencia del mes en curso) sin preguntar nada. */}
         <button
-          className={styles.exportarBtn}
+          className={`btn btn-primary ${styles.exportarBtn}`}
           onClick={() => setExportarAbierto(true)}
           title="Elegir reporte y rango de fechas para descargar en Excel"
         >
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                   )}
                   {tarea.total_incidencias > 0 && (
                     <button
-                      className={styles.evidenciasBtn}
+                      className={`btn btn-secondary btn-sm ${styles.evidenciasBtn}`}
                       onClick={() => setTareaEvidencias(tarea)}
                       title="Ver las evidencias que dejó el técnico"
                     >

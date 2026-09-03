@@ -1,17 +1,16 @@
 /* ============================================================
    DashboardPage.module.css
    Panel de Control Operativo – Teleprogreso S.A.
-   Estilo SaaS moderno, paleta corporativa.
+   Nuevo diseño basado en tokens corporativos.
    ============================================================ */
 
 .page {
   min-height: 100%;
   color: var(--color-text);
-  animation: fadeIn 400ms ease-out;
+  animation: fadeIn var(--transition-slow) ease-out;
 }
 
 /* ── Header de página ─────────────────────────────────────── */
-/* Envuelve título+subtítulo y el botón de exportar, uno a cada extremo. */
 .pageHeader {
   display: flex;
   align-items: flex-start;
@@ -22,6 +21,7 @@
 }
 
 .title {
+  font-family: var(--font-display);
   font-size: 1.875rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -33,61 +33,31 @@
 }
 .title::before {
   content: '';
-  width: 6px;
+  width: var(--space-1);
   height: 28px;
   background: var(--gradient-primary);
   border-radius: var(--radius-full);
 }
 .subtitle {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   color: var(--color-text-secondary);
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--space-4);
 }
 
-/* Botón "Exportar reporte": descarga rápida de asistencia del mes,
-   adelanto de la página completa de Reportes del próximo sprint. Mismo
-   lenguaje visual que .nuevaTareaBtn de ReasignacionPage. */
 .exportarBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 11px 20px;
-  background: var(--gradient-primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--shadow-primary-sm);
-  transition: var(--transition);
   white-space: nowrap;
-  letter-spacing: 0.01em;
   flex-shrink: 0;
 }
 
 .exportarBtn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.exportarBtn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-  box-shadow: var(--shadow-primary);
-}
-
-.exportarBtn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 @media (max-width: 560px) {
   .pageHeader { flex-direction: column; align-items: stretch; }
-  .exportarBtn { justify-content: center; }
+  .exportarBtn { width: 100%; justify-content: center; }
 }
 
 /* ── Centro / loading ─────────────────────────────────────── */
@@ -104,9 +74,9 @@
   padding: var(--space-5) var(--space-6);
   background: var(--color-danger-bg);
   color: var(--color-danger-dark);
-  border-left: 4px solid var(--color-danger);
+  border-left: var(--space-1) solid var(--color-danger);
   border-radius: var(--radius-md);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
@@ -136,13 +106,14 @@
   flex-direction: column;
   gap: var(--space-2);
   overflow: hidden;
+  box-shadow: var(--shadow-xs);
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
-  animation: fadeIn 500ms ease-out backwards;
+  animation: fadeIn var(--transition-slow) ease-out backwards;
 }
 .metricCard:nth-child(1) { animation-delay: 0ms;   }
-.metricCard:nth-child(2) { animation-delay: 80ms;  }
-.metricCard:nth-child(3) { animation-delay: 160ms; }
-.metricCard:nth-child(4) { animation-delay: 240ms; }
+.metricCard:nth-child(2) { animation-delay: 60ms;  }
+.metricCard:nth-child(3) { animation-delay: 120ms; }
+.metricCard:nth-child(4) { animation-delay: 180ms; }
 
 .metricCard::after {
   content: '';
@@ -157,10 +128,15 @@
 }
 .metricCard:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-  border-color: transparent;
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-strong);
 }
 .metricCard:hover::after { opacity: 1; }
+
+.metricCard.info::after { background: var(--gradient-primary); }
+.metricCard.success::after { background: var(--gradient-success); }
+.metricCard.warning::after { background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%); }
+.metricCard.danger::after { background: var(--gradient-accent); }
 
 /* Decoración circular en esquina */
 .metricCard::before {
@@ -170,47 +146,46 @@
   right: -40px;
   width: 120px;
   height: 120px;
-  border-radius: 50%;
-  opacity: 0.06;
+  border-radius: var(--radius-full);
+  opacity: 0.08;
   transition: opacity var(--transition), transform var(--transition);
 }
-.metricCard:hover::before { opacity: 0.10; transform: scale(1.1); }
+.metricCard:hover::before { opacity: 0.15; transform: scale(1.1); }
 
-.metricCard.info    ::before { background: var(--color-primary); }
-.metricCard.success ::before { background: var(--color-success); }
-.metricCard.warning ::before { background: var(--color-warning); }
-.metricCard.danger  ::before { background: var(--color-danger);  }
+.metricCard.info::before    { background: var(--color-primary); }
+.metricCard.success::before { background: var(--color-success); }
+.metricCard.warning::before { background: var(--color-warning); }
+.metricCard.danger::before  { background: var(--color-danger);  }
 
 .metricCard.clickable { cursor: pointer; }
 
 /* Valor numérico grande */
 .metricValue {
-  font-size: 2.5rem;
+  font-family: var(--font-display);
+  font-size: 2.25rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.04em;
   color: var(--color-text);
 }
-.metricCard.info    .metricValue { color: var(--color-primary);     }
-.metricCard.success .metricValue { color: var(--color-success-dark);}
-.metricCard.warning .metricValue { color: var(--color-warning-dark);}
-.metricCard.danger  .metricValue { color: var(--color-danger-dark); }
+.metricCard.info    .metricValue { color: var(--color-primary-dark); }
+.metricCard.success .metricValue { color: var(--color-success-dark); }
+.metricCard.warning .metricValue { color: var(--color-warning-dark); }
+.metricCard.danger  .metricValue { color: var(--color-danger-dark);  }
 
 .metricLabel {
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: var(--color-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 
-/* Contexto del número ("de 5", "12 en total"): en minúscula y más tenue para
-   que no compita con la cifra principal. */
 .metricSuffix {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--color-text-muted);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 /* ── Secciones ────────────────────────────────────────────── */
@@ -219,13 +194,14 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-6);
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
   box-shadow: var(--shadow-xs);
-  animation: fadeIn 500ms ease-out 300ms backwards;
+  animation: fadeIn var(--transition-slow) ease-out backwards;
 }
 
 .sectionTitle {
-  font-size: 1.0625rem;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--color-text);
   margin: 0 0 var(--space-5);
@@ -238,17 +214,10 @@
 }
 .sectionTitle::before {
   content: '';
-  width: 4px;
+  width: var(--space-1);
   height: 16px;
   background: var(--color-primary);
   border-radius: var(--radius-full);
-}
-
-.emptyMsg {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  text-align: center;
-  padding: var(--space-8) 0;
 }
 
 /* ── Lista de técnicos ────────────────────────────────────── */
@@ -266,9 +235,9 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-bg);
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border);
   transition: var(--transition);
 }
 .tecnicoItem:hover {
@@ -278,13 +247,13 @@
 }
 
 .tecnicoAvatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
   background: var(--gradient-primary);
-  color: white;
+  color: var(--color-text-on-primary);
   font-weight: 700;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -300,13 +269,13 @@
 }
 
 .tecnicoNombre {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--color-text);
 }
 
 .tecnicoTareas {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 
@@ -326,9 +295,9 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-bg);
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-primary);
   transition: var(--transition);
 }
@@ -350,7 +319,7 @@
 }
 
 .tareaTitulo {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
@@ -359,7 +328,7 @@
 }
 
 .tareaTecnico {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 
@@ -372,28 +341,8 @@
 }
 
 .evidenciasBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
-  font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: var(--transition);
 }
-
-.evidenciasBtn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.evidenciasBtn svg { width: 14px; height: 14px; }
 
 .evidenciasCount {
   display: inline-flex;
@@ -401,7 +350,7 @@
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   background: var(--color-primary-light);
   color: var(--color-primary-dark);
   border-radius: var(--radius-full);
@@ -412,9 +361,6 @@
 
 @media (max-width: 560px) {
   .tareaItem { flex-wrap: wrap; }
-  /* Las acciones también envuelven: en un teléfono la fecha de vencimiento,
-     el botón de evidencias y el badge de estado no caben en una línea y se
-     salían de la tarjeta. */
   .tareaAcciones {
     width: 100%;
     flex-wrap: wrap;
