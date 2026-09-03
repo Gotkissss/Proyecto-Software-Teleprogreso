@@ -252,7 +252,7 @@ export default function SelectorUbicacionMapa({
             </span>
             <button
               type="button"
-              className={styles.quitarBtn}
+              className={`btn btn-ghost btn-sm ${styles.quitarBtn}`}
               onClick={quitarUbicacion}
               disabled={disabled}
             >
