@@ -44,6 +44,13 @@
   background: var(--gradient-primary);
 }
 
+.subtitle {
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
 .nuevaTareaBtn {
   flex-shrink: 0;
 }
@@ -53,136 +60,297 @@
   height: 1rem;
 }
 
-/* ── Aviso de tareas cerradas ocultas de esta lista ── */
-.cerradasNota {
+/* ── Barra de herramientas del tablero ── */
+.boardToolbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-  background: var(--color-primary-50);
-  border: 1px solid var(--color-primary-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  margin: 0 0 var(--space-5);
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
-/* Aclaración del alcance del historial (SCRUM-180): en tono secundario para
-   que no compita con la cifra ni con el enlace. */
-.cerradasAclaracion {
+.agruparLabel {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.verRealizadasBtn {
-  padding: 0;
-  font: inherit;
+.agruparSelect {
+  height: 36px;
+  padding: 0 var(--space-8) 0 var(--space-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-primary-dark);
-  background: none;
-  border: none;
-  text-decoration: underline;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
   cursor: pointer;
   transition: var(--transition);
 }
 
-.verRealizadasBtn:hover {
-  color: var(--color-primary-deep);
+.agruparSelect:hover {
+  background-color: var(--color-bg-alt);
 }
 
-/* ── Lista de tareas ── */
-.tareasList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.agruparSelect:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* ── Tablero de columnas (tipo Planner) ──
+   Cada criterio de agrupación arma un set de buckets distinto; el tablero
+   solo los pinta en fila con scroll horizontal, sin saber cuántos son. */
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+
+.boardColumn {
+  flex: 0 0 280px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3);
+  max-height: calc(100vh - 260px);
+}
+
+.boardColumnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) var(--space-3);
+}
+
+.boardColumnTitle {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boardColumnCount {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.boardColumnBody {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  overflow-y: auto;
+  min-height: 40px;
 }
 
-.tareaItem {
+.boardColumnEmpty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--space-4) 0;
+  margin: 0;
+}
+
+/* ── Card de tarea dentro de una columna ── */
+.tareaCard {
   position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
-  padding: var(--space-5) var(--space-6);
-  padding-left: calc(var(--space-6) + var(--space-1));
+  padding: var(--space-4);
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
+  flex-direction: column;
+  gap: var(--space-3);
   transition: var(--transition);
   overflow: hidden;
+  /* `.boardColumnBody` es un flex-column con scroll propio: sin flex-shrink:0
+     acá, el `overflow: hidden` de esta misma regla hace que el alto mínimo
+     automático de la card sea 0 (así lo define la spec de flexbox), y cuando
+     el contenido de la columna no cabe, en vez de solo scrollear, las cards
+     de abajo se comprimen y recortan su texto en lugar de conservar su alto. */
+  flex-shrink: 0;
 }
 
-/* La barra lateral se pinta con ::before y no con border-left para poder
-   darle más grosor sin descuadrar el padding ni las esquinas. */
-.tareaItem::before {
+/* La barra de acento vive arriba y solo aparece al pasar el mouse: en reposo
+   la card queda limpia, y el color solo se pide al mirarla de cerca. Se pinta
+   con ::before y no con border-top para poder animar su opacidad sin mover
+   el resto del contenido. */
+.tareaCard::before {
   content: '';
   position: absolute;
   left: 0;
+  right: 0;
   top: 0;
-  bottom: 0;
-  width: var(--space-1);
+  height: var(--space-1);
   background: var(--color-primary);
+  opacity: 0;
+  transition: var(--transition);
 }
 
-/* Color de la barra según lo cerca que esté la fecha límite. Es lo primero
-   que mira el supervisor al repartir trabajo. */
-.acento_critico::before { background: var(--color-danger); }
-.acento_proximo::before { background: var(--color-warning); }
-.acento_neutro::before  { background: var(--color-primary); }
+.tareaCard:hover::before {
+  opacity: 1;
+}
 
-.tareaItem:hover {
-  transform: translateY(-2px);
+/* Color de la barra según el progreso de la tarea. Mismos colores que ya usa
+   el mapa del supervisor para pendiente/en curso (estadoColor.js), para que
+   el código de color sea el mismo en toda la app. */
+.acento_pendiente::before   { background: var(--color-warning); }
+.acento_en_progreso::before { background: var(--color-primary); }
+
+.tareaCard:hover {
   box-shadow: var(--shadow-md);
   border-color: var(--color-border-strong);
 }
 
-.tareaInfo {
-  flex: 1;
+.tareaCardInfo {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
-}
-
-/* Zona que abre la ficha de la tarea. Se marca con cursor y realce al pasar
-   por encima para que se note que es clicable y no solo texto. */
-.tareaInfoClickable {
   cursor: pointer;
   border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
-  transition: var(--transition);
 }
 
-.tareaInfoClickable:hover {
-  background: var(--color-bg-alt);
-}
-
-.tareaInfoClickable:hover .tareaTitulo {
+.tareaCardInfo:hover .tareaCardTitulo {
   color: var(--color-primary-dark);
 }
 
-.tareaTitulo {
-  font-size: var(--text-xl);
+/* alignItems: flex-start (no center) para que, si el título ocupa dos
+   líneas, el círculo se quede junto a la primera y no flote centrado entre
+   ambas — así se lee como el círculo de una checklist, no como un adorno. */
+.tareaCardTituloRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.tareaCardTitulo {
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--color-text);
   letter-spacing: -0.01em;
   line-height: 1.35;
 }
 
-/* ── Segunda línea: quién la lleva y dónde ── */
-.tareaMeta {
+/* Círculo de progreso junto al título: vacío = pendiente, medio relleno de
+   arriba hacia abajo = en curso. Mismo color que la barra de acento de la
+   card. Del alto de una línea de texto para que se lea como el círculo de
+   una checklist y no como un simple punto decorativo. */
+.progresoIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  /* Compensa el line-height del título para quedar a la altura de su
+     primera línea en vez de pegado al borde superior de la card. */
+  margin-top: 0.2em;
+}
+
+.progresoIcon svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* Mismo azul en los dos estados: lo que distingue pendiente de en curso es
+   la forma (círculo vacío vs. arco inferior remarcado), no el color. */
+.progresoIcon_pendiente,
+.progresoIcon_en_progreso {
+  color: var(--color-primary);
+}
+
+.tareaCardChips {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* Fecha límite como icono + texto en vez de badge: el color solo la cuenta
+   dos veces (rojo si ya venció, azul si todavía corre) y sin fecha se apaga
+   a gris, igual que "Sin asignar" en el técnico. */
+.fechaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.fechaChip svg {
+  width: 14px;
+  height: 14px;
+}
+
+.fechaChip_futura   { color: var(--color-primary); }
+.fechaChip_sinFecha { color: var(--color-text-muted); }
+
+.fechaChip_vencida {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* Icono de prioridad en vez de badge de texto: baja/alta/urgente se marcan
+   con su propio glifo y color; media no lleva icono (ver PRIORIDAD_ICONO). */
+.prioridadIcono {
+  display: inline-flex;
+  align-items: center;
+}
+
+.prioridadIcono svg {
+  width: 14px;
+  height: 14px;
+}
+
+.prioridadIcono_baja    { color: var(--color-text-muted); }
+.prioridadIcono_alta    { color: var(--color-warning); }
+.prioridadIcono_urgente { color: var(--color-danger); }
+
+.tecnicoChip {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-  line-height: 1.4;
+}
+
+.tecnicoAvatar {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--gradient-primary);
+  color: var(--color-text-on-primary);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .metaTecnico {
@@ -196,15 +364,13 @@
   color: var(--color-text-muted);
 }
 
-.metaSep {
-  color: var(--color-border-strong);
-}
-
 .metaDireccion {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
 }
 
 .metaDireccion svg {
@@ -214,28 +380,18 @@
   opacity: 0.75;
 }
 
-/* ── Tercera línea: plazo, prioridad y descripción ── */
-.tareaChips {
+.metaDireccionTexto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Acciones de la card ── */
+.tareaCardAcciones {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
-.tareaDescripcion {
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-  line-height: 1.4;
-  min-width: 0;
-}
-
-/* ── Acciones de la fila ── */
-.tareaAcciones {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
 }
 
 .evidenciasBtn {
@@ -388,17 +544,14 @@
   .title {
     font-size: 1.5rem;
   }
-  .tareaItem {
-    flex-direction: column;
-    align-items: flex-start;
+  .boardToolbar {
+    justify-content: flex-start;
+  }
+  .board {
     gap: var(--space-3);
   }
-  .tareaAcciones {
-    width: 100%;
-    flex-wrap: wrap;
-    row-gap: var(--space-2);
-  }
-  .tareaDescripcion {
-    width: 100%;
+  .boardColumn {
+    flex: 0 0 240px;
+    width: 240px;
   }
 }
