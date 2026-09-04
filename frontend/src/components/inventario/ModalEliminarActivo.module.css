@@ -1,0 +1,46 @@
+.iconWrap {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-4);
+}
+
+.iconWrap svg {
+  width: 28px;
+  height: 28px;
+}
+
+.desc {
+  font-size: var(--text-md);
+  color: var(--color-text);
+  line-height: 1.5;
+  text-align: center;
+  margin: 0 0 var(--space-2);
+}
+
+.desc strong {
+  color: var(--color-danger-dark);
+}
+
+.warning {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: 0 0 var(--space-4);
+}
+
+.errorBanner {
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-light);
+  color: var(--color-danger-dark);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}

@@ -13,6 +13,7 @@
 
 import Badge from '../ui/Badge'
 import Modal, { ModalActions } from '../ui/Modal'
+import { PRIORIDAD_LABEL, variantePorPrioridad } from '../mapa/estadoColor'
 import { describirVencimiento, formatearFecha } from '../../utils/vencimiento'
 import styles from './ModalDetalleTarea.module.css'
 
@@ -51,6 +52,7 @@ export default function ModalDetalleTarea({
   if (!tarea) return null
 
   const estado = tarea.estado_tarea ?? tarea.estado
+  const prioridad = (tarea.prioridad ?? 'media').toLowerCase()
   const vencimiento = describirVencimiento(tarea)
   const evidencias = tarea.total_incidencias ?? 0
 
@@ -62,7 +64,10 @@ export default function ModalDetalleTarea({
             label={ESTADO_LABEL[estado] ?? estado}
             variant={ESTADO_VARIANT[estado] ?? 'muted'}
           />
-          <Badge label={tarea.prioridad ?? 'media'} />
+          <Badge
+            label={`Prioridad ${PRIORIDAD_LABEL[prioridad] ?? prioridad}`}
+            variant={variantePorPrioridad(prioridad)}
+          />
           {vencimiento && (
             <Badge label={vencimiento.texto} variant={vencimiento.variant} />
           )}
@@ -117,9 +122,6 @@ export default function ModalDetalleTarea({
             Reasignar
           </button>
         )}
-        <button type="button" className={styles.btnSecundario} onClick={onClose}>
-          Cerrar
-        </button>
       </ModalActions>
     </Modal>
   )

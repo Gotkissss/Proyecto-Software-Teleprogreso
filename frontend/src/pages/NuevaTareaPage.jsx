@@ -236,7 +236,7 @@ export default function NuevaTareaPage() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <button
-          className={styles.backBtn}
+          className={`btn btn-secondary btn-sm ${styles.backBtn}`}
           onClick={() => navigate('/supervisor/reasignacion')}
           type="button"
         >
@@ -466,7 +466,7 @@ export default function NuevaTareaPage() {
           <div className={styles.formBtns}>
             <button
               type="button"
-              className={styles.cancelBtn}
+              className="btn btn-secondary"
               onClick={() => navigate('/supervisor/reasignacion')}
               disabled={cargando}
             >
@@ -474,7 +474,7 @@ export default function NuevaTareaPage() {
             </button>
             <button
               type="submit"
-              className={styles.submitBtn}
+              className="btn btn-primary"
               disabled={
                 cargando ||
                 (tecnicoSeleccionado &&

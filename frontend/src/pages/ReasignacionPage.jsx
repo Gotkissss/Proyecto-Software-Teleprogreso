@@ -11,13 +11,14 @@ import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEditarTarea from '../components/tareas/ModalEditarTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import MiniMapaTarea from '../components/mapa/MiniMapaTarea'
+import { ESTADO_LABEL } from '../components/mapa/estadoColor'
 import {
   LIMITE_TAREAS_FALLBACK,
   getTareas,
   getTecnicosDisponibles,
   reasignarTarea,
 } from '../api/tareaService'
-import { describirVencimiento } from '../utils/vencimiento'
+import { diasRestantes, parsearFechaLocal } from '../utils/vencimiento'
 import styles from './ReasignacionPage.module.css'
 
 
@@ -48,18 +49,12 @@ const PRIORIDAD_LABEL = {
 }
 
 /**
- * Color de la barra lateral de la tarjeta.
- *
- * Sigue al vencimiento y no a la prioridad: lo que hace que una tarea salte a
- * la vista en esta pantalla es que se esté pasando de fecha. Una tarea urgente
- * con una semana por delante no necesita gritar; una media que venció ayer sí.
+ * Color de la barra de acento de la tarjeta: sigue al progreso (pendiente vs.
+ * en curso), no al vencimiento. Con las cards agrupadas en columnas, ver de
+ * un vistazo en qué van todas las tareas de un técnico importa más que cuál
+ * está más cerca de vencer, que ya se lee en su propio badge.
  */
-const acentoDe = (vencimiento) => {
-  if (!vencimiento) return 'neutro'
-  if (vencimiento.variant === 'danger') return 'critico'
-  if (vencimiento.variant === 'warning') return 'proximo'
-  return 'neutro'
-}
+const acentoDe = (estado) => (estado === 'en_progreso' ? 'en_progreso' : 'pendiente')
 
 // ── Iconos ───────────────────────────────────────────────────────────────────
 const IconPin = () => (
@@ -68,24 +63,144 @@ const IconPin = () => (
     <circle cx="12" cy="10" r="3" />
   </svg>
 )
-const IconReloj = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <polyline points="12 7 12 12 15 14" />
-  </svg>
-)
-const IconProgreso = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12a9 9 0 1 1-3.5-7.1" />
-    <polyline points="21 3 21 9 15 9" />
-  </svg>
-)
 const IconMas = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 )
+const IconCalendario = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+)
+const IconFlechaAbajo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <polyline points="6 13 12 19 18 13" />
+  </svg>
+)
+const IconExclamacion = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+    <line x1="12" y1="4" x2="12" y2="15" />
+    <line x1="12" y1="20" x2="12.01" y2="20" />
+  </svg>
+)
+// Único icono con relleno sólido de los tres: la campana "suena" con más
+// fuerza visual que un simple contorno, y como urgente es la prioridad más
+// alta, conviene que sea la que más pese en la columna. Las ondas de sonido
+// y el badajo se quedan en trazo porque un arco tan fino no se ve bien
+// relleno.
+const IconCampana = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="currentColor" stroke="none" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    <path d="M3.5 5a10 10 0 0 0-1.5 3" />
+    <path d="M20.5 5a10 10 0 0 1 1.5 3" />
+  </svg>
+)
+
+// Un icono por prioridad en vez de texto: media no lleva icono a propósito,
+// para que solo urgente/alta/baja "griten" y media quede neutra.
+const PRIORIDAD_ICONO = {
+  baja:    IconFlechaAbajo,
+  alta:    IconExclamacion,
+  urgente: IconCampana,
+}
+
+/** Vacío = pendiente, mitad inferior rellena = en curso. Reemplaza al badge
+    de estado solo en la card del tablero: ahí el progreso se lee de un
+    vistazo por el relleno, sin gastar el espacio de un badge de texto. */
+const IconProgreso = ({ enProgreso }) => (
+  <svg viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.75" />
+    {enProgreso && <path d="M2 8a6 6 0 0 0 12 0z" fill="currentColor" />}
+  </svg>
+)
+
+// Opciones del selector "Agrupar por". El valor es la clave que consume
+// `agruparTareas`; el label es lo que ve el supervisor en el <select>.
+const AGRUPACIONES = [
+  { value: 'asignado',     label: 'Asignado a' },
+  { value: 'prioridad',    label: 'Prioridad' },
+  { value: 'progreso',     label: 'Progreso' },
+  { value: 'vencimiento',  label: 'Fecha de finalización' },
+]
+
+const ORDEN_PRIORIDAD = ['urgente', 'alta', 'media', 'baja']
+const ORDEN_PROGRESO = ['pendiente', 'en_progreso']
+
+/**
+ * Agrupa las tareas en columnas tipo Planner según el criterio elegido.
+ *
+ * "Prioridad" y "Progreso" usan un orden fijo (siempre las mismas columnas,
+ * aunque estén vacías) porque son catálogos cerrados. "Asignado a" es
+ * dinámico: una columna por técnico que tenga tareas, más "Sin asignar" al
+ * final si aplica.
+ */
+function agruparTareas(tareas, criterio) {
+  if (criterio === 'asignado') {
+    const porTecnico = new Map()
+
+    tareas.forEach((t) => {
+      const nombre = t.tecnico?.nombre ?? null
+      const key = nombre ?? '__sin_asignar__'
+      if (!porTecnico.has(key)) {
+        porTecnico.set(key, { key, label: nombre ?? 'Sin asignar', tareas: [] })
+      }
+      porTecnico.get(key).tareas.push(t)
+    })
+
+    return [...porTecnico.values()].sort((a, b) => {
+      if (a.key === '__sin_asignar__') return 1
+      if (b.key === '__sin_asignar__') return -1
+      return a.label.localeCompare(b.label, 'es')
+    })
+  }
+
+  if (criterio === 'prioridad') {
+    return ORDEN_PRIORIDAD.map((p) => ({
+      key: p,
+      label: PRIORIDAD_LABEL[p],
+      tareas: tareas.filter((t) => (t.prioridad ?? 'media').toLowerCase() === p),
+    }))
+  }
+
+  if (criterio === 'progreso') {
+    const presentes = new Set(tareas.map(estadoDe))
+    const otros = [...presentes].filter((e) => !ORDEN_PROGRESO.includes(e))
+
+    return [...ORDEN_PROGRESO, ...otros].map((e) => ({
+      key: e,
+      label: ESTADO_LABEL[e] ?? e,
+      tareas: tareas.filter((t) => estadoDe(t) === e),
+    }))
+  }
+
+  // criterio === 'vencimiento'
+  const conRetraso = []
+  const futuras = []
+  const sinFecha = []
+
+  tareas.forEach((t) => {
+    if (!t.fecha_finalizacion) {
+      sinFecha.push(t)
+      return
+    }
+    const dias = diasRestantes(t.fecha_finalizacion)
+    if (dias !== null && dias < 0) conRetraso.push(t)
+    else futuras.push(t)
+  })
+
+  return [
+    { key: 'retraso',   label: 'Con retraso', tareas: conRetraso },
+    { key: 'futuras',   label: 'Futuras',     tareas: futuras },
+    { key: 'sin_fecha', label: 'Sin fecha',   tareas: sinFecha },
+  ]
+}
 
 export default function ReasignacionPage() {
 
@@ -106,6 +221,8 @@ export default function ReasignacionPage() {
   const [tecnicoNuevo, setTecnicoNuevo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorReasignacion, setErrorReasignacion] = useState(null)
+  // Criterio de agrupación del tablero (SCRUM: vista tipo Planner por buckets).
+  const [agrupacion, setAgrupacion] = useState('asignado')
 
   const fetchData = useCallback(async () => {
     try {
@@ -257,6 +374,11 @@ export default function ReasignacionPage() {
   )
   const totalCerradas = totalCompletadas + totalCanceladas
 
+  const grupos = useMemo(
+    () => agruparTareas(tareasActivas, agrupacion),
+    [tareasActivas, agrupacion]
+  )
+
   /** Técnico que ya tiene la tarea abierta en el modal. */
   const idTecnicoActual =
     tareaSeleccionada?.tecnico?.id_empleado ?? null
@@ -318,12 +440,17 @@ export default function ReasignacionPage() {
 
       {/* HEADER NUEVO */}
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>
-          Reasignación de servicios
-        </h1>
+        <div>
+          <h1 className={styles.title}>
+            Reasignación de servicios
+          </h1>
+          <p className={styles.subtitle}>
+            Tareas pendientes y en curso, disponibles para reasignar.
+          </p>
+        </div>
 
         <button
-          className={styles.nuevaTareaBtn}
+          className={`btn btn-primary ${styles.nuevaTareaBtn}`}
           onClick={() => navigate('/supervisor/nueva-tarea')}
         >
           <IconMas />
@@ -331,44 +458,24 @@ export default function ReasignacionPage() {
         </button>
       </div>
 
-      {/* Aviso de lo que se está ocultando, con salida hacia el historial:
-          si no, parecería que las tareas cerradas se perdieron. */}
-      {totalCerradas > 0 && (
-        <p className={styles.cerradasNota}>
-          {/* Cada cifra dice exactamente qué es y a dónde lleva. Las
-              canceladas no tienen pantalla propia, así que se nombran pero no
-              se enlazan: prometer un enlace que no existe es peor que no
-              mencionarlas. */}
-          {totalCompletadas > 0 && (
-            <>
-              {totalCompletadas} realizada{totalCompletadas === 1 ? '' : 's'}
-              {totalCanceladas > 0 && ` y ${totalCanceladas} cancelada${totalCanceladas === 1 ? '' : 's'}`}
-            </>
-          )}
-          {totalCompletadas === 0 && (
-            <>{totalCanceladas} cancelada{totalCanceladas === 1 ? '' : 's'}</>
-          )}
-          {' '}en total no aparece{totalCerradas === 1 ? '' : 'n'} aquí.
-          {totalCompletadas > 0 && (
-            <>
-              {' '}
-              <button
-                type="button"
-                className={styles.verRealizadasBtn}
-                onClick={() => navigate('/supervisor/historial-tareas')}
-              >
-                Ver tareas realizadas
-              </button>
-              {/* El histórico ya cubre semanas de trabajo (SCRUM-180), así que
-                  este número es mucho mayor que lo que abre "Realizadas", que
-                  arranca en los últimos 7 días. Sin este aviso el supervisor
-                  compara las dos cifras y cree que se perdieron tareas. */}
-              <span className={styles.cerradasAclaracion}>
-                (el historial abre en los últimos 7 días; amplía el rango para ver más)
-              </span>
-            </>
-          )}
-        </p>
+      {/* Selector de agrupación del tablero, arriba a la derecha, como en
+          Planner: cambia el criterio de las columnas sin recargar nada. */}
+      {tareasActivas.length > 0 && (
+        <div className={styles.boardToolbar}>
+          <label className={styles.agruparLabel} htmlFor="agrupar-por">
+            Agrupar por
+          </label>
+          <select
+            id="agrupar-por"
+            className={styles.agruparSelect}
+            value={agrupacion}
+            onChange={(e) => setAgrupacion(e.target.value)}
+          >
+            {AGRUPACIONES.map((op) => (
+              <option key={op.value} value={op.value}>{op.label}</option>
+            ))}
+          </select>
+        </div>
       )}
 
       {tareasActivas.length === 0 ? (
@@ -386,7 +493,7 @@ export default function ReasignacionPage() {
           }
           emptyAction={
             <button
-              className={styles.nuevaTareaBtn}
+              className={`btn btn-primary ${styles.nuevaTareaBtn}`}
               onClick={() => navigate('/supervisor/nueva-tarea')}
             >
               <IconMas />
@@ -395,125 +502,158 @@ export default function ReasignacionPage() {
           }
         />
       ) : (
-        <ul className={styles.tareasList}>
-          {tareasActivas.map((tarea) => {
-            const id = tarea.id_tarea ?? tarea.id
-            const vencimiento = describirVencimiento(tarea)
-            const estado = estadoDe(tarea)
-            const prioridad = (tarea.prioridad ?? 'media').toLowerCase()
-            const enProgreso = estado === 'en_progreso'
+        <div className={styles.board}>
+          {grupos.map((grupo) => (
+            <div key={grupo.key} className={styles.boardColumn}>
+              <div className={styles.boardColumnHeader}>
+                <span className={styles.boardColumnTitle}>{grupo.label}</span>
+                <span className={styles.boardColumnCount}>{grupo.tareas.length}</span>
+              </div>
 
-            return (
-              <li
-                key={id}
-                className={`${styles.tareaItem} ${styles[`acento_${acentoDe(vencimiento)}`]}`}
-              >
-                {/* Toda la zona de información abre la ficha. Los botones de
-                    la derecha detienen la propagación para que "Editar" no
-                    dispare además el detalle. */}
-                <div
-                  className={`${styles.tareaInfo} ${styles.tareaInfoClickable}`}
-                  role="button"
-                  tabIndex={0}
-                  title="Ver detalle de la tarea"
-                  onClick={() => setTareaDetalle(tarea)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setTareaDetalle(tarea)
-                    }
-                  }}
-                >
-                  <span className={styles.tareaTitulo}>
-                    {tarea.titulo}
-                  </span>
+              <div className={styles.boardColumnBody}>
+                {grupo.tareas.length === 0 ? (
+                  <p className={styles.boardColumnEmpty}>Sin tareas</p>
+                ) : (
+                  grupo.tareas.map((tarea) => {
+                    const id = tarea.id_tarea ?? tarea.id
+                    const estado = estadoDe(tarea)
+                    const prioridad = (tarea.prioridad ?? 'media').toLowerCase()
+                    const enProgreso = estado === 'en_progreso'
+                    const PrioridadIcono = PRIORIDAD_ICONO[prioridad]
 
-                  {/* Quién la lleva y dónde. El nombre va destacado porque es
-                      el dato por el que se busca al repartir trabajo. */}
-                  <span className={styles.tareaMeta}>
-                    {/* El backend devuelve tecnico.nombre (nombre completo).
-                        Antes se leía `nombre_completo`, que no existe, y todas
-                        las tareas aparecían como "Sin asignar". */}
-                    <span
-                      className={
-                        tarea.tecnico?.nombre ? styles.metaTecnico : styles.metaSinAsignar
-                      }
-                    >
-                      {tarea.tecnico?.nombre ?? 'Sin asignar'}
-                    </span>
+                    // Estado de la fecha límite: vencida (rojo), futura/hoy
+                    // (azul) o sin fecha asignada (gris), con el icono de
+                    // calendario haciendo de badge en los tres casos.
+                    const fechaLimite = tarea.fecha_finalizacion
+                    const dias = fechaLimite ? diasRestantes(fechaLimite) : null
+                    const fechaEstado = !fechaLimite ? 'sinFecha' : dias < 0 ? 'vencida' : 'futura'
+                    const fechaTexto = fechaLimite
+                      ? (() => {
+                          const f = parsearFechaLocal(fechaLimite)
+                          return f
+                            ? `${String(f.getDate()).padStart(2, '0')}/${String(f.getMonth() + 1).padStart(2, '0')}`
+                            : null
+                        })()
+                      : null
 
-                    {tarea.direccion_servicio && (
-                      <>
-                        <span className={styles.metaSep} aria-hidden="true">·</span>
-                        <span className={styles.metaDireccion}>
-                          <IconPin />
-                          {tarea.direccion_servicio}
-                        </span>
-                      </>
-                    )}
-                  </span>
-
-                  {/* Fila de contexto: cuánto queda, qué tan urgente es y de
-                      qué va la tarea, todo a un golpe de vista. */}
-                  <span className={styles.tareaChips}>
-                    {/* Cuánto queda para la fecha límite, para no tener que
-                        calcularlo mentalmente a partir de una fecha suelta. */}
-                    {vencimiento && (
-                      <span
-                        className={`${styles.chip} ${styles[`chipPlazo_${vencimiento.variant}`]}`}
+                    return (
+                      <div
+                        key={id}
+                        className={`${styles.tareaCard} ${styles[`acento_${acentoDe(estado)}`]}`}
                       >
-                        {vencimiento.texto}
-                      </span>
-                    )}
+                        {/* Toda la zona de información abre la ficha. Los
+                            botones de abajo detienen la propagación para que
+                            "Editar" no dispare además el detalle. */}
+                        <div
+                          className={styles.tareaCardInfo}
+                          role="button"
+                          tabIndex={0}
+                          title="Ver detalle de la tarea"
+                          onClick={() => setTareaDetalle(tarea)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setTareaDetalle(tarea)
+                            }
+                          }}
+                        >
+                          <span className={styles.tareaCardTituloRow}>
+                            <span
+                              className={`${styles.progresoIcon} ${styles[`progresoIcon_${acentoDe(estado)}`]}`}
+                              title={ESTADO_LABEL[estado] ?? estado}
+                            >
+                              <IconProgreso enProgreso={enProgreso} />
+                            </span>
+                            <span className={styles.tareaCardTitulo}>{tarea.titulo}</span>
+                          </span>
 
-                    <span className={`${styles.chip} ${styles[`chipPrioridad_${prioridad}`]}`}>
-                      {PRIORIDAD_LABEL[prioridad] ?? `Prioridad ${prioridad}`}
-                    </span>
+                          <span className={styles.tareaCardChips}>
+                            <span
+                              className={`${styles.fechaChip} ${styles[`fechaChip_${fechaEstado}`]}`}
+                              title={
+                                fechaEstado === 'sinFecha'
+                                  ? 'Sin fecha límite'
+                                  : `Fecha límite: ${fechaTexto}`
+                              }
+                            >
+                              <IconCalendario />
+                              {fechaTexto && <span>{fechaTexto}</span>}
+                            </span>
 
-                    {tarea.descripcion && (
-                      <span className={styles.tareaDescripcion}>{tarea.descripcion}</span>
-                    )}
-                  </span>
-                </div>
+                            {PrioridadIcono && (
+                              <span
+                                className={`${styles.prioridadIcono} ${styles[`prioridadIcono_${prioridad}`]}`}
+                                title={PRIORIDAD_LABEL[prioridad] ?? prioridad}
+                              >
+                                <PrioridadIcono />
+                              </span>
+                            )}
+                          </span>
 
-                <div className={styles.tareaAcciones} onClick={(e) => e.stopPropagation()}>
-                  <span
-                    className={`${styles.estadoPill} ${
-                      enProgreso ? styles.estadoProgreso : styles.estadoPendiente
-                    }`}
-                  >
-                    {enProgreso ? <IconProgreso /> : <IconReloj />}
-                    {estado}
-                  </span>
+                          {/* El backend devuelve tecnico.nombre (nombre
+                              completo). Antes se leía `nombre_completo`, que
+                              no existe, y todas las tareas aparecían como
+                              "Sin asignar". */}
+                          {tarea.tecnico?.nombre ? (
+                            <span className={styles.tecnicoChip}>
+                              <span className={styles.tecnicoAvatar}>
+                                {tarea.tecnico.nombre[0].toUpperCase()}
+                              </span>
+                              <span className={styles.metaTecnico}>{tarea.tecnico.nombre}</span>
+                            </span>
+                          ) : (
+                            <span className={styles.metaSinAsignar}>Sin asignar</span>
+                          )}
 
-                  {tarea.total_incidencias > 0 && (
-                    <button
-                      className={styles.evidenciasBtn}
-                      onClick={() => setTareaEvidencias(tarea)}
-                      title="Ver las evidencias que dejó el técnico"
-                    >
-                      Evidencias ({tarea.total_incidencias})
-                    </button>
-                  )}
+                          {tarea.direccion_servicio && (
+                            <span className={styles.metaDireccion}>
+                              <IconPin />
+                              <span className={styles.metaDireccionTexto}>
+                                {tarea.direccion_servicio}
+                              </span>
+                            </span>
+                          )}
+                        </div>
 
-                  <button
-                    className={styles.editarBtn}
-                    onClick={() => setTareaEditando(tarea)}
-                  >
-                    Editar
-                  </button>
+                        <div
+                          className={styles.tareaCardAcciones}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {tarea.total_incidencias > 0 && (
+                            <button
+                              className={`btn btn-secondary btn-sm ${styles.evidenciasBtn}`}
+                              onClick={() => setTareaEvidencias(tarea)}
+                              title="Ver las evidencias que dejó el técnico"
+                            >
+                              Evidencias
+                              <span className={styles.evidenciasCount}>
+                                {tarea.total_incidencias}
+                              </span>
+                            </button>
+                          )}
 
-                  <button
-                    className={styles.reasignarBtn}
-                    onClick={() => abrirPanel(tarea)}
-                  >
-                    Reasignar
-                  </button>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setTareaEditando(tarea)}
+                          >
+                            Editar
+                          </button>
+
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => abrirPanel(tarea)}
+                          >
+                            Reasignar
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Antes era un overlay propio de esta página; ahora usa el Modal
@@ -626,14 +766,14 @@ export default function ReasignacionPage() {
 
         <ModalActions>
           <button
-            className={styles.cancelBtn}
+            className="btn btn-ghost"
             onClick={() => setTareaSeleccionada(null)}
           >
             Cancelar
           </button>
 
           <button
-            className={styles.confirmBtn}
+            className="btn btn-primary"
             onClick={handleReasignar}
             disabled={
               !tecnicoNuevo ||

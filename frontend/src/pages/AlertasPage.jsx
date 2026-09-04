@@ -406,7 +406,7 @@ export default function AlertasPage() {
                     {alerta.tipo === TIPO_ALERTA.TAREA_VENCIDA && (
                       <button
                         type="button"
-                        className={styles.irATareaBtn}
+                        className={`btn btn-secondary btn-sm ${styles.irATareaBtn}`}
                         onClick={() => navigate('/supervisor/reasignacion')}
                       >
                         Ir a la tarea para resolverla &rarr;
@@ -414,16 +414,16 @@ export default function AlertasPage() {
                     )}
 
                     {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
-                      <div className={styles.alertaHeader}>
+                      <div className={styles.alertaAcciones}>
                         <button
-                          className={styles.resolverBtn}
+                          className={`btn btn-secondary btn-sm ${styles.resolverBtn}`}
                           onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
                           disabled={enProceso}
                         >
                           {enProceso ? 'Guardando...' : 'Marcar aviso como atendido'}
                         </button>
                         <button
-                          className={styles.resolverBtn}
+                          className={`btn btn-ghost btn-sm ${styles.descartarBtn}`}
                           onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
                           disabled={enProceso}
                         >

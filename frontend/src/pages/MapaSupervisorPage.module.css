@@ -1,96 +1,263 @@
-/* ─────────────────────────────────────────────────────────
+/* ============================================================
    MapaSupervisorPage.module.css
-   HU-165 / HU-166
-───────────────────────────────────────────────────────── */
+   Teleprogreso S.A. — Mapa del equipo (HU-165 / HU-166)
+   Nuevo diseño basado en tokens corporativos.
+   ============================================================ */
 
 .page {
-  font-family: var(--font-sans);
-  background: var(--color-bg);
   min-height: 100%;
-  padding: var(--space-5) var(--space-5) var(--space-8);
   color: var(--color-text);
-  box-sizing: border-box;
-  animation: fadeIn 400ms ease-out;
+  animation: fadeIn var(--transition-slow) ease-out;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
-.header {
+/* ── Header ── */
+.pageHeader {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 1.875rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-text);
+  margin: 0;
+  padding-left: var(--space-4);
+  line-height: 1.2;
+}
+
+.title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--space-1);
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-primary);
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   color: var(--color-text-secondary);
+  margin: 0;
+  padding-left: var(--space-4);
 }
 
+/* ── Filtros ── */
 .filtros {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
 }
 
 .filtroCampo {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-2);
 }
 
-.filtroCampo span {
-  font-size: 0.6875rem;
+.filtroLabel {
+  font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
-.filtroCampo input,
-.filtroCampo select {
-  padding: 0.45rem 0.6rem;
-  font-size: 0.875rem;
+.input,
+.select {
+  height: 44px;
+  min-width: 200px;
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
   color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
-  font-family: inherit;
-  min-width: 180px;
+  background-color: var(--color-bg);
+  outline: none;
+  transition: var(--transition);
+  box-sizing: border-box;
 }
 
-.filtroCampo input:focus,
-.filtroCampo select:focus {
+.select {
+  appearance: none;
+  padding-right: var(--space-10);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  cursor: pointer;
+}
+
+.input:hover,
+.select:hover {
+  background-color: var(--color-bg-alt);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--color-primary);
+  background-color: var(--color-surface);
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
-  border-color: var(--color-primary);
+}
+
+/* ── Mapa, leyenda y filtro de técnicos ─────────────────────────────────────
+   En móvil van apilados: leyenda, mapa y filtro, en ese orden. En pantalla
+   ancha (a partir de 1025px, el mismo corte al que el layout del supervisor
+   pliega su barra lateral) el mapa ocupa la columna izquierda entera y a su
+   derecha se apilan leyenda y filtro.
+
+   El alto del bloque lo fija el contenedor y no el mapa: así la fila del
+   filtro se lleva el espacio que sobra tras la leyenda (1fr) y el panel
+   termina exactamente a la misma altura que el mapa.
+   -------------------------------------------------------------------------- */
+.mapaLayout {
+  --mapa-alto: 68vh;
+  --mapa-alto-min: 420px;
+
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    'leyenda'
+    'mapa'
+    'filtro';
+  gap: var(--space-4);
+}
+
+@media (min-width: 1025px) {
+  .mapaLayout {
+    height: var(--mapa-alto);
+    min-height: var(--mapa-alto-min);
+    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'mapa leyenda'
+      'mapa filtro';
+  }
+}
+
+.leyendaSlot {
+  grid-area: leyenda;
+  min-width: 0;
 }
 
 .mapWrap {
+  grid-area: mapa;
   position: relative;
-  height: 68vh;
-  min-height: 420px;
+  height: var(--mapa-alto);
+  min-height: var(--mapa-alto-min);
 }
 
+@media (min-width: 1025px) {
+  /* El alto ya lo pone el contenedor; aquí solo se rellena la celda. */
+  .mapWrap {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+.filtroSlot {
+  grid-area: filtro;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── Controles nativos de Leaflet (SCRUM-195) ───────────────────────────────
+   El zoom, la atribución y los popups los pinta Leaflet, no nuestro JSX, así
+   que la única forma de alinearlos al diseño es sobrescribir sus clases con
+   :global(). Va acotado a .mapWrap para no tocar el mapa del técnico, que
+   sigue con el aspecto que le dieron sus propias pantallas.
+   -------------------------------------------------------------------------- */
+.mapWrap :global(.leaflet-bar) {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+}
+
+.mapWrap :global(.leaflet-bar a) {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border-bottom-color: var(--color-border);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  transition: var(--transition);
+}
+
+.mapWrap :global(.leaflet-bar a:hover) {
+  background: var(--color-primary-50);
+  color: var(--color-primary-dark);
+}
+
+.mapWrap :global(.leaflet-bar a:first-child) {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.mapWrap :global(.leaflet-bar a:last-child) {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.mapWrap :global(.leaflet-control-attribution) {
+  background: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.mapWrap :global(.leaflet-popup-content-wrapper) {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+}
+
+/* ── Aviso de tareas sin ubicación ── */
 .avisoSinUbicacion {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--color-warning-dark);
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-light);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .title {
+    font-size: 1.5rem;
+  }
+  .filtros {
+    padding: var(--space-4);
+  }
+  .filtroCampo {
+    flex: 1;
+    min-width: 0;
+  }
+  .input,
+  .select {
+    min-width: 0;
+    width: 100%;
+  }
 }
