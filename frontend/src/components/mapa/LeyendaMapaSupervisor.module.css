@@ -1,37 +1,32 @@
 /* components/mapa/LeyendaMapaSupervisor.module.css
-   HU-166 — Panel flotante sobre el mapa: contador de tareas visibles +
-   leyenda de colores por estado.
+   HU-166 — Contador de tareas visibles + leyenda de colores por estado.
 
-   Se posiciona absolute dentro de .mapWrap (MapaSupervisorPage.module.css),
-   que ya tiene position:relative. z-index alto porque los controles nativos
-   de Leaflet (zoom, LayersControl) también flotan sobre el mapa. */
+   Ya no flota sobre el mapa: vivía como overlay absolute y terminaba tapando
+   el control de zoom y las casillas del selector de técnicos. Ahora es una
+   tarjeta normal en la columna lateral de MapaSupervisorPage. */
 
 .panel {
-  position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
-  z-index: 500;
-  max-width: 190px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-3);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-4) var(--space-5);
   font-family: var(--font-sans);
-  pointer-events: none;
 }
 
 .contador {
-  margin: 0 0 var(--space-2);
-  padding-bottom: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--color-border);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--color-text-secondary);
 }
 
 .contador strong {
   color: var(--color-text);
-  font-size: 1rem;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .leyenda {
@@ -40,21 +35,21 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 
 .dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
@@ -66,11 +61,11 @@
   margin-left: auto;
   font-weight: 700;
   color: var(--color-text);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 640px) {
   .panel {
-    max-width: 150px;
-    padding: var(--space-2);
+    padding: var(--space-3) var(--space-4);
   }
 }

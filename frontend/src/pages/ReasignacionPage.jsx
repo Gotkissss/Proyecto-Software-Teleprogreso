@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Badge from '../components/ui/Badge'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
@@ -47,6 +48,15 @@ const PRIORIDAD_LABEL = {
   urgente: 'Prioridad Urgente',
 }
 
+// El label que se muestra no es el valor crudo ('Prioridad Alta' y no 'alta'),
+// así que Badge no puede deducir la variante sola y se le pasa explícita.
+const PRIORIDAD_VARIANT = {
+  baja:    'muted',
+  media:   'info',
+  alta:    'warning',
+  urgente: 'danger',
+}
+
 /**
  * Color de la barra lateral de la tarjeta.
  *
@@ -66,18 +76,6 @@ const IconPin = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
     <circle cx="12" cy="10" r="3" />
-  </svg>
-)
-const IconReloj = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <polyline points="12 7 12 12 15 14" />
-  </svg>
-)
-const IconProgreso = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 12a9 9 0 1 1-3.5-7.1" />
-    <polyline points="21 3 21 9 15 9" />
   </svg>
 )
 const IconMas = () => (
@@ -323,7 +321,7 @@ export default function ReasignacionPage() {
         </h1>
 
         <button
-          className={styles.nuevaTareaBtn}
+          className={`btn btn-primary ${styles.nuevaTareaBtn}`}
           onClick={() => navigate('/supervisor/nueva-tarea')}
         >
           <IconMas />
@@ -386,7 +384,7 @@ export default function ReasignacionPage() {
           }
           emptyAction={
             <button
-              className={styles.nuevaTareaBtn}
+              className={`btn btn-primary ${styles.nuevaTareaBtn}`}
               onClick={() => navigate('/supervisor/nueva-tarea')}
             >
               <IconMas />
@@ -459,16 +457,13 @@ export default function ReasignacionPage() {
                     {/* Cuánto queda para la fecha límite, para no tener que
                         calcularlo mentalmente a partir de una fecha suelta. */}
                     {vencimiento && (
-                      <span
-                        className={`${styles.chip} ${styles[`chipPlazo_${vencimiento.variant}`]}`}
-                      >
-                        {vencimiento.texto}
-                      </span>
+                      <Badge label={vencimiento.texto} variant={vencimiento.variant} />
                     )}
 
-                    <span className={`${styles.chip} ${styles[`chipPrioridad_${prioridad}`]}`}>
-                      {PRIORIDAD_LABEL[prioridad] ?? `Prioridad ${prioridad}`}
-                    </span>
+                    <Badge
+                      label={PRIORIDAD_LABEL[prioridad] ?? `Prioridad ${prioridad}`}
+                      variant={PRIORIDAD_VARIANT[prioridad] ?? 'muted'}
+                    />
 
                     {tarea.descripcion && (
                       <span className={styles.tareaDescripcion}>{tarea.descripcion}</span>
@@ -477,34 +472,30 @@ export default function ReasignacionPage() {
                 </div>
 
                 <div className={styles.tareaAcciones} onClick={(e) => e.stopPropagation()}>
-                  <span
-                    className={`${styles.estadoPill} ${
-                      enProgreso ? styles.estadoProgreso : styles.estadoPendiente
-                    }`}
-                  >
-                    {enProgreso ? <IconProgreso /> : <IconReloj />}
-                    {estado}
-                  </span>
+                  <Badge label={estado} variant={enProgreso ? 'info' : 'warning'} />
 
                   {tarea.total_incidencias > 0 && (
                     <button
-                      className={styles.evidenciasBtn}
+                      className={`btn btn-secondary btn-sm ${styles.evidenciasBtn}`}
                       onClick={() => setTareaEvidencias(tarea)}
                       title="Ver las evidencias que dejó el técnico"
                     >
-                      Evidencias ({tarea.total_incidencias})
+                      Evidencias
+                      <span className={styles.evidenciasCount}>
+                        {tarea.total_incidencias}
+                      </span>
                     </button>
                   )}
 
                   <button
-                    className={styles.editarBtn}
+                    className="btn btn-secondary btn-sm"
                     onClick={() => setTareaEditando(tarea)}
                   >
                     Editar
                   </button>
 
                   <button
-                    className={styles.reasignarBtn}
+                    className="btn btn-primary btn-sm"
                     onClick={() => abrirPanel(tarea)}
                   >
                     Reasignar
@@ -626,14 +617,14 @@ export default function ReasignacionPage() {
 
         <ModalActions>
           <button
-            className={styles.cancelBtn}
+            className="btn btn-ghost"
             onClick={() => setTareaSeleccionada(null)}
           >
             Cancelar
           </button>
 
           <button
-            className={styles.confirmBtn}
+            className="btn btn-primary"
             onClick={handleReasignar}
             disabled={
               !tecnicoNuevo ||

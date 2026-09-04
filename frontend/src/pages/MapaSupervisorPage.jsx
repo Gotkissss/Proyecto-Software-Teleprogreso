@@ -6,10 +6,11 @@
  * Reutiliza <MapaBase> igual que MapaPage (vista del técnico), pero:
  *   - Colorea los pines por ESTADO (no por prioridad) — ver
  *     MarcadorTareaSupervisor + estadoColor.js.
- *   - Agrupa los marcadores por técnico dentro de <LayerGroup>, expuestos
- *     como capas independientes en un <LayersControl> nativo de Leaflet:
- *     el supervisor puede apagar/encender técnicos concretos sin perder
- *     de vista el resto del mapa.
+ *   - Agrupa los marcadores por técnico y deja apagar/encender a cada uno
+ *     desde <FiltroTecnicosMapa>. Antes esto era un <LayersControl> nativo
+ *     de Leaflet, que solo puede dibujarse dentro del mapa y terminaba
+ *     tapándolo; ahora el panel vive fuera y el estado de qué técnicos se
+ *     ven lo lleva esta página.
  *
  * Qué entra en el mapa lo decide el backend (GET /tareas/mapa-supervisor):
  * en el día de HOY, todo el trabajo abierto del equipo más lo que se cerró
@@ -19,16 +20,16 @@
  * vencidas y las programadas para otro día se caían, y con ellas los técnicos
  * que solo tenían ese tipo de trabajo desaparecían del control de capas.
  *
- * HU-166 (leyenda + contador) se agrega como overlay sobre el propio mapa
- * vía <LeyendaMapaSupervisor>, dentro del mismo contenedor con position:relative
- * que envuelve a <MapaBase>.
+ * HU-166 (leyenda + contador) va en <LeyendaMapaSupervisor>, en la misma
+ * columna lateral que el filtro de técnicos: a la derecha del mapa en
+ * pantalla ancha y encima del mapa en móvil.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { LayerGroup, LayersControl } from 'react-leaflet'
 import { getMapaSupervisor, getTecnicosDisponibles } from '../api/tareaService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTareaSupervisor from '../components/mapa/MarcadorTareaSupervisor'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
+import FiltroTecnicosMapa from '../components/mapa/FiltroTecnicosMapa'
 import LeyendaMapaSupervisor from '../components/mapa/LeyendaMapaSupervisor'
 import PageState from '../components/ui/PageState'
 import { hoyISO } from '../utils/fecha'
@@ -89,6 +90,19 @@ export default function MapaSupervisorPage() {
   const [fecha, setFecha]         = useState(hoyISO())
   const [idTecnico, setIdTecnico] = useState('')
 
+  // Técnicos apagados desde el panel lateral. Se guardan los ocultos y no los
+  // visibles para que un técnico nuevo aparezca marcado sin tocar nada.
+  const [ocultos, setOcultos] = useState(() => new Set())
+
+  const alternarTecnico = (id) => {
+    setOcultos((prev) => {
+      const siguiente = new Set(prev)
+      if (siguiente.has(id)) siguiente.delete(id)
+      else siguiente.add(id)
+      return siguiente
+    })
+  }
+
   const esHoy = fecha === hoyISO()
 
   // El selector de técnico se llena con TODOS los técnicos activos, no solo
@@ -135,8 +149,8 @@ export default function MapaSupervisorPage() {
   const sinUbicacion = filtradas.length - conUbicacion.length
   const puntos = useMemo(() => conUbicacion.map((s) => [s.lat, s.lng]), [conUbicacion])
 
-  // Agrupado por técnico: una capa (LayerGroup) por técnico, más "Sin
-  // asignar" para las tareas que no tienen técnico. Se agrupa sobre
+  // Agrupado por técnico para el panel lateral: una entrada por técnico, más
+  // "Sin asignar" para las tareas que no tienen técnico. Se agrupa sobre
   // `conUbicacion` porque solo eso es lo que puede pintarse en el mapa.
   const grupos = useMemo(() => {
     const mapa = new Map()
@@ -159,6 +173,15 @@ export default function MapaSupervisorPage() {
     })
   }, [conUbicacion])
 
+  // Lo que realmente se pinta: lo que tiene ubicación menos los técnicos que
+  // el supervisor apagó en el panel.
+  const visibles = useMemo(
+    () => conUbicacion.filter(
+      (s) => !ocultos.has(s.tecnico?.id_empleado ?? 'sin-asignar')
+    ),
+    [conUbicacion, ocultos]
+  )
+
   if (loading || error) {
     return (
       <PageState
@@ -173,29 +196,29 @@ export default function MapaSupervisorPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
+      <header className={styles.pageHeader}>
         <h1 className={styles.title}>Mapa</h1>
         <p className={styles.subtitle}>
-          {esHoy
-            ? 'Todo el trabajo abierto del equipo y lo que se cerró hoy, agrupado por técnico.'
-            : 'Lo que el equipo cerró ese día, agrupado por técnico.'}
+          Dónde está el trabajo del día, por técnico
         </p>
       </header>
 
       {/* ── Filtros ── */}
       <section className={styles.filtros}>
         <label className={styles.filtroCampo}>
-          <span>Fecha</span>
+          <span className={styles.filtroLabel}>Fecha</span>
           <input
             type="date"
+            className={styles.input}
             value={fecha}
             onChange={(e) => setFecha(e.target.value || hoyISO())}
           />
         </label>
 
         <label className={styles.filtroCampo}>
-          <span>Técnico</span>
+          <span className={styles.filtroLabel}>Técnico</span>
           <select
+            className={styles.select}
             value={idTecnico}
             onChange={(e) => setIdTecnico(e.target.value)}
           >
@@ -210,33 +233,32 @@ export default function MapaSupervisorPage() {
       </section>
 
       {conUbicacion.length > 0 ? (
-        <div className={styles.mapWrap}>
-          <MapaBase>
-            <AjustarVistaMarcadores puntos={puntos} />
+        <div className={styles.mapaLayout}>
+          <div className={styles.mapWrap}>
+            <MapaBase>
+              <AjustarVistaMarcadores puntos={puntos} />
 
-            <LayersControl position="topright">
-              {grupos.map((g) => (
-                <LayersControl.Overlay
-                  key={g.id}
-                  name={`${g.nombre} (${g.servicios.length})`}
-                  checked
-                >
-                  <LayerGroup>
-                    {g.servicios.map((s) => (
-                      <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />
-                    ))}
-                  </LayerGroup>
-                </LayersControl.Overlay>
+              {visibles.map((s) => (
+                <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />
               ))}
-            </LayersControl>
-          </MapaBase>
+            </MapaBase>
+          </div>
 
-          {/* HU-166: leyenda de colores por estado + contador de tareas
-              visibles, superpuesta sobre el propio mapa. */}
-          <LeyendaMapaSupervisor
-            servicios={conUbicacion}
-            estados={esHoy ? ESTADOS_HOY : ESTADOS_DIA_PASADO}
-          />
+          {/* Panel lateral: a la derecha del mapa en pantalla ancha, encima
+              del mapa en móvil. */}
+          <aside className={styles.panelLateral}>
+            {/* HU-166: contador de tareas visibles + leyenda por estado. */}
+            <LeyendaMapaSupervisor
+              servicios={visibles}
+              estados={esHoy ? ESTADOS_HOY : ESTADOS_DIA_PASADO}
+            />
+
+            <FiltroTecnicosMapa
+              grupos={grupos}
+              ocultos={ocultos}
+              onAlternar={alternarTecnico}
+            />
+          </aside>
         </div>
       ) : (
         <PageState

@@ -13,6 +13,7 @@
 
 import { useCallback, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import Badge from '../components/ui/Badge'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import Spinner from '../components/ui/Spinner'
@@ -105,11 +106,11 @@ function ModalConfirmarLiberar({ herramienta, onConfirmar, onCancelar, cargando 
         La herramienta quedará disponible para reasignar.
       </p>
       <ModalActions>
-        <button className={styles.confirmCancelBtn} onClick={onCancelar} disabled={cargando}>
+        <button className="btn btn-ghost" onClick={onCancelar} disabled={cargando}>
           Cancelar
         </button>
         <button
-          className={styles.confirmDeleteBtn}
+          className={`btn btn-danger ${styles.confirmDeleteBtn}`}
           onClick={() => onConfirmar(herramienta.id_activo)}
           disabled={cargando}
         >
@@ -196,9 +197,9 @@ export default function CarroDetallePage() {
 
   /*  Estados visuales del vehículo  */
   const estadoConfig = {
-    disponible:  { label: 'Disponible',  cls: styles.estadoDisponible },
-    en_uso:      { label: 'En uso',      cls: styles.estadoEnUso },
-    mantenimiento:{ label: 'Mantenimiento', cls: styles.estadoMantenimiento },
+    disponible:    { label: 'Disponible',    variant: 'success' },
+    en_uso:        { label: 'En uso',        variant: 'warning' },
+    mantenimiento: { label: 'Mantenimiento', variant: 'danger'  },
   }
   const estadoActual = estadoConfig[carro?.estado_vehiculo] ?? estadoConfig.disponible
 
@@ -220,10 +221,16 @@ export default function CarroDetallePage() {
 
       {/* El feedback de éxito/error sale por el toast global. */}
 
-      {/*  Botón volver  */}
-      <button className={styles.backBtn} onClick={() => navigate(-1)}>
-        <IconBack /> Volver
-      </button>
+      {/*  Encabezado  */}
+      <div className={styles.pageHeader}>
+        <button
+          className={`btn btn-secondary btn-sm ${styles.backBtn}`}
+          onClick={() => navigate(-1)}
+        >
+          <IconBack /> Volver
+        </button>
+        <h1 className={styles.title}>Detalle de vehículo</h1>
+      </div>
 
       {/* 
           SECCIÓN 1: Ficha del vehículo
@@ -235,11 +242,8 @@ export default function CarroDetallePage() {
           </div>
           <div className={styles.fichaHeaderInfo}>
             <div className={styles.fichaTitleRow}>
-              <h1 className={styles.fichaTitle}>{carro.nombre_activo}</h1>
-              <span className={`${styles.estadoBadge} ${estadoActual.cls}`}>
-                <span className={styles.estadoDot} />
-                {estadoActual.label}
-              </span>
+              <h2 className={styles.fichaTitle}>{carro.nombre_activo}</h2>
+              <Badge {...estadoActual} />
             </div>
             <p className={styles.fichaPlaca}>{carro.placa}</p>
           </div>
@@ -289,7 +293,7 @@ export default function CarroDetallePage() {
           </div>
 
           <button
-            className={styles.asignarBtn}
+            className={`btn btn-primary ${styles.asignarBtn}`}
             onClick={() => setModalAsignar(true)}
           >
             <IconPlus />
@@ -299,18 +303,20 @@ export default function CarroDetallePage() {
 
         {/* Lista de herramientas */}
         {herramientas.length === 0 ? (
-          <div className={styles.emptyHerramientas}>
-            <div className={styles.emptyHerramientasIcon}><IconWrench /></div>
-            <p className={styles.emptyHerramientasMsg}>
-              Este vehículo no tiene herramientas asignadas.
-            </p>
-            <button
-              className={styles.emptyAsignarBtn}
-              onClick={() => setModalAsignar(true)}
-            >
-              <IconPlus /> Asignar primera herramienta
-            </button>
-          </div>
+          <PageState
+            empty
+            emptyIcon={<IconWrench />}
+            emptyTitle="Sin herramientas asignadas"
+            emptyDescription="Este vehículo no tiene herramientas asignadas."
+            emptyAction={
+              <button
+                className="btn btn-primary"
+                onClick={() => setModalAsignar(true)}
+              >
+                <IconPlus /> Asignar primera herramienta
+              </button>
+            }
+          />
         ) : (
           <ul className={styles.herramientasList}>
             {herramientas.map((herr) => (
@@ -350,16 +356,13 @@ export default function CarroDetallePage() {
 
                 {/* Estado + acción */}
                 <div className={styles.herramientaAcciones}>
-                  <span className={`${styles.herramientaEstado} ${
-                    herr.estado === 'disponible'
-                      ? styles.estadoHDisponible
-                      : styles.estadoHEnUso
-                  }`}>
-                    {herr.estado}
-                  </span>
+                  <Badge
+                    label={herr.estado}
+                    variant={herr.estado === 'disponible' ? 'success' : 'warning'}
+                  />
 
                   <button
-                    className={styles.liberarBtn}
+                    className={`btn btn-ghost btn-sm ${styles.liberarBtn}`}
                     onClick={() => setHerramientaLiberar(herr)}
                     title={`Liberar ${herr.nombre_activo}`}
                   >
