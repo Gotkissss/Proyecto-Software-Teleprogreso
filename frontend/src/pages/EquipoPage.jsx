@@ -161,9 +161,11 @@ export default function EquipoPage() {
                 <Badge {...estadoVeh} />
               </div>
 
-              <span className={styles.vehiculoPlaca}>{vehiculo.placa}</span>
-
               <div className={styles.vehiculoGrid}>
+                <div className={styles.vehiculoDataItem}>
+                  <span className={styles.dataLabel}>Placa</span>
+                  <span className={styles.vehiculoPlaca}>{vehiculo.placa}</span>
+                </div>
                 <div className={styles.vehiculoDataItem}>
                   <span className={styles.dataLabel}>Marca</span>
                   <span className={styles.dataValue}>{vehiculo.marca ?? '—'}</span>
@@ -173,10 +175,6 @@ export default function EquipoPage() {
                   <span className={styles.dataValue}>{vehiculo.modelo ?? '—'}</span>
                 </div>
               </div>
-
-              {vehiculo.descripcion && (
-                <p className={styles.vehiculoDesc}>{vehiculo.descripcion}</p>
-              )}
             </div>
           </div>
         )}
