@@ -17,7 +17,6 @@ import { describirVencimiento } from '../utils/vencimiento'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-const IconRoute    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
 const IconNav      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
 const IconChevron  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 const IconCalendar = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -326,10 +325,6 @@ export default function RutaDiariaPage() {
 
   const totalServicios = servicios.length
   const paradasCompletadas = servicios.filter((s) => s.estado === 'completado').length
-  const paradasPendientes = servicios.filter(
-    (s) => s.estado === 'pendiente' || s.estado === 'en_progreso'
-  ).length
-
   const fechaRuta = ruta?.fecha
     ? new Date(ruta.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
         day: 'numeric', month: 'long',
@@ -354,12 +349,6 @@ export default function RutaDiariaPage() {
             {paradasCompletadas}/{totalServicios}
           </span>
           <span className={styles.resumenLabel}>Completadas</span>
-        </div>
-        <div className={styles.resumenDivider} />
-        <div className={styles.resumenItem}>
-          <span className={styles.resumenIcon}><IconRoute /></span>
-          <span className={styles.resumenValue}>{paradasPendientes}</span>
-          <span className={styles.resumenLabel}>Pendientes</span>
         </div>
       </section>
 

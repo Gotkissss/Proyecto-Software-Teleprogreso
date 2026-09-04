@@ -104,12 +104,6 @@
   letter-spacing: 0.06em;
 }
 
-.resumenDivider {
-  width: 1px;
-  background: var(--color-border);
-  margin: var(--space-1) 0;
-}
-
 /* ── Alerta ── */
 .alertBanner {
   display: flex;
@@ -354,11 +348,9 @@
   letter-spacing: 0.06em;
 }
 
+/* Sin caja propia: las filas se alinean igual que la fila de estado de
+   arriba, para que todo el modal se lea como una sola lista. */
 .panelDetails {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
