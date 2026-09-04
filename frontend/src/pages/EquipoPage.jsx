@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useState, useEffect } from 'react'
+import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
 import styles from './EquipoPage.module.css'
 
@@ -46,25 +47,21 @@ const IconTag = () => (
 )
 
 /* ─── HELPERS ────────────────────────────────────────────────────────────── */
-const ESTADO_VEHICULO = {
-  disponible:    { label: 'Disponible',    cls: 'estadoDisponible' },
-  en_uso:        { label: 'En uso',        cls: 'estadoEnUso' },
-  mantenimiento: { label: 'Mantenimiento', cls: 'estadoMantenimiento' },
+const ESTADO_ACTIVO = {
+  disponible:    { label: 'Disponible',    variant: 'success' },
+  en_uso:        { label: 'En uso',        variant: 'warning' },
+  mantenimiento: { label: 'Mantenimiento', variant: 'danger'  },
 }
 
-const ESTADO_HERR = {
-  disponible:    { label: 'Disponible',    cls: 'herrDisponible' },
-  en_uso:        { label: 'En uso',        cls: 'herrEnUso' },
-  mantenimiento: { label: 'Mantenimiento', cls: 'herrMantenimiento' },
-}
+const estadoDeActivo = (estado) => ESTADO_ACTIVO[estado] ?? ESTADO_ACTIVO.disponible
 
 /* ─── SVG VEHÍCULO (inline, sin imagen externa) ──────────────────────────── */
-function VehiculoIlustracion({ color = '#1e3a5f' }) {
+function VehiculoIlustracion() {
   return (
     <svg viewBox="0 0 160 90" width="160" height="90" fill="none" aria-hidden="true">
-      <rect x="8" y="48" width="144" height="34" rx="6" fill={color} opacity="0.9"/>
-      <path d="M28 48 L42 18 L118 18 L136 48 Z" fill={color}/>
-      <path d="M46 46 L54 24 L108 24 L118 46 Z" fill="white" opacity="0.25"/>
+      <rect x="8" y="48" width="144" height="34" rx="6" fill="var(--color-primary-deep)" opacity="0.9"/>
+      <path d="M28 48 L42 18 L118 18 L136 48 Z" fill="var(--color-primary-deep)"/>
+      <path d="M46 46 L54 24 L108 24 L118 46 Z" fill="var(--color-surface)" opacity="0.25"/>
       {/* ruedas */}
       <circle cx="40" cy="82" r="12" fill="#1a202c"/>
       <circle cx="40" cy="82" r="5" fill="#718096"/>
@@ -72,7 +69,7 @@ function VehiculoIlustracion({ color = '#1e3a5f' }) {
       <circle cx="120" cy="82" r="5" fill="#718096"/>
       {/* faros */}
       <rect x="130" y="52" width="10" height="6" rx="2" fill="#ffd54f" opacity="0.85"/>
-      <rect x="20"  y="52" width="10" height="6" rx="2" fill="#ef5350" opacity="0.7"/>
+      <rect x="20"  y="52" width="10" height="6" rx="2" fill="var(--color-danger)" opacity="0.7"/>
     </svg>
   )
 }
@@ -114,10 +111,14 @@ export default function EquipoPage() {
     )
   }
 
-  const estadoVeh = ESTADO_VEHICULO[vehiculo?.estado_vehiculo] ?? ESTADO_VEHICULO.disponible
+  const estadoVeh = estadoDeActivo(vehiculo?.estado_vehiculo)
 
   return (
     <div className={styles.page}>
+      <header className={styles.pageHeader}>
+        <h1 className={styles.title}>Mi equipo</h1>
+        <p className={styles.subtitle}>Vehículo y herramientas asignadas a tu nombre</p>
+      </header>
 
       {/* ════════════════════════════════════════
           SECCIÓN: MI VEHÍCULO  (SCRUM-126)
@@ -132,23 +133,24 @@ export default function EquipoPage() {
 
         {/* SCRUM-128: Estado vacío */}
         {!vehiculo ? (
-          <div className={styles.emptyCard}>
-            <div className={styles.emptyIlustration}>
-              <IconCar />
-            </div>
-            <p className={styles.emptyTitle}>Sin vehículo asignado</p>
-            <p className={styles.emptyDesc}>
-              Aún no tienes un vehículo asignado. Contacta a tu supervisor.
-            </p>
-          </div>
+          <PageState
+            empty
+            emptyIcon={<IconCar />}
+            emptyTitle="Sin vehículo asignado"
+            emptyDescription="Aún no tienes un vehículo asignado. Contacta a tu supervisor."
+          />
         ) : (
           /* SCRUM-126: Card de vehículo */
           <div className={styles.vehiculoCard}>
             {/* Imagen / ilustración grande */}
             <div className={styles.vehiculoImagen}>
               {fotoUrl(vehiculo.foto_url)
-                ? <img src={fotoUrl(vehiculo.foto_url)} alt={vehiculo.nombre_activo} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>
-                : <VehiculoIlustracion color="#1e3a5f" />
+                ? <img
+                    src={fotoUrl(vehiculo.foto_url)}
+                    alt={vehiculo.nombre_activo}
+                    className={styles.vehiculoFoto}
+                  />
+                : <VehiculoIlustracion />
               }
             </div>
 
@@ -156,10 +158,7 @@ export default function EquipoPage() {
             <div className={styles.vehiculoInfo}>
               <div className={styles.vehiculoTitleRow}>
                 <h3 className={styles.vehiculoNombre}>{vehiculo.nombre_activo}</h3>
-                <span className={`${styles.estadoBadge} ${styles[estadoVeh.cls]}`}>
-                  <span className={styles.estadoDot} />
-                  {estadoVeh.label}
-                </span>
+                <Badge {...estadoVeh} />
               </div>
 
               <span className={styles.vehiculoPlaca}>{vehiculo.placa}</span>
@@ -198,20 +197,17 @@ export default function EquipoPage() {
         </div>
 
         {herramientas.length === 0 ? (
-          <div className={styles.emptyCard}>
-            <div className={styles.emptyIlustration}>
-              <IconWrench />
-            </div>
-            <p className={styles.emptyTitle}>Sin herramientas asignadas</p>
-            <p className={styles.emptyDesc}>
-              No tienes herramientas asignadas a tu vehículo todavía.
-            </p>
-          </div>
+          <PageState
+            empty
+            emptyIcon={<IconWrench />}
+            emptyTitle="Sin herramientas asignadas"
+            emptyDescription="No tienes herramientas asignadas a tu vehículo todavía."
+          />
         ) : (
           /* SCRUM-127: grid de herramientas */
           <ul className={styles.herramientasGrid}>
             {herramientas.map((herr) => {
-              const estadoH = ESTADO_HERR[herr.estado] ?? ESTADO_HERR.disponible
+              const estadoH = estadoDeActivo(herr.estado)
               return (
                 <li key={herr.id_activo} className={styles.herramientaCard}>
                   {/* Icono */}
@@ -236,9 +232,7 @@ export default function EquipoPage() {
                   </div>
 
                   {/* Estado */}
-                  <span className={`${styles.herramientaEstado} ${styles[estadoH.cls]}`}>
-                    {estadoH.label}
-                  </span>
+                  <Badge {...estadoH} />
                 </li>
               )
             })}

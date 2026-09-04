@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
-import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import ModalFinalizarTarea from '../components/tareas/ModalFinalizarTarea'
 import {
   ESTADO_LABEL,
+  PRIORIDAD_LABEL,
   variantePorEstado,
   variantePorPrioridad,
 } from '../components/mapa/estadoColor'
@@ -32,96 +32,76 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa })
   const isInProgress = servicio.estado === 'en_progreso'
   const isCompleted  = servicio.estado === 'completado'
 
-  const estadoColor = isCompleted
-    ? '#16a34a'
-    : isInProgress
-    ? '#1a56db'
-    : servicio.prioridad === 'urgente'
-    ? '#dc2626'
-    : '#64748b'
-
-  const estadoLabel = ESTADO_LABEL[servicio.estado] ?? servicio.estado
-
-  // Usa el Modal compartido en lugar del panel propio de esta pantalla.
   return (
     <Modal open={Boolean(servicio)} onClose={onClose} title={servicio.nombre}>
-        <div className={styles.panelBody}>
-          {/* Estado actual */}
-          <div className={styles.panelEstadoRow}>
-            <span className={styles.panelEstadoLabel}>Estado de la tarea</span>
-            <span
-              className={styles.panelEstadoBadge}
-              style={{
-                background: estadoColor + '18',
-                color: estadoColor,
-                border: `1px solid ${estadoColor}40`,
-              }}
-            >
-              <span
-                className={styles.panelEstadoDot}
-                style={{ background: estadoColor }}
-              />
-              {estadoLabel}
-            </span>
-          </div>
-
-          {/* Detalles */}
-          <div className={styles.panelDetails}>
-            <div className={styles.panelDetailRow}>
-              <span className={styles.panelDetailKey}>Dirección</span>
-              <span className={styles.panelDetailVal}>{servicio.direccion}</span>
-            </div>
-            <div className={styles.panelDetailRow}>
-              <span className={styles.panelDetailKey}>Tipo</span>
-              <span className={styles.panelDetailVal}>{servicio.tipo}</span>
-            </div>
-            <div className={styles.panelDetailRow}>
-              <span className={styles.panelDetailKey}>Prioridad</span>
-              <span className={styles.panelDetailVal} style={{ textTransform: 'capitalize' }}>
-                {servicio.prioridad}
-              </span>
-            </div>
-          </div>
-
-          {/* SCRUM-158: enlace directo al mapa, centrado en esta tarea */}
-          <button
-            className={styles.verMapaBtn}
-            onClick={() => onVerEnMapa(servicio.id_servicio)}
-          >
-            <IconMap />
-            <span>Ver en mapa</span>
-          </button>
-
-          {/* Acciones */}
-          {!isCompleted && (
-            <div className={styles.panelActions}>
-              {!isInProgress ? (
-                <button
-                  className={styles.iniciarBtn}
-                  onClick={() => onIniciar(servicio.id_servicio)}
-                >
-                  <IconPlay />
-                  <span>Iniciar Tarea</span>
-                </button>
-              ) : (
-                <button
-                  className={styles.terminarBtn}
-                  onClick={() => onTerminar(servicio.id_servicio)}
-                >
-                  <IconCheck />
-                  <span>Terminar Tarea</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {isCompleted && (
-            <div className={styles.panelCompletado}>
-              <IconCheck />
-              <span>Tarea completada</span>
-            </div>
-          )}
+      <div className={styles.panelBody}>
+        {/* Estado actual */}
+        <div className={styles.panelEstadoRow}>
+          <span className={styles.panelEstadoLabel}>Estado de la tarea</span>
+          <Badge
+            label={ESTADO_LABEL[servicio.estado] ?? servicio.estado}
+            variant={variantePorEstado(servicio.estado)}
+          />
         </div>
+
+        {/* Detalles */}
+        <div className={styles.panelDetails}>
+          <div className={styles.panelDetailRow}>
+            <span className={styles.panelDetailKey}>Dirección</span>
+            <span className={styles.panelDetailVal}>{servicio.direccion}</span>
+          </div>
+          <div className={styles.panelDetailRow}>
+            <span className={styles.panelDetailKey}>Tipo</span>
+            <span className={styles.panelDetailVal}>{servicio.tipo}</span>
+          </div>
+          <div className={styles.panelDetailRow}>
+            <span className={styles.panelDetailKey}>Prioridad</span>
+            <Badge
+              label={PRIORIDAD_LABEL[servicio.prioridad] ?? servicio.prioridad}
+              variant={variantePorPrioridad(servicio.prioridad)}
+            />
+          </div>
+        </div>
+
+        {/* SCRUM-158: enlace directo al mapa, centrado en esta tarea */}
+        <button
+          className={`btn btn-secondary ${styles.panelBtn}`}
+          onClick={() => onVerEnMapa(servicio.id_servicio)}
+        >
+          <IconMap />
+          <span>Ver en mapa</span>
+        </button>
+
+        {/* Acciones */}
+        {!isCompleted && (
+          <div className={styles.panelActions}>
+            {!isInProgress ? (
+              <button
+                className={`btn btn-primary btn-lg ${styles.panelBtn}`}
+                onClick={() => onIniciar(servicio.id_servicio)}
+              >
+                <IconPlay />
+                <span>Iniciar tarea</span>
+              </button>
+            ) : (
+              <button
+                className={`btn btn-success btn-lg ${styles.panelBtn}`}
+                onClick={() => onTerminar(servicio.id_servicio)}
+              >
+                <IconCheck />
+                <span>Terminar tarea</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {isCompleted && (
+          <div className={styles.panelCompletado}>
+            <IconCheck />
+            <span>Tarea completada</span>
+          </div>
+        )}
+      </div>
     </Modal>
   )
 }
@@ -183,7 +163,7 @@ function ServicioCard({ servicio, onVerDetalle }) {
 
       {!isCompleted && (
         <button
-          className={`${styles.navBtn} ${isActive ? styles.navBtnActive : ''}`}
+          className={`btn ${isActive ? 'btn-primary' : 'btn-ghost'} ${styles.navBtn}`}
           onClick={() => onVerDetalle(servicio)}
         >
           <IconNav />
@@ -344,28 +324,26 @@ export default function RutaDiariaPage() {
     )
   }
 
-  const nombre      = ruta?.tecnico?.nombre_completo ?? user?.nombre ?? 'Técnico'
-  const primerNombre = nombre.split(' ')[0]
   const totalServicios = servicios.length
   const paradasCompletadas = servicios.filter((s) => s.estado === 'completado').length
   const paradasPendientes = servicios.filter(
     (s) => s.estado === 'pendiente' || s.estado === 'en_progreso'
   ).length
 
+  const fechaRuta = ruta?.fecha
+    ? new Date(ruta.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
+        day: 'numeric', month: 'long',
+      })
+    : ''
+
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
-        <div className={styles.dateRow}>
-          <span className={styles.dateLabel}>
-            <IconCalendar />
-            HOY, {ruta?.fecha
-              ? new Date(ruta.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
-                  day: 'numeric', month: 'long',
-                }).toUpperCase()
-              : ''}
-          </span>
-        </div>
-        <h2 className={styles.greeting}>Hola, {primerNombre}</h2>
+        <h1 className={styles.title}>Ruta de hoy</h1>
+        <p className={styles.subtitle}>
+          <IconCalendar />
+          {fechaRuta ? `${fechaRuta}` : 'Tus paradas del día'}
+        </p>
       </header>
 
       {/* Contadores — derivados de las tareas reales del día */}
@@ -375,13 +353,13 @@ export default function RutaDiariaPage() {
           <span className={styles.resumenValue}>
             {paradasCompletadas}/{totalServicios}
           </span>
-          <span className={styles.resumenLabel}>COMPLETADAS</span>
+          <span className={styles.resumenLabel}>Completadas</span>
         </div>
         <div className={styles.resumenDivider} />
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconRoute /></span>
           <span className={styles.resumenValue}>{paradasPendientes}</span>
-          <span className={styles.resumenLabel}>PENDIENTES</span>
+          <span className={styles.resumenLabel}>Pendientes</span>
         </div>
       </section>
 
@@ -394,7 +372,7 @@ export default function RutaDiariaPage() {
 
       <section className={styles.listSection}>
         <div className={styles.listHeader}>
-          <h3 className={styles.listTitle}>Cronograma del Día</h3>
+          <h2 className={styles.listTitle}>Cronograma del día</h2>
           <span className={styles.listUpdated}>
             Actualizado: {new Date().toLocaleTimeString('es-GT', {
               hour: '2-digit', minute: '2-digit',
@@ -413,9 +391,11 @@ export default function RutaDiariaPage() {
             ))}
           </div>
         ) : (
-          <EmptyState
-            title="Sin paradas para hoy"
-            description="Cuando tu supervisor te asigne tareas aparecerán en esta lista."
+          <PageState
+            empty
+            emptyIcon={<IconPin />}
+            emptyTitle="Sin paradas para hoy"
+            emptyDescription="Cuando tu supervisor te asigne tareas aparecerán en esta lista."
           />
         )}
 

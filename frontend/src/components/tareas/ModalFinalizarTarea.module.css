@@ -12,7 +12,7 @@
 .label {
   display: block;
   margin: var(--space-5) 0 var(--space-2);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -24,13 +24,13 @@
 .textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: var(--space-3);
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  font-size: var(--text-lg);
   line-height: 1.5;
   resize: vertical;
   min-height: 92px;
@@ -49,22 +49,19 @@
 
 .errorCampo {
   margin: var(--space-2) 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--color-danger-dark);
 }
 
 .errorGeneral {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
   margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-4);
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-light);
   border-radius: var(--radius-md);
   color: var(--color-danger-dark);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
@@ -101,7 +98,7 @@
   display: flex;
   color: var(--color-primary);
 }
-.dropzoneIcono svg { width: 32px; height: 32px; }
+.dropzoneIcono svg { width: 2rem; height: 2rem; }
 
 .dropzoneTexto {
   font-size: var(--text-md);
@@ -158,67 +155,23 @@
 
 .quitarBtn {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  background: transparent;
   color: var(--color-danger-dark);
-  border: 1px solid var(--color-danger-light);
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
+  border-color: var(--color-danger-light);
 }
 
 .quitarBtn:hover:not(:disabled) {
   background: var(--color-danger-bg);
+  border-color: var(--color-danger);
 }
 
-.quitarBtn svg { width: 14px; height: 14px; }
+.quitarBtn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
 
 /* ── Acciones ─────────────────────────────────────────────── */
-.cancelBtn,
+/* El botón de guardar usa `btn btn-success`; aquí solo se le da el tamaño
+   táctil que necesita en móvil. */
 .guardarBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 11px 20px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: var(--text-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.cancelBtn {
-  background: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-}
-
-.cancelBtn:hover:not(:disabled) {
-  color: var(--color-text);
-  border-color: var(--color-text-secondary);
-}
-
-.guardarBtn {
-  background: var(--gradient-success, var(--gradient-primary));
-  color: #fff;
-  border: none;
-}
-
-.guardarBtn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-}
-
-.cancelBtn:disabled,
-.guardarBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
+  min-height: 44px;
 }

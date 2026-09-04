@@ -24,7 +24,8 @@ import {
   getTiposPausa,
   getEstadoPausas,
 } from '../api/asistenciaService'
-import Modal from '../components/ui/Modal'
+import Badge from '../components/ui/Badge'
+import Modal, { ModalActions } from '../components/ui/Modal'
 import Spinner from '../components/ui/Spinner'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
@@ -99,6 +100,36 @@ function ModalPausa({ open, tipos, pausasUsadas, onSelect, onClose, loading }) {
   )
 }
 
+/* Confirmación de cierre de jornada: mismo patrón que los diálogos de
+   confirmación del supervisor (Modal + ModalActions). */
+function ModalConfirmarFinalizar({ open, onConfirmar, onCancelar, cargando }) {
+  return (
+    <Modal open={open} onClose={onCancelar} title="Finalizar jornada" width={420}>
+      <div className={styles.confirmIconWrap}>
+        <IconCheck />
+      </div>
+      <p className={styles.confirmDesc}>
+        ¿Confirmas que deseas finalizar la jornada de hoy? Tu ubicación y estado
+        se actualizarán en el panel de supervisión.
+      </p>
+      <ModalActions>
+        <button className="btn btn-ghost" onClick={onCancelar} disabled={cargando}>
+          Cancelar
+        </button>
+        <button
+          className={`btn btn-success ${styles.confirmBtn}`}
+          onClick={onConfirmar}
+          disabled={cargando}
+        >
+          {cargando
+            ? <><Spinner size="sm" color="white" /> Finalizando...</>
+            : <><IconCheck /> Finalizar jornada</>}
+        </button>
+      </ModalActions>
+    </Modal>
+  )
+}
+
 function HistorialRow({ item }) {
   const isEntrada = item.tipo === 'entrada'
   return (
@@ -131,6 +162,7 @@ export default function PausasPage() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [showModal,  setShowModal]  = useState(false)
+  const [confirmarFinalizar, setConfirmarFinalizar] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
 
   // Segundos añadidos por el tick local desde la última respuesta del servidor.
@@ -235,10 +267,10 @@ export default function PausasPage() {
   }
 
   const handleFinalizarJornada = async () => {
-    if (!window.confirm('¿Confirmas que deseas finalizar la jornada de hoy?')) return
     setActionLoading(true)
     try {
       await finalizarJornada()
+      setConfirmarFinalizar(false)
       await fetchData({ silencioso: true })
       toast.success('¡Jornada finalizada! Tu estado se actualizó.')
     } catch (err) {
@@ -300,41 +332,35 @@ export default function PausasPage() {
   }
 
   const estadoJornada = !jornadaIniciada
-    ? { label: 'Inactivo',           color: '#94a3b8' }
+    ? { label: 'Inactivo',           variant: 'muted' }
     : jornadaFinalizada
-    ? { label: 'Jornada finalizada', color: '#16a34a' }
+    ? { label: 'Jornada finalizada', variant: 'success' }
     : enPausa
-    ? { label: pausaActiva.label,    color: pausaExcedida ? '#dc2626' : '#d97706' }
-    : { label: 'Activo',             color: '#16a34a' }
+    ? { label: pausaActiva.label,    variant: pausaExcedida ? 'danger' : 'warning' }
+    : { label: 'Activo',             variant: 'success' }
 
   // Productividad = tiempo efectivo sobre el tiempo total de presencia.
   const productividadPct = segundosDesdeEntrada > 0
     ? Math.round((segundosTrabajados / segundosDesdeEntrada) * 100)
     : 0
 
+  const fechaJornada = estado?.fecha
+    ? new Date(estado.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      })
+    : ''
+
   return (
     <div className={styles.page}>
-      <section className={styles.hero}>
-        <p className={styles.jornadaLabel}>
-          Jornada de Hoy:{' '}
-          {estado?.fecha
-            ? new Date(estado.fecha + 'T12:00:00').toLocaleDateString('es-GT', {
-                day: 'numeric', month: 'long', year: 'numeric'
-              })
-            : ''}
+      <header className={styles.pageHeader}>
+        <h1 className={styles.title}>Jornada y pausas</h1>
+        <p className={styles.subtitle}>
+          {fechaJornada ? `Hoy, ${fechaJornada}` : 'Tu asistencia del día'}
         </p>
+      </header>
 
-        <span
-          className={styles.estadoBadge}
-          style={{
-            background: estadoJornada.color + '20',
-            color: estadoJornada.color,
-            border: `1px solid ${estadoJornada.color}40`,
-          }}
-        >
-          <span className={styles.estadoDot} style={{ background: estadoJornada.color }} />
-          {estadoJornada.label}
-        </span>
+      <section className={styles.hero}>
+        <Badge label={estadoJornada.label} variant={estadoJornada.variant} />
 
         {/* Sin jornada abierta se ofrece el botón de entrada. Ojo con el caso
             de la jornada YA finalizada: antes esta rama solo miraba
@@ -349,13 +375,13 @@ export default function PausasPage() {
                 : 'Registra tu entrada para iniciar la jornada laboral.'}
             </p>
             <button
-              className={styles.entradaBtn}
+              className={`btn btn-success btn-lg ${styles.pillBtn}`}
               onClick={handleRegistrarEntrada}
               disabled={actionLoading}
             >
               {actionLoading ? <Spinner size="sm" color="white" /> : <IconLogin />}
               <span>
-                {jornadaFinalizada ? 'Registrar nueva entrada' : 'Registrar Entrada'}
+                {jornadaFinalizada ? 'Registrar nueva entrada' : 'Registrar entrada'}
               </span>
             </button>
           </div>
@@ -371,8 +397,8 @@ export default function PausasPage() {
               </span>
               <span className={styles.clockLabel}>
                 {enPausa
-                  ? (pausaExcedida ? 'PAUSA EXCEDIDA' : 'TIEMPO DE PAUSA')
-                  : 'TIEMPO RESTANTE'}
+                  ? (pausaExcedida ? 'Pausa excedida' : 'Tiempo de pausa')
+                  : 'Tiempo restante'}
               </span>
             </div>
 
@@ -384,14 +410,14 @@ export default function PausasPage() {
 
             {!jornadaFinalizada && (
               <button
-                className={`${styles.pauseBtn} ${enPausa ? styles.pauseBtnActive : ''}`}
+                className={`btn ${enPausa ? 'btn-success' : 'btn-primary'} btn-lg ${styles.pillBtn}`}
                 onClick={enPausa ? handleReanudar : () => setShowModal(true)}
                 disabled={actionLoading}
               >
                 {actionLoading
                   ? <Spinner size="sm" color="white" />
                   : enPausa ? <IconPlay /> : <IconPause />}
-                <span>{enPausa ? 'REANUDAR' : 'PAUSAR'}</span>
+                <span>{enPausa ? 'Reanudar' : 'Pausar'}</span>
               </button>
             )}
           </>
@@ -402,7 +428,7 @@ export default function PausasPage() {
         <div className={styles.metricCard}>
           <span className={styles.metricIcon}><IconBolt /></span>
           <div>
-            <p className={styles.metricLabel}>PRODUCTIVIDAD</p>
+            <p className={styles.metricLabel}>Productividad</p>
             <p className={styles.metricValue}>
               {jornadaIniciada ? `${productividadPct}%` : '-'}
             </p>
@@ -411,7 +437,7 @@ export default function PausasPage() {
         <div className={styles.metricCard}>
           <span className={styles.metricIcon}><IconTimer /></span>
           <div>
-            <p className={styles.metricLabel}>EN PAUSA</p>
+            <p className={styles.metricLabel}>En pausa</p>
             <p className={styles.metricValue}>
               {jornadaIniciada ? secsToHHMMSS(segundosEnPausaTotal) : '--:--:--'}
             </p>
@@ -425,7 +451,7 @@ export default function PausasPage() {
             <IconHistory />
             Historial de hoy
           </span>
-          <button className={styles.verTodoBtn} onClick={() => fetchData()}>
+          <button className="btn btn-ghost btn-sm" onClick={() => fetchData()}>
             Actualizar
           </button>
         </div>
@@ -441,12 +467,12 @@ export default function PausasPage() {
       {jornadaIniciada && !jornadaFinalizada && (
         <div className={styles.finalizarWrap}>
           <button
-            className={styles.finalizarBtn}
-            onClick={handleFinalizarJornada}
+            className={`btn btn-primary btn-lg ${styles.finalizarBtn}`}
+            onClick={() => setConfirmarFinalizar(true)}
             disabled={actionLoading || enPausa}
           >
-            {actionLoading ? <Spinner size="sm" color="white" /> : <IconCheck />}
-            <span>Guardar y Finalizar Jornada</span>
+            <IconCheck />
+            <span>Guardar y finalizar jornada</span>
           </button>
           <p className={styles.finalizarNote}>
             {enPausa
@@ -470,6 +496,13 @@ export default function PausasPage() {
         onSelect={handleIniciarPausa}
         onClose={() => setShowModal(false)}
         loading={actionLoading}
+      />
+
+      <ModalConfirmarFinalizar
+        open={confirmarFinalizar}
+        onConfirmar={handleFinalizarJornada}
+        onCancelar={() => setConfirmarFinalizar(false)}
+        cargando={actionLoading}
       />
     </div>
   )

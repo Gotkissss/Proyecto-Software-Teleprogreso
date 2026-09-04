@@ -156,9 +156,8 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
       <p className={styles.tarea}>{servicio.nombre}</p>
 
       {errores.general && (
-        <div className={styles.errorGeneral}>
-          <span aria-hidden="true">⚠</span>
-          <span>{errores.general}</span>
+        <div className={styles.errorGeneral} role="alert">
+          {errores.general}
         </div>
       )}
 
@@ -196,7 +195,7 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
           </div>
           <button
             type="button"
-            className={styles.quitarBtn}
+            className={`btn btn-secondary btn-sm ${styles.quitarBtn}`}
             onClick={quitarFoto}
             disabled={guardando}
           >
@@ -229,10 +228,14 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
       {errores.foto && <p className={styles.errorCampo}>{errores.foto}</p>}
 
       <ModalActions>
-        <button className={styles.cancelBtn} onClick={onClose} disabled={guardando}>
+        <button className="btn btn-ghost" onClick={onClose} disabled={guardando}>
           Cancelar
         </button>
-        <button className={styles.guardarBtn} onClick={handleGuardar} disabled={guardando}>
+        <button
+          className={`btn btn-success ${styles.guardarBtn}`}
+          onClick={handleGuardar}
+          disabled={guardando}
+        >
           {guardando ? (
             <><Spinner size="sm" color="white" /> Enviando evidencia…</>
           ) : (
