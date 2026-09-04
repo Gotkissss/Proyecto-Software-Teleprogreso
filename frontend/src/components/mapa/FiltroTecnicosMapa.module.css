@@ -1,7 +1,14 @@
 /* components/mapa/FiltroTecnicosMapa.module.css
    Panel de técnicos, fuera del mapa. Misma tarjeta que el resto de la app. */
 
+/* Llena el hueco que le deja su celda: en pantalla ancha eso hace que la
+   tarjeta termine justo donde termina el mapa. */
 .panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -28,9 +35,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  /* Con la plantilla completa la lista crecía demasiado; se acota y hace
-     scroll para no empujar el mapa fuera de la pantalla. */
-  max-height: 46vh;
+  /* Se queda con el alto sobrante de la tarjeta y hace scroll dentro: así la
+     lista nunca desborda por muchos técnicos que haya. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -81,8 +89,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Apilado bajo el mapa no hay alto que repartir, así que se le pone tope
+   para que la lista no alargue la página de más. */
 @media (max-width: 1024px) {
   .lista {
-    max-height: 30vh;
+    max-height: 40vh;
   }
 }

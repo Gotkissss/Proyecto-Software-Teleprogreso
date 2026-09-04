@@ -116,41 +116,66 @@
   outline-offset: 1px;
 }
 
-/* ── Mapa + panel lateral ───────────────────────────────────────────────────
-   En pantalla ancha el panel va a la derecha del mapa; por debajo de 1024px
-   (el mismo corte al que el layout del supervisor pliega su barra lateral)
-   pasa a una sola columna con el panel encima del mapa.
+/* ── Mapa, leyenda y filtro de técnicos ─────────────────────────────────────
+   En móvil van apilados: leyenda, mapa y filtro, en ese orden. En pantalla
+   ancha (a partir de 1025px, el mismo corte al que el layout del supervisor
+   pliega su barra lateral) el mapa ocupa la columna izquierda entera y a su
+   derecha se apilan leyenda y filtro.
+
+   El alto del bloque lo fija el contenedor y no el mapa: así la fila del
+   filtro se lleva el espacio que sobra tras la leyenda (1fr) y el panel
+   termina exactamente a la misma altura que el mapa.
    -------------------------------------------------------------------------- */
 .mapaLayout {
+  --mapa-alto: 68vh;
+  --mapa-alto-min: 420px;
+
   display: grid;
   grid-template-columns: 1fr;
   grid-template-areas:
-    'panel'
-    'mapa';
+    'leyenda'
+    'mapa'
+    'filtro';
   gap: var(--space-4);
 }
 
 @media (min-width: 1025px) {
   .mapaLayout {
+    height: var(--mapa-alto);
+    min-height: var(--mapa-alto-min);
     grid-template-columns: minmax(0, 1fr) 280px;
-    grid-template-areas: 'mapa panel';
-    align-items: start;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'mapa leyenda'
+      'mapa filtro';
   }
+}
+
+.leyendaSlot {
+  grid-area: leyenda;
+  min-width: 0;
 }
 
 .mapWrap {
   grid-area: mapa;
   position: relative;
-  height: 68vh;
-  min-height: 420px;
+  height: var(--mapa-alto);
+  min-height: var(--mapa-alto-min);
 }
 
-.panelLateral {
-  grid-area: panel;
+@media (min-width: 1025px) {
+  /* El alto ya lo pone el contenedor; aquí solo se rellena la celda. */
+  .mapWrap {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+.filtroSlot {
+  grid-area: filtro;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Controles nativos de Leaflet (SCRUM-195) ───────────────────────────────

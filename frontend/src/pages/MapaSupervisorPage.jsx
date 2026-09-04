@@ -244,15 +244,15 @@ export default function MapaSupervisorPage() {
             </MapaBase>
           </div>
 
-          {/* Panel lateral: a la derecha del mapa en pantalla ancha, encima
-              del mapa en móvil. */}
-          <aside className={styles.panelLateral}>
-            {/* HU-166: contador de tareas visibles + leyenda por estado. */}
+          {/* HU-166: contador de tareas visibles + leyenda por estado. */}
+          <div className={styles.leyendaSlot}>
             <LeyendaMapaSupervisor
               servicios={visibles}
               estados={esHoy ? ESTADOS_HOY : ESTADOS_DIA_PASADO}
             />
+          </div>
 
+          <aside className={styles.filtroSlot}>
             <FiltroTecnicosMapa
               grupos={grupos}
               ocultos={ocultos}
