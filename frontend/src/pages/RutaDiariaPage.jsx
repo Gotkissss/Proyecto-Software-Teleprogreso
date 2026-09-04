@@ -167,7 +167,7 @@ function ServicioCard({ servicio, onVerDetalle }) {
         >
           <IconNav />
           <span>
-            {isActive ? 'Tarea en curso — Ver detalles' : 'Ver detalles de la orden'}
+            {isActive ? 'Ver detalles' : 'Ver detalles de la orden'}
           </span>
         </button>
       )}

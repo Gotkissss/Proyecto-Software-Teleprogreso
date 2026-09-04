@@ -268,6 +268,8 @@
   font-size: var(--text-sm);
   color: var(--color-primary-dark);
   font-weight: 600;
+  /* El tipo llega en minúscula desde la base de datos. */
+  text-transform: capitalize;
 }
 
 .herramientaTipo svg {
