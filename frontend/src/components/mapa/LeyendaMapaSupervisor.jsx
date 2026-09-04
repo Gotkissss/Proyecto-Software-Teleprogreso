@@ -3,10 +3,10 @@
  * HU-166 — Leyenda de colores por estado + contador de tareas visibles,
  * superpuesta sobre el mapa del supervisor.
  *
- * A diferencia de la leyenda de MapaPage (vista del técnico), que va en una
- * franja debajo del mapa, aquí se superpone SOBRE el propio mapa: el
- * supervisor la necesita a la vista mientras sigue viendo el mapa completo,
- * sin tener que hacer scroll.
+ * Vive en la columna lateral de MapaSupervisorPage, junto al filtro de
+ * técnicos: a la derecha del mapa en pantalla ancha y encima del mapa en
+ * móvil. Antes se superponía al mapa como overlay, pero acababa tapando el
+ * control de zoom y las casillas del selector de técnicos.
  *
  * "Visibles" = las tareas que ya pasaron los filtros de fecha/técnico de
  * MapaSupervisorPage y tienen coordenadas — exactamente las mismas que se
@@ -21,12 +21,8 @@
  * día pasado solo se ve lo que se cerró ese día. Listar filas que ese mapa no
  * puede pintar deja un "Cancelado 0" fijo que solo hace ruido.
  *
- * Uso como hijo de un contenedor con position:relative (el mismo
- * styles.mapWrap que envuelve a <MapaBase> en MapaSupervisorPage):
- *   <div className={styles.mapWrap}>
- *     <MapaBase>...</MapaBase>
- *     <LeyendaMapaSupervisor servicios={conUbicacion} />
- *   </div>
+ * Uso:
+ *   <LeyendaMapaSupervisor servicios={visibles} estados={ESTADOS_HOY} />
  */
 import { ESTADO_COLOR, ESTADO_LABEL, ORDEN_ESTADOS } from './estadoColor'
 import styles from './LeyendaMapaSupervisor.module.css'

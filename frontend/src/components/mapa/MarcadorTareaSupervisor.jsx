@@ -9,13 +9,11 @@
  * una sola ruta. El color coincide con el de LeyendaMapaSupervisor (misma
  * fuente: estadoColor.js).
  *
- * Uso como hijo de <MapaBase>, normalmente agrupado dentro de un
- * <LayerGroup> por técnico (ver MapaSupervisorPage):
- *   <LayerGroup>
- *     {serviciosDelTecnico.map((s) => (
- *       <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />
- *     ))}
- *   </LayerGroup>
+ * Uso como hijo de <MapaBase> (ver MapaSupervisorPage, que decide qué
+ * servicios entran según los técnicos encendidos en el panel lateral):
+ *   {serviciosVisibles.map((s) => (
+ *     <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />
+ *   ))}
  *
  * `servicio` sigue la forma que arma MapaSupervisorPage a partir de
  * getTareas() (api/tareaService):
