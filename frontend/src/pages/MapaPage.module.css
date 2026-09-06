@@ -12,7 +12,7 @@
   padding: var(--space-5) var(--space-4) var(--space-12);
   color: var(--color-text);
   box-sizing: border-box;
-  animation: fadeIn 400ms ease-out;
+  animation: fadeIn var(--transition-slow) ease-out;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -21,19 +21,36 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-text);
+  margin: 0;
+  padding-left: var(--space-4);
+  line-height: 1.2;
+}
+
+.title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--space-1);
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-primary);
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 0.875rem;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-md);
   color: var(--color-text-secondary);
 }
 
@@ -44,7 +61,7 @@
 
 .avisoSinUbicacion {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--color-warning-dark);
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-light);
@@ -57,7 +74,7 @@
    el mapa de tareas sigue funcionando igual sin este punto. */
 .avisoUbicacion {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--color-info);
   background: var(--color-info-bg);
   border: 1px solid var(--color-info-light);
@@ -76,14 +93,18 @@
 .legendItem {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8125rem;
+  gap: var(--space-2);
+  font-size: var(--text-base);
   color: var(--color-text-secondary);
 }
 
 .legendDot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page { animation: none; }
 }

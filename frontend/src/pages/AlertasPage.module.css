@@ -484,3 +484,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Respeta la preferencia del sistema de reducir animaciones (ver
+   GUIA-ESTILO.md): la entrada de la pantalla no debe forzarse. */
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+}
