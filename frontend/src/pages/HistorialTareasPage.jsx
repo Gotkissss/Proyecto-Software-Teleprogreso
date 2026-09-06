@@ -25,7 +25,6 @@ import { getTareasCompletadas } from '../api/rutaService'
 import { getTecnicosDisponibles } from '../api/tareaService'
 import FotoEvidencia from '../components/tareas/FotoEvidencia'
 import Badge from '../components/ui/Badge'
-import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
 import styles from './HistorialTareasPage.module.css'
 
@@ -329,9 +328,10 @@ export default function HistorialTareasPage() {
           ))}
         </div>
       ) : (
-        <EmptyState
-          title="Sin tareas completadas en este rango"
-          description="Prueba a ampliar las fechas o a quitar el filtro de técnico."
+        <PageState
+          empty
+          emptyTitle="Sin tareas completadas en este rango"
+          emptyDescription="Prueba a ampliar las fechas o a quitar el filtro de técnico."
         />
       )}
     </div>
