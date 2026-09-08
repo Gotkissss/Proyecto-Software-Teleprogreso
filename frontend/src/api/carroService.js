@@ -1,20 +1,5 @@
 /**
  * Servicio para gestionar vehículos y sus herramientas asignadas.
- *
- * Endpoints que implementará Gualim de backend (SCRUM-111, 112, 113):
- *
- *   SCRUM-111: GET  /activos/carros/{id}/herramientas
- *              -> Lista herramientas asignadas a un carro
- *
- *   SCRUM-112: POST /activos/carros/{id}/herramientas
- *              body: { id_herramienta: number }
- *               ->Asigna una herramienta al carro (tabla CarroHerramienta)
- *
- *   SCRUM-113: DELETE /activos/carros/{id}/herramientas/{id_h}
- *               -> Libera (desasigna) una herramienta del carro
- *
- * Todos los endpoints están implementados en el backend.
- * ---------------------------------------------------------------------------
  */
 
 import apiClient from './client'
@@ -42,10 +27,8 @@ export async function getCarroById(id) {
 /*  Herramientas de un carro (SCRUM-111, 112, 113) */
 
 /**
- * SCRUM-111
  * Obtiene las herramientas asignadas a un carro específico.
- *
- * TODO (backend — gualim): Implementar GET /activos/carros/{id}/herramientas
+ * Endpoint: GET /activos/carros/{id}/herramientas
  */
 export async function getHerramientasDeCarro(idCarro) {
   const { data } = await apiClient.get(`/activos/carros/${idCarro}/herramientas`)
@@ -53,10 +36,8 @@ export async function getHerramientasDeCarro(idCarro) {
 }
 
 /**
- * SCRUM-112
  * Asigna una herramienta a un carro (crea registro en CarroHerramienta).
- *
- * TODO (backend — gualim): Implementar POST /activos/carros/{id}/herramientas
+ * Endpoint: POST /activos/carros/{id}/herramientas
  *
  * @param {number} idCarro
  * @param {number} idHerramienta
@@ -70,10 +51,8 @@ export async function asignarHerramientaACarro(idCarro, idHerramienta) {
 }
 
 /**
- * SCRUM-113
  * Desasigna (libera) una herramienta de un carro.
- *
- * TODO (backend — gualim): Implementar DELETE /activos/carros/{id}/herramientas/{id_h}
+ * Endpoint: DELETE /activos/carros/{id}/herramientas/{id_h}
  *
  * @param {number} idCarro
  * @param {number} idHerramienta

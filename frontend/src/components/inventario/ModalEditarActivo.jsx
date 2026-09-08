@@ -1,31 +1,31 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { editarActivo } from '../../api/inventarioService'
 import styles from './ModalEditarActivo.module.css'
 
 export default function ModalEditarActivo({ activo, onCerrar, onEditado }) {
-  if (!activo) return null
-
-  const tipo = activo.tipo ?? (activo.placa ? 'carro' : activo.stock_minimo !== undefined ? 'material' : 'herramienta')
+  const tipo = activo?.tipo ?? (activo?.placa ? 'carro' : activo?.stock_minimo !== undefined ? 'material' : 'herramienta')
 
   const [form, setForm] = useState({
-    nombre_activo:       activo.nombre_activo       ?? '',
-    descripcion:         activo.descripcion         ?? '',
-    placa:               activo.placa               ?? '',
-    marca:               activo.marca               ?? '',
-    modelo:              activo.modelo              ?? '',
-    capacidad:           activo.capacidad           ?? '',
-    estado_vehiculo:     activo.estado_vehiculo     ?? 'disponible',
-    tipo_herramienta:    activo.tipo_herramienta    ?? '',
-    estado:              activo.estado              ?? 'disponible',
-    cantidad_disponible: activo.cantidad_disponible ?? 0,
-    stock_minimo:        activo.stock_minimo        ?? 0,
-    unidad_medida:       activo.unidad_medida       ?? '',
-    tipo_material:       activo.tipo_material       ?? '',
+    nombre_activo:       activo?.nombre_activo       ?? '',
+    descripcion:         activo?.descripcion         ?? '',
+    placa:               activo?.placa               ?? '',
+    marca:               activo?.marca               ?? '',
+    modelo:              activo?.modelo              ?? '',
+    capacidad:           activo?.capacidad           ?? '',
+    estado_vehiculo:     activo?.estado_vehiculo     ?? 'disponible',
+    tipo_herramienta:    activo?.tipo_herramienta    ?? '',
+    estado:              activo?.estado              ?? 'disponible',
+    cantidad_disponible: activo?.cantidad_disponible ?? 0,
+    stock_minimo:        activo?.stock_minimo        ?? 0,
+    unidad_medida:       activo?.unidad_medida       ?? '',
+    tipo_material:       activo?.tipo_material       ?? '',
   })
   const [guardando, setGuardando] = useState(false)
   const [error,     setError]     = useState(null)
+
+  if (!activo) return null
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 

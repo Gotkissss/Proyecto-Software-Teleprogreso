@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { asignarTecnicoACarro } from '../../api/inventarioService'
@@ -6,8 +6,6 @@ import { getTecnicosDisponibles } from '../../api/tareaService'
 import styles from './ModalAsignarTecnico.module.css'
 
 export default function ModalAsignarTecnico({ vehiculo, onCerrar, onAsignado }) {
-  if (!vehiculo) return null
-
   const [tecnicos, setTecnicos] = useState([])
   const [loading, setLoading] = useState(true)
   const [tecnicoId, setTecnicoId] = useState('')
@@ -20,6 +18,8 @@ export default function ModalAsignarTecnico({ vehiculo, onCerrar, onAsignado }) 
       .catch(() => setError('No se pudo cargar la lista de técnicos.'))
       .finally(() => setLoading(false))
   }, [])
+
+  if (!vehiculo) return null
 
   const handleConfirmar = async () => {
     if (!tecnicoId) return

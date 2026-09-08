@@ -1,18 +1,10 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import apiClient from '../../api/client'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { useToast } from '../ui/Toast'
-import { getPasswordStrength } from './ModalCrearEmpleado'
+import { ROLES, ROL_LABEL, validarFormularioEdicion, getPasswordStrength } from './empleadoValidacion'
 import styles from './ModalEditarEmpleado.module.css'
-
-const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
-const ROL_LABEL = {
-  admin:      'Admin',
-  supervisor: 'Supervisor',
-  tecnico:    'Técnico',
-  gerente:    'Gerente',
-}
 
 const IconAlert = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,36 +38,27 @@ const IconEyeOff = () => (
 )
 
 export default function ModalEditarEmpleado({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
-  if (!empleado) return null
-
   const [form, setForm] = useState({
-    nombre:   empleado.nombre   ?? '',
-    apellido: empleado.apellido ?? '',
-    correo:   empleado.correo   ?? '',
-    telefono: empleado.telefono ?? '',
-    rol:      empleado.rol      ?? 'tecnico',
+    nombre:   empleado?.nombre   ?? '',
+    apellido: empleado?.apellido ?? '',
+    correo:   empleado?.correo   ?? '',
+    telefono: empleado?.telefono ?? '',
+    rol:      empleado?.rol      ?? 'tecnico',
   })
   const [errores, setErrores] = useState({})
+
+  if (!empleado) return null
 
   const handleChange = (campo, valor) => {
     setForm(prev => ({ ...prev, [campo]: valor }))
     if (errores[campo]) setErrores(prev => ({ ...prev, [campo]: null }))
   }
 
-  const validar = () => {
-    const e = {}
-    if (!form.nombre.trim())   e.nombre   = 'El nombre es obligatorio.'
-    if (!form.apellido.trim()) e.apellido = 'El apellido es obligatorio.'
-    if (!form.correo.trim())   e.correo   = 'El correo es obligatorio.'
-    if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) e.correo = 'Ingresa un correo válido.'
-    if (form.telefono && !/^[0-9+\-() ]{7,}$/.test(form.telefono.trim())) e.telefono = 'Teléfono inválido (mín. 7 dígitos).'
-    setErrores(e)
-    return Object.keys(e).length === 0
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!validar()) return
+    const erroresValidacion = validarFormularioEdicion(form)
+    setErrores(erroresValidacion)
+    if (Object.keys(erroresValidacion).length > 0) return
     const cambios = {}
     if (form.nombre.trim()   !== empleado.nombre)           cambios.nombre   = form.nombre.trim()
     if (form.apellido.trim() !== empleado.apellido)         cambios.apellido = form.apellido.trim()

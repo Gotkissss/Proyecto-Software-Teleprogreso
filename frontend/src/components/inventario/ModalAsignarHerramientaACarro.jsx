@@ -1,14 +1,14 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import { asignarHerramientaACarro } from '../../api/inventarioService'
 import styles from './ModalAsignarHerramientaACarro.module.css'
 
 export default function ModalAsignarHerramientaACarro({ herramienta, carros = [], onCerrar, onAsignada }) {
-  if (!herramienta) return null
-
   const [carroId, setCarroId] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
+
+  if (!herramienta) return null
 
   const handleConfirmar = async () => {
     if (!carroId) return

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { crearActivo } from '../../api/inventarioService'
