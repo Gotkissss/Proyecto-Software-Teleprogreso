@@ -1,16 +1,9 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import apiClient from '../../api/client'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
+import { ROLES, ROL_LABEL, validarFormulario, getPasswordStrength } from './empleadoValidacion'
 import styles from './ModalCrearEmpleado.module.css'
-
-const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
-const ROL_LABEL = {
-  admin:      'Admin',
-  supervisor: 'Supervisor',
-  tecnico:    'Técnico',
-  gerente:    'Gerente',
-}
 
 const IconAlert = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -45,56 +38,6 @@ const FORM_INICIAL = {
   contrasena:           '',
   confirmar_contrasena: '',
   fecha_contratacion:   '',
-}
-
-export function validarFormulario(form) {
-  const errores = {}
-  if (!form.nombre.trim()) errores.nombre = 'El nombre es obligatorio.'
-  else if (form.nombre.trim().length < 2) errores.nombre = 'El nombre debe tener al menos 2 caracteres.'
-
-  if (!form.apellido.trim()) errores.apellido = 'El apellido es obligatorio.'
-  else if (form.apellido.trim().length < 2) errores.apellido = 'El apellido debe tener al menos 2 caracteres.'
-
-  if (!form.correo.trim()) errores.correo = 'El correo electrónico es obligatorio.'
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) errores.correo = 'Ingresa un correo electrónico válido.'
-
-  if (form.telefono.trim()) {
-    const digitos = form.telefono.replace(/\D/g, '')
-    if (digitos.length < 7) errores.telefono = 'El teléfono debe tener al menos 7 dígitos.'
-    else if (!/^[0-9+\-() ]+$/.test(form.telefono.trim())) errores.telefono = 'Solo se permiten dígitos, espacios, +, - y ().'
-  }
-
-  if (!form.contrasena) errores.contrasena = 'La contraseña es obligatoria.'
-  else if (form.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres.'
-  else if (!/[A-Z]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos una letra mayúscula.'
-  else if (!/[a-z]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos una letra minúscula.'
-  else if (!/[0-9]/.test(form.contrasena)) errores.contrasena = 'Debe contener al menos un número.'
-
-  if (!form.confirmar_contrasena) errores.confirmar_contrasena = 'Confirma la contraseña.'
-  else if (form.contrasena !== form.confirmar_contrasena) errores.confirmar_contrasena = 'Las contraseñas no coinciden.'
-
-  if (!form.fecha_contratacion) errores.fecha_contratacion = 'La fecha de contratación es obligatoria.'
-  else {
-    const hoy = new Date()
-    hoy.setHours(0, 0, 0, 0)
-    const fecha = new Date(form.fecha_contratacion + 'T12:00:00')
-    if (fecha > hoy) errores.fecha_contratacion = 'La fecha no puede ser en el futuro.'
-  }
-  return errores
-}
-
-export function getPasswordStrength(pass) {
-  if (!pass) return { level: 0, label: '', color: '' }
-  let score = 0
-  if (pass.length >= 8)  score++
-  if (pass.length >= 12) score++
-  if (/[A-Z]/.test(pass)) score++
-  if (/[a-z]/.test(pass)) score++
-  if (/[0-9]/.test(pass)) score++
-  if (/[^A-Za-z0-9]/.test(pass)) score++
-  if (score <= 2) return { level: 1, label: 'Débil',  color: 'var(--color-danger)' }
-  if (score <= 4) return { level: 2, label: 'Media',  color: 'var(--color-warning)' }
-  return              { level: 3, label: 'Fuerte', color: 'var(--color-success)' }
 }
 
 export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExistentes = [] }) {
