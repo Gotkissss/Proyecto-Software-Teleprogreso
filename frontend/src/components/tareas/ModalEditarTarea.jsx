@@ -6,12 +6,19 @@
  * Envía únicamente los campos que realmente cambiaron, para no pisar datos
  * que el supervisor no tocó y para que el backend no revalide de más
  * (por ejemplo el límite de tareas activas del técnico).
+ *
+ * Aquí NO se cambia el técnico asignado. Había un segundo selector que hacía
+ * lo mismo que "Reasignar", pero a ciegas: sin el mapa del servicio, sin decir
+ * quién la lleva ahora y sin avisar cuando ya no queda nadie más a quien
+ * pasársela. Tener las dos puertas obligaba además a elegir entre ellas sin
+ * ninguna pista de que una estaba peor equipada. El técnico se muestra en
+ * modo lectura y el botón lleva al flujo de reasignación, que es el completo.
  * ---------------------------------------------------------------------------
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
-import { LIMITE_TAREAS_FALLBACK, actualizarTarea } from '../../api/tareaService'
+import { actualizarTarea } from '../../api/tareaService'
 import styles from './ModalEditarTarea.module.css'
 
 const PRIORIDADES = [
@@ -28,9 +35,6 @@ const ESTADOS = [
   { value: 'cancelado',   label: 'Cancelado' },
 ]
 
-// Respaldo. El límite real llega en `limite_tareas` de cada técnico.
-const LIMITE_TAREAS = LIMITE_TAREAS_FALLBACK
-
 /** Convierte la tarea del backend al estado del formulario. */
 function tareaAFormulario(tarea) {
   return {
@@ -41,16 +45,15 @@ function tareaAFormulario(tarea) {
     estado:             tarea?.estado_tarea ?? 'pendiente',
     fecha_inicio:       tarea?.fecha_inicio ?? '',
     fecha_finalizacion: tarea?.fecha_finalizacion ?? '',
-    id_tecnico:         tarea?.tecnico?.id_empleado ?? '',
   }
 }
 
 export default function ModalEditarTarea({
   open,
   tarea,
-  tecnicos = [],
   onClose,
   onGuardado,
+  onReasignar,
 }) {
   const [form, setForm]         = useState(() => tareaAFormulario(tarea))
   const [error, setError]       = useState(null)
@@ -213,28 +216,31 @@ export default function ModalEditarTarea({
         </div>
       </div>
 
-      <label className={styles.label} htmlFor="edit-tec">Técnico asignado</label>
-      <select
-        id="edit-tec"
-        className={styles.select}
-        value={form.id_tecnico ?? ''}
-        onChange={(e) => handleChange('id_tecnico', e.target.value)}
-      >
-        <option value="">Sin asignar</option>
-        {tecnicos.map((tec) => {
-          const esActual = tec.id === inicial.id_tecnico
-          const alLimite =
-            !esActual &&
-            (tec.tareas_activas ?? 0) >= (tec.limite_tareas ?? LIMITE_TAREAS)
-          return (
-            <option key={tec.id} value={tec.id} disabled={alLimite}>
-              {tec.nombre_completo} — {tec.tareas_activas ?? 0} activa
-              {tec.tareas_activas === 1 ? '' : 's'}
-              {alLimite ? ' (límite alcanzado)' : ''}
-            </option>
-          )
-        })}
-      </select>
+      <span className={styles.label}>Técnico asignado</span>
+      <div className={styles.tecnicoRow}>
+        <span
+          className={
+            tarea.tecnico?.nombre ? styles.tecnicoNombre : styles.tecnicoSinAsignar
+          }
+        >
+          {tarea.tecnico?.nombre ?? 'Sin asignar'}
+        </span>
+
+        {onReasignar && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => onReasignar(tarea)}
+            disabled={guardando}
+          >
+            Reasignar…
+          </button>
+        )}
+      </div>
+      <p className={styles.tecnicoNota}>
+        El cambio de técnico se hace desde “Reasignar”, que muestra la
+        ubicación del servicio y la carga de cada uno.
+      </p>
 
       <ModalActions>
         <button className={styles.cancelBtn} onClick={onClose} disabled={guardando}>

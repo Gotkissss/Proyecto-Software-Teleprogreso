@@ -14,6 +14,7 @@ import MiniMapaTarea from '../components/mapa/MiniMapaTarea'
 import { ESTADO_LABEL } from '../components/mapa/estadoColor'
 import {
   LIMITE_TAREAS_FALLBACK,
+  actualizarTarea,
   getTareas,
   getTecnicosDisponibles,
   reasignarTarea,
@@ -33,6 +34,12 @@ const limiteDe = (tecnico) => tecnico?.limite_tareas ?? LIMITE_TAREAS
 
 /** True si el técnico ya no puede recibir más trabajo. */
 const alLimite = (tecnico) => (tecnico?.tareas_activas ?? 0) >= limiteDe(tecnico)
+
+// Valor especial del selector: quitarle la tarea a quien la tenga y dejarla
+// en la columna "Sin asignar". Antes esto solo se podía hacer desde el modal
+// de edición; al retirarle a "Editar" el cambio de técnico, la opción se
+// mudó aquí para no perderla.
+const SIN_ASIGNAR = 'sin-asignar'
 
 // Estados en los que la tarea ya está cerrada: no se reasigna algo que
 // el técnico ya entregó (ni algo que se canceló).
@@ -253,8 +260,57 @@ export default function ReasignacionPage() {
     fetchData()
   }, [fetchData])
 
+  /** Deja la tarea sin técnico (PATCH /tareas/{id} con id_tecnico = null). */
+  const handleDesasignar = async () => {
+    const idTarea = tareaSeleccionada.id_tarea ?? tareaSeleccionada.id
+    const nombrePrevio = tareaSeleccionada.tecnico?.nombre
+
+    setGuardando(true)
+    setErrorReasignacion(null)
+
+    try {
+      await actualizarTarea(idTarea, { id_tecnico: null })
+
+      // Quien la tenía se queda con una tarea activa menos.
+      setTecnicos((prev) =>
+        prev.map((t) =>
+          t.id === idTecnicoActual
+            ? { ...t, tareas_activas: Math.max(0, (t.tareas_activas ?? 0) - 1) }
+            : t
+        )
+      )
+
+      setTareas((prev) =>
+        prev.map((t) =>
+          (t.id_tarea ?? t.id) === idTarea ? { ...t, tecnico: null } : t
+        )
+      )
+
+      toast.success(
+        nombrePrevio
+          ? `Tarea retirada a ${nombrePrevio}. Queda sin asignar.`
+          : 'La tarea queda sin asignar.'
+      )
+      setTareaSeleccionada(null)
+      setTecnicoNuevo('')
+    } catch (err) {
+      setErrorReasignacion(
+        err?.response?.data?.detail ||
+          'No se pudo dejar la tarea sin asignar. Inténtalo de nuevo.'
+      )
+      console.error(err)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   const handleReasignar = async () => {
     if (!tareaSeleccionada || !tecnicoNuevo) return
+
+    if (tecnicoNuevo === SIN_ASIGNAR) {
+      await handleDesasignar()
+      return
+    }
 
     setGuardando(true)
     setErrorReasignacion(null)
@@ -420,13 +476,15 @@ export default function ReasignacionPage() {
         onVerEvidencias={(t) => { setTareaDetalle(null); setTareaEvidencias(t) }}
       />
 
-      {/* Modal de edición de una tarea existente */}
+      {/* Modal de edición de una tarea existente. No cambia el técnico: el
+          botón de su ficha cierra la edición y abre la reasignación, que es
+          el único sitio donde se mueve trabajo de un técnico a otro. */}
       <ModalEditarTarea
         open={Boolean(tareaEditando)}
         tarea={tareaEditando}
-        tecnicos={tecnicos}
         onClose={() => setTareaEditando(null)}
         onGuardado={handleTareaEditada}
+        onReasignar={(t) => { setTareaEditando(null); abrirPanel(t) }}
       />
 
       {/* SCRUM-141/142: evidencias que dejó el técnico al cerrar la tarea */}
@@ -726,6 +784,12 @@ export default function ReasignacionPage() {
               </option>
             )
           })}
+
+          {/* Retirar la tarea sin dársela a nadie. Solo tiene sentido si
+              ahora mismo la tiene alguien. */}
+          {idTecnicoActual != null && (
+            <option value={SIN_ASIGNAR}>Dejar sin asignar</option>
+          )}
         </select>
 
         {/* Único técnico en la plantilla y ya tiene la tarea: no hay a quién
@@ -736,10 +800,18 @@ export default function ReasignacionPage() {
           ) && (
             <p className={styles.limiteMsg}>
               ⚠ No hay ningún otro técnico disponible para recibir esta tarea.
+              {idTecnicoActual != null && ' Puedes dejarla sin asignar.'}
             </p>
           )}
 
-        {tecnicoNuevo && (() => {
+        {tecnicoNuevo === SIN_ASIGNAR && (
+          <p className={styles.advertenciaMsg}>
+            ℹ La tarea se quedará sin técnico y volverá a la columna “Sin
+            asignar”.
+          </p>
+        )}
+
+        {tecnicoNuevo && tecnicoNuevo !== SIN_ASIGNAR && (() => {
           const tec = tecnicos.find((t) => t.id === Number(tecnicoNuevo))
           if (!tec) return null
 
@@ -778,7 +850,8 @@ export default function ReasignacionPage() {
             disabled={
               !tecnicoNuevo ||
               guardando ||
-              alLimite(tecnicos.find((t) => t.id === Number(tecnicoNuevo)))
+              (tecnicoNuevo !== SIN_ASIGNAR &&
+                alLimite(tecnicos.find((t) => t.id === Number(tecnicoNuevo))))
             }
           >
             {guardando ? 'Guardando...' : 'Confirmar'}

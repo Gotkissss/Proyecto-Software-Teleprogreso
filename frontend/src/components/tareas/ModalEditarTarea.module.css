@@ -52,6 +52,40 @@
   min-width: 0;
 }
 
+/* ── Técnico asignado (solo lectura) ──────────────────────────────────────
+   Este modal ya no cambia el técnico: lo muestra y manda a "Reasignar".
+   ------------------------------------------------------------------------ */
+.tecnicoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tecnicoNombre {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tecnicoSinAsignar {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.tecnicoNota {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
 .error {
   display: flex;
   align-items: center;
