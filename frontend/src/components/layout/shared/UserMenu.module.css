@@ -117,10 +117,18 @@
   transition: var(--transition);
 }
 .dropdownItem:hover {
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+}
+.dropdownItem svg { width: 16px; height: 16px; }
+
+/* El rojo se reserva a "Cerrar sesión": cuando era el único ítem del menú
+   estaba en `.dropdownItem`, y al entrar "Mi perfil" habría teñido de rojo
+   una acción que no destruye nada. */
+.dropdownItemSalir:hover {
   background: var(--color-danger-bg);
   color: var(--color-danger-dark);
 }
-.dropdownItem svg { width: 16px; height: 16px; }
 
 @media (max-width: 768px) {
   .userInfo { display: none; }

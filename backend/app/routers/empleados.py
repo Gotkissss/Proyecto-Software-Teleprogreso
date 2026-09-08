@@ -207,6 +207,9 @@ async def update_contrasena_empleado(
     - Se guarda hasheada con bcrypt; nunca en texto plano y nunca se devuelve.
     - No se pide la contraseña anterior: quien la restablece es un
       administrador, no el dueño de la cuenta.
+    - Las sesiones abiertas del empleado se invalidan (`version_token`): si se
+      restablece porque la cuenta pudo quedar expuesta, dejar viva la sesión
+      anterior anularía el propósito.
     """
     empleado = await empleados_service.restablecer_contrasena(
         db,
@@ -217,8 +220,9 @@ async def update_contrasena_empleado(
     return {
         "detail": (
             f"Contraseña actualizada para {empleado.nombre} {empleado.apellido}. "
-            "Comunícasela por un medio seguro y pídele que la cambie contigo "
-            "si sospecha que alguien más la vio."
+            "Sus sesiones abiertas se cerraron. Comunícasela por un medio "
+            "seguro y pídele que la cambie contigo si sospecha que alguien "
+            "más la vio."
         ),
         "id_empleado": empleado.id_empleado,
     }

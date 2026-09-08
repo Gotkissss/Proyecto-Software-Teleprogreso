@@ -1,0 +1,313 @@
+/* ===========================================================================
+   PerfilPage.module.css
+   Teleprogreso S.A. — Mi perfil (compartida por técnico y supervisor)
+
+   Todo por tokens (ver frontend/GUIA-ESTILO.md). Los botones usan las clases
+   globales `btn ...`; aquí solo viven las piezas propias de la pantalla.
+   =========================================================================== */
+
+.page {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  /* El alto lo pone el <main> del layout: 100vh metería scroll de más. */
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: var(--space-5) var(--space-4) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  /* En desktop la columna no se estira a lo ancho de la pantalla: un
+     formulario de tres campos a 1600px es ilegible. */
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+  animation: fadeIn 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page { animation: none; }
+}
+
+/* ── Encabezado ─────────────────────────────────────────────────────────── */
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+}
+
+/* ── Tarjeta de identidad ───────────────────────────────────────────────── */
+.identidadCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--gradient-primary-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-primary);
+  color: var(--color-text-on-primary);
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.identidadInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.nombre {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.correo {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* ── Tarjetas de contenido ──────────────────────────────────────────────── */
+.card {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cardTitle svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+}
+
+.cardNota {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* ── Rejilla de datos ───────────────────────────────────────────────────── */
+.datosGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-5) 0 0;
+}
+
+.dato {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.datoLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.datoLabel svg {
+  width: 14px;
+  height: 14px;
+}
+
+.datoValor {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.datoMono {
+  font-family: var(--font-mono);
+}
+
+/* ── Formulario ─────────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  /* Hueco a la derecha para el botón de mostrar/ocultar. */
+  padding: 0 var(--space-11) 0 var(--space-4);
+  min-height: 44px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  transition: var(--transition);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary-sm);
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inputError,
+.inputError:focus {
+  border-color: var(--color-danger);
+  box-shadow: none;
+}
+
+.verBtn {
+  position: absolute;
+  right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.verBtn:hover { color: var(--color-text); }
+.verBtn svg { width: 16px; height: 16px; }
+
+.campoError {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-danger-dark);
+}
+
+.ayuda {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-light);
+  border-radius: var(--radius-md);
+  color: var(--color-danger-dark);
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.errorBanner svg { width: 16px; height: 16px; }
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* En móvil (pantalla del técnico) la acción principal ocupa todo el ancho:
+   objetivo táctil grande y alcanzable con el pulgar. */
+@media (max-width: 560px) {
+  .identidadCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .formActions {
+    justify-content: stretch;
+  }
+
+  .formActions > :global(.btn) {
+    width: 100%;
+    min-height: 48px;
+  }
+}

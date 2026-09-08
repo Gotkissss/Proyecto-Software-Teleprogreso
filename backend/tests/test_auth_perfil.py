@@ -302,3 +302,90 @@ async def test_token_legacy_solo_es_valido_mientras_la_version_es_cero(
             _db_para_autenticacion(empleado),
         )
     assert error.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_restablecer_contrasena_tambien_invalida_las_sesiones_abiertas(
+    monkeypatch,
+):
+    """
+    El restablecimiento administrativo tiene que echar al empleado igual que
+    el cambio propio.
+
+    Es la mitad que faltaba: `version_token` se subía en
+    POST /auth/cambiar-contrasena pero no en
+    PATCH /empleados/{id}/contrasena, así que restablecer la clave de una
+    cuenta que se creía comprometida cambiaba la contraseña y dejaba viva la
+    sesión de quien ya estaba dentro, hasta que el JWT expirara solo.
+    """
+    from app.schemas.empleado import EmpleadoPasswordUpdate
+    from app.services import empleados as empleados_service
+
+    empleado = _empleado(version_token=3)
+    resultado = MagicMock()
+    resultado.scalar_one_or_none.return_value = empleado
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=resultado)
+
+    monkeypatch.setattr(
+        empleados_service, "hash_password", lambda _: "hash-nuevo"
+    )
+
+    devuelto = await empleados_service.restablecer_contrasena(
+        db,
+        empleado.id_empleado,
+        EmpleadoPasswordUpdate(
+            contrasena="ClaveNueva1",
+            contrasena_confirmacion="ClaveNueva1",
+        ),
+        current_user=_empleado(rol="supervisor"),
+    )
+
+    assert devuelto.hash_contrasena == "hash-nuevo"
+    assert devuelto.version_token == 4
+
+
+@pytest.mark.asyncio
+async def test_login_deja_registrado_el_ultimo_acceso(monkeypatch):
+    """
+    `ultimo_acceso` sale en la lista de empleados y en el perfil, pero nadie
+    lo escribía: se quedaba en NULL para siempre y las dos pantallas mostraban
+    "—" tanto para una cuenta recién creada como para una que entra a diario.
+    """
+    from datetime import datetime as _datetime
+
+    momento = _datetime(2026, 9, 8, 7, 45, 0)
+    empleado = _empleado()
+    assert empleado.ultimo_acceso is None
+
+    resultado = MagicMock()
+    resultado.scalar_one_or_none.return_value = empleado
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=resultado)
+
+    monkeypatch.setattr(auth, "run_in_threadpool", _ejecutar_sin_hilo)
+    monkeypatch.setattr(auth, "verify_password", lambda _plain, _hash: True)
+    monkeypatch.setattr(auth, "create_access_token", MagicMock(return_value="jwt"))
+    # La hora es la de la operación (Guatemala), no la del contenedor (UTC).
+    monkeypatch.setattr(auth, "ahora", lambda: momento)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/auth/login",
+            "headers": [],
+            "query_string": b"",
+            "server": ("test", 80),
+            "client": ("127.0.0.1", 50001),
+            "scheme": "http",
+        }
+    )
+
+    await auth.login(
+        request,
+        LoginRequest(correo="ana@teleprogreso.com", contrasena="clave"),
+        db,
+    )
+
+    assert empleado.ultimo_acceso == momento

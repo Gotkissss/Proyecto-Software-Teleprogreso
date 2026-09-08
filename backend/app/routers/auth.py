@@ -33,6 +33,7 @@ from app.core.security import (
     revoke_token,
     verify_password,
 )
+from app.core.tiempo import ahora
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.auth import (
@@ -147,6 +148,14 @@ async def login(
         rol=empleado.rol,
         version_token=empleado.version_token,
     )
+
+    # Marca de entrada. La columna `ultimo_acceso` existe desde el principio y
+    # sale en la lista de empleados y en el perfil, pero nadie la escribía
+    # nunca: siempre valía NULL y se mostraba como "—", lo que hacía imposible
+    # distinguir una cuenta sin usar de una que se usa a diario. Se toma la
+    # hora de la operación (tiempo.ahora), no la del contenedor, que corre en
+    # UTC.
+    empleado.ultimo_acceso = ahora()
 
     # Login correcto: se borra el historial de fallos de esta combinación para
     # que un usuario legítimo que se equivocó un par de veces no arrastre el

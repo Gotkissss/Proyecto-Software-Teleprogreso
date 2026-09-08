@@ -14,6 +14,9 @@ import EquipoPage     from './pages/EquipoPage'
 /* Historial de tareas completadas — la misma pantalla sirve a técnico y
    supervisor; el backend decide qué puede ver cada rol. */
 import HistorialTareasPage from './pages/HistorialTareasPage'
+/* Perfil del usuario autenticado — se monta bajo los dos layouts porque se
+   abre desde el menú del avatar, que es común a técnico y supervisor. */
+import PerfilPage from './pages/PerfilPage'
 
 /* Páginas del supervisor */
 import DashboardPage    from './pages/DashboardPage'
@@ -48,6 +51,7 @@ export default function App() {
             <Route path="/pausas" element={<PausasPage />} />
             <Route path="/historial" element={<HistorialTareasPage />} />
             <Route path="/equipo" element={<EquipoPage />} />
+            <Route path="/perfil" element={<PerfilPage />} />
           </Route>
 
           {/* ── Rutas del supervisor (desktop) ──────────── */}
@@ -77,6 +81,7 @@ export default function App() {
               element={<Navigate to="/supervisor/empleados?tab=historial" replace />}
             />
             <Route path="historial-tareas" element={<HistorialTareasPage />} />
+            <Route path="perfil" element={<PerfilPage />} />
             
           </Route>
 

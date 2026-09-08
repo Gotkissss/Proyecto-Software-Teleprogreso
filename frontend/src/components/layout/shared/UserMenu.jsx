@@ -8,11 +8,23 @@
  *
  * variant="app"        → solo el avatar (pantalla angosta del técnico)
  * variant="supervisor" → avatar + nombre y rol al lado
+ *
+ * De aquí cuelga también "Mi perfil". La ruta depende del layout: el perfil
+ * está montado en /perfil para el técnico y en /supervisor/perfil para el
+ * panel, así que se deriva de la variante en vez de escribirla en cada layout.
  * ---------------------------------------------------------------------------
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import styles from './UserMenu.module.css'
+
+const IconUser = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+)
 
 const IconLogout = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -70,8 +82,18 @@ export default function UserMenu({ user, onLogout, variant = 'app' }) {
               <span>{user.correo}</span>
               <span className={styles.dropdownRol}>{rol}</span>
             </div>
-            <button
+            <Link
+              to={variant === 'supervisor' ? '/supervisor/perfil' : '/perfil'}
               className={styles.dropdownItem}
+              role="menuitem"
+              onClick={() => setAbierto(false)}
+            >
+              <IconUser />
+              Mi perfil
+            </Link>
+
+            <button
+              className={`${styles.dropdownItem} ${styles.dropdownItemSalir}`}
               role="menuitem"
               onClick={() => { setAbierto(false); onLogout?.() }}
             >

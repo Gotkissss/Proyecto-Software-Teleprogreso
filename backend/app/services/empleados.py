@@ -332,6 +332,14 @@ async def restablecer_contrasena(
         raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
     empleado.hash_contrasena = hash_password(data.contrasena)
+    # Las sesiones que el empleado tuviera abiertas dejan de valer aquí mismo.
+    # Sin esto, restablecer la contraseña de una cuenta que se cree
+    # comprometida no echaba a nadie: los JWT ya emitidos seguían funcionando
+    # hasta expirar solos, que es justo lo que se quiere evitar al
+    # restablecerla. `version_token` ya existe para el cambio de contraseña
+    # propio (POST /auth/cambiar-contrasena); solo faltaba aplicarlo también
+    # por esta puerta.
+    empleado.version_token += 1
     logger.warning(
         "Contraseña restablecida para %s (id=%s) por %s (id=%s, rol=%s)",
         empleado.correo,

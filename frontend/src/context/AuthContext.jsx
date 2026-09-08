@@ -53,6 +53,22 @@ export function AuthProvider({ children }) {
     navigate('/login', { replace: true })
   }, [navigate])
 
+  /**
+   * Cierra la sesión sin llamar a POST /auth/logout.
+   *
+   * Se usa cuando el token ya dejó de valer del lado del servidor —hoy solo
+   * al cambiar la propia contraseña, que invalida todas las sesiones—. Llamar
+   * al logout normal en ese punto devuelve 401, y el interceptor de axios
+   * reacciona recargando la página entera hacia /login, lo que se lleva por
+   * delante el aviso de que el cambio salió bien.
+   */
+  const cerrarSesionLocal = useCallback(() => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
+    setUser(null)
+    navigate('/login', { replace: true })
+  }, [navigate])
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -60,6 +76,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       loginUser,
       logoutUser,
+      cerrarSesionLocal,
     }}>
       {children}
     </AuthContext.Provider>
