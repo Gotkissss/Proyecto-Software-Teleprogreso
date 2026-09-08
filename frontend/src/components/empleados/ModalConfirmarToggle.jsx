@@ -1,4 +1,3 @@
-import React from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import styles from './ModalConfirmarToggle.module.css'

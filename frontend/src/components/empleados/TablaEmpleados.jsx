@@ -1,4 +1,3 @@
-import React from 'react'
 import Badge from '../ui/Badge'
 import EmptyState from '../ui/EmptyState'
 import styles from './TablaEmpleados.module.css'

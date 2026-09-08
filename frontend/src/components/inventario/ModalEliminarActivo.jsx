@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { eliminarActivo } from '../../api/inventarioService'
@@ -13,10 +13,10 @@ const IconAlert = () => (
 )
 
 export default function ModalEliminarActivo({ activo, onCerrar, onEliminado }) {
-  if (!activo) return null
-
   const [eliminando, setEliminando] = useState(false)
   const [error,      setError]      = useState(null)
+
+  if (!activo) return null
 
   const handleConfirmar = async () => {
     setEliminando(true)
