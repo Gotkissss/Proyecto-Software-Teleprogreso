@@ -25,10 +25,10 @@ import logging
 from dataclasses import dataclass
 from datetime import time
 
-from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import bad_request, conflict, not_found
 from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
@@ -180,12 +180,11 @@ async def crear_empleado(
         select(Empleado).where(Empleado.correo == data.correo)
     )
     if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
+        raise conflict(
+            (
                 "Ya existe un empleado registrado con el correo "
                 f"'{data.correo}'."
-            ),
+            )
         )
 
     nuevo_empleado = Empleado(
@@ -216,19 +215,15 @@ async def editar_empleado(
     )
     empleado = result.scalar_one_or_none()
     if not empleado:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró ningún empleado con id={id_empleado}.",
-        )
+        raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
     if data.rol is not None and data.rol != empleado.rol:
         if id_empleado == current_user.id_empleado:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     "No puedes cambiar tu propio rol. "
                     "Pide a otro administrador que lo haga."
-                ),
+                )
             )
 
         if empleado.rol == ROL_ADMIN:
@@ -240,13 +235,12 @@ async def editar_empleado(
                 )
             )
             if (result_admins.scalar() or 0) == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
+                raise bad_request(
+                    (
                         "No se puede quitar el rol de administrador: es el "
                         "único admin activo que queda. Asigna primero el rol "
                         "'admin' a otro empleado."
-                    ),
+                    )
                 )
 
     if data.correo and data.correo != empleado.correo:
@@ -254,12 +248,11 @@ async def editar_empleado(
             select(Empleado).where(Empleado.correo == data.correo)
         )
         if result_correo.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise conflict(
+                (
                     f"El correo '{data.correo}' ya está en uso "
                     "por otro empleado."
-                ),
+                )
             )
 
     for campo, valor in data.model_dump(exclude_unset=True).items():
@@ -279,19 +272,15 @@ async def cambiar_estado_empleado(
     )
     empleado = result.scalar_one_or_none()
     if not empleado:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró ningún empleado con id={id_empleado}.",
-        )
+        raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
     if empleado.estado == data.estado:
         accion = "activo" if data.estado == "activo" else "inactivo"
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El empleado '{empleado.nombre} {empleado.apellido}' "
                 f"ya tiene el estado '{accion}'."
-            ),
+            )
         )
 
     if empleado.rol == ROL_ADMIN and data.estado != ESTADO_EMPLEADO_ACTIVO:
@@ -303,13 +292,12 @@ async def cambiar_estado_empleado(
             )
         )
         if (result_admins.scalar() or 0) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     "No se puede desactivar: es el único administrador activo "
                     "que queda. Activa o crea otro admin antes de desactivar "
                     "este."
-                ),
+                )
             )
 
     empleado.estado = data.estado
@@ -341,10 +329,7 @@ async def restablecer_contrasena(
     )
     empleado = result.scalar_one_or_none()
     if not empleado:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró ningún empleado con id={id_empleado}.",
-        )
+        raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
     empleado.hash_contrasena = hash_password(data.contrasena)
     logger.warning(

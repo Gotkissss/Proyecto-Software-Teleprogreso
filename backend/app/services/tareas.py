@@ -17,12 +17,12 @@ from collections import OrderedDict
 from datetime import date, datetime, time, timedelta
 from typing import List, Optional
 
-from fastapi import HTTPException, status
 from geoalchemy2 import Geometry
 from sqlalchemy import DateTime, and_, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import bad_request, forbidden, not_found
 from app.core.reglas import (
     ESTADOS_TAREA_ACTIVOS,
     ESTADOS_TAREA_CERRADOS,
@@ -69,21 +69,19 @@ def validar_tarea_abierta(tarea) -> None:
     constancia de que alguien decidió reabrirla.
     """
     if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 "Esta tarea fue cancelada y ya no admite evidencias. "
                 "Consulta con tu supervisor."
-            ),
+            )
         )
 
     if tarea.estado_tarea == "completado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 "Esta tarea ya está completada y no admite evidencias nuevas. "
                 "Si falta algo, pide a tu supervisor que la reabra."
-            ),
+            )
         )
 
 
@@ -102,21 +100,17 @@ def validar_cierre_permitido(tarea) -> None:
                         ser inofensivo, porque el frontend reintenta el cierre
                         si la primera respuesta se pierde.
 
-    Lanza HTTPException 400 en los dos primeros casos.
+    Lanza un error 400 en los dos primeros casos.
     """
     if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se puede finalizar una tarea cancelada.",
-        )
+        raise bad_request("No se puede finalizar una tarea cancelada.")
 
     if tarea.estado_tarea == "pendiente":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 "La tarea todavía no se ha iniciado. Pulsa 'Iniciar tarea' "
                 "antes de finalizarla."
-            ),
+            )
         )
 
 
@@ -231,13 +225,12 @@ async def _buscar_tecnico_asignable(
     tecnico = result.scalar_one_or_none()
 
     if tecnico is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
+        raise not_found(
+            (
                 f"No se encontró ningún técnico activo con id={id_empleado}. "
                 "Las tareas solo pueden asignarse a empleados con rol 'tecnico' "
                 "y cuenta activa."
-            ),
+            )
         )
 
     return tecnico
@@ -263,14 +256,13 @@ async def _validar_limite_al_reabrir(
     )
 
     if activas >= LIMITE_TAREAS_ACTIVAS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"No se puede reabrir la tarea: el técnico '{asignado['nombre']}' "
                 f"ya tiene {activas} tareas activas y el límite es "
                 f"{LIMITE_TAREAS_ACTIVAS}. Reasigna la tarea a otro técnico o "
                 f"cierra alguna de las suyas primero."
-            ),
+            )
         )
 
 
@@ -485,14 +477,13 @@ async def crear_tarea(db: AsyncSession, data: TareaCreate) -> TareaResponse:
         tecnico = await _buscar_tecnico_asignable(db, data.id_tecnico)
         tareas_activas = await _contar_tareas_activas(db, data.id_tecnico)
         if tareas_activas >= LIMITE_TAREAS_ACTIVAS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     f"El técnico '{tecnico.nombre} {tecnico.apellido}' ya tiene "
                     f"{tareas_activas} tareas activas. "
                     f"El límite máximo es {LIMITE_TAREAS_ACTIVAS}. "
                     "Selecciona otro técnico disponible."
-                ),
+                )
             )
 
     nueva_tarea = Tarea(
@@ -539,10 +530,7 @@ async def editar_tarea(
     tarea = result.scalar_one_or_none()
 
     if not tarea:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tarea con id={id_tarea} no encontrada.",
-        )
+        raise not_found(f"Tarea con id={id_tarea} no encontrada.")
 
     cambios = data.model_dump(exclude_unset=True)
     if not cambios:
@@ -551,18 +539,14 @@ async def editar_tarea(
     nueva_inicio = cambios.get("fecha_inicio", tarea.fecha_inicio)
     nueva_fin = cambios.get("fecha_finalizacion", tarea.fecha_finalizacion)
     if nueva_inicio and nueva_fin and nueva_inicio > nueva_fin:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La fecha de inicio no puede ser posterior a la fecha de finalización.",
+        raise bad_request(
+            "La fecha de inicio no puede ser posterior a la fecha de finalización."
         )
 
     if "nombre" in cambios:
         titulo = (cambios["nombre"] or "").strip()
         if not titulo:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El título de la tarea no puede quedar vacío.",
-            )
+            raise bad_request("El título de la tarea no puede quedar vacío.")
         tarea.titulo = titulo
     if "descripcion" in cambios:
         tarea.descripcion = cambios["descripcion"]
@@ -596,14 +580,13 @@ async def editar_tarea(
         nuevo_tecnico = cambios["id_tecnico"]
 
         if tarea.estado_tarea in ESTADOS_TAREA_CERRADOS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     f"La tarea está en estado '{tarea.estado_tarea}' y ya no "
                     "puede cambiar de técnico: la evidencia registrada quedaría "
                     "atribuida a alguien que no hizo el trabajo. Reábrela "
                     "primero si necesitas reasignarla."
-                ),
+                )
             )
 
         if nuevo_tecnico is None:
@@ -624,13 +607,12 @@ async def editar_tarea(
                     db, nuevo_tecnico, excluir_tarea=id_tarea
                 )
                 if tareas_activas >= LIMITE_TAREAS_ACTIVAS:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=(
+                    raise bad_request(
+                        (
                             f"El técnico '{tecnico.nombre} {tecnico.apellido}' ya tiene "
                             f"{tareas_activas} tareas activas. "
                             f"El límite máximo es {LIMITE_TAREAS_ACTIVAS}."
-                        ),
+                        )
                     )
 
                 await db.execute(
@@ -655,10 +637,7 @@ async def actualizar_estado(
     tarea = result.scalar_one_or_none()
 
     if not tarea:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tarea con id={id_tarea} no encontrada.",
-        )
+        raise not_found(f"Tarea con id={id_tarea} no encontrada.")
 
     nuevo_estado = data.estado.value
     await _validar_limite_al_reabrir(db, tarea, nuevo_estado)
@@ -685,18 +664,14 @@ async def reasignar_tarea(
     tarea = result.scalar_one_or_none()
 
     if not tarea:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tarea con id={id_tarea} no encontrada.",
-        )
+        raise not_found(f"Tarea con id={id_tarea} no encontrada.")
 
     if tarea.estado_tarea in ESTADOS_TAREA_CERRADOS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"La tarea está en estado '{tarea.estado_tarea}' y ya no puede "
                 "reasignarse. Reábrela primero si necesitas cambiar el técnico."
-            ),
+            )
         )
 
     tecnico = await _buscar_tecnico_asignable(db, data.id_tecnico)
@@ -704,13 +679,12 @@ async def reasignar_tarea(
         db, data.id_tecnico, excluir_tarea=id_tarea
     )
     if tareas_activas >= LIMITE_TAREAS_ACTIVAS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El técnico '{tecnico.nombre} {tecnico.apellido}' ya tiene "
                 f"{tareas_activas} tareas activas. "
                 f"El límite máximo es {LIMITE_TAREAS_ACTIVAS}."
-            ),
+            )
         )
 
     await db.execute(
@@ -738,10 +712,7 @@ async def iniciar_tarea(
     tarea = result.scalar_one_or_none()
 
     if not tarea:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tarea con id={id_tarea} no encontrada.",
-        )
+        raise not_found(f"Tarea con id={id_tarea} no encontrada.")
 
     if current_user.rol == "tecnico":
         result_asig = await db.execute(
@@ -751,23 +722,20 @@ async def iniciar_tarea(
             )
         )
         if not result_asig.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
+            raise forbidden(
+                (
                     "No tienes permiso para iniciar esta tarea. "
                     "Solo el técnico asignado puede iniciarla."
-                ),
+                )
             )
 
     if tarea.estado_tarea == "completado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta tarea ya fue completada. No se puede volver a iniciar.",
+        raise bad_request(
+            "Esta tarea ya fue completada. No se puede volver a iniciar."
         )
     if tarea.estado_tarea == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta tarea está cancelada. Pide a tu supervisor que la reactive.",
+        raise bad_request(
+            "Esta tarea está cancelada. Pide a tu supervisor que la reactive."
         )
 
     ya_en_curso = tarea.estado_tarea == "en_progreso"
@@ -800,10 +768,7 @@ async def finalizar_tarea(
     tarea = result.scalar_one_or_none()
 
     if not tarea:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tarea con id={id_tarea} no encontrada.",
-        )
+        raise not_found(f"Tarea con id={id_tarea} no encontrada.")
 
     if current_user.rol == "tecnico":
         result_asig = await db.execute(
@@ -813,22 +778,20 @@ async def finalizar_tarea(
             )
         )
         if result_asig.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
+            raise forbidden(
+                (
                     "No tienes permiso para finalizar esta tarea. "
                     "Solo el técnico asignado puede cerrarla."
-                ),
+                )
             )
 
     validar_cierre_permitido(tarea)
     if await _contar_incidencias(db, id_tarea) == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 "Registra la evidencia (descripción y foto) antes de finalizar "
                 "la tarea."
-            ),
+            )
         )
 
     marcar_completada(tarea)
@@ -849,10 +812,7 @@ async def obtener_tareas_completadas(
     desde = fecha_desde or (hasta - timedelta(days=6))
 
     if desde > hasta:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La fecha inicial no puede ser posterior a la final.",
-        )
+        raise bad_request("La fecha inicial no puede ser posterior a la final.")
 
     id_empleado_filtro = (
         id_tecnico

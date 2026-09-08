@@ -9,10 +9,11 @@ app/services/empleados.py.
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado, require_admin, require_supervisor
+from app.core.exceptions import bad_request
 from app.core.reglas import ROLES_VALIDOS
 from app.db.session import get_db
 from app.models.empleado import Empleado
@@ -73,23 +74,21 @@ async def get_empleados(
     if rol:
         roles_validos = set(ROLES_VALIDOS)
         if rol not in roles_validos:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     f"Rol '{rol}' no es válido. "
                     f"Roles permitidos: {', '.join(sorted(roles_validos))}"
-                ),
+                )
             )
 
     if estado:
         estados_validos = {"activo", "inactivo"}
         if estado not in estados_validos:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     f"Estado '{estado}' no es válido. "
                     f"Estados permitidos: {', '.join(sorted(estados_validos))}"
-                ),
+                )
             )
 
     rows = await empleados_service.listar_empleados(
@@ -155,12 +154,11 @@ async def update_estado_empleado(
     current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     if id == current_user.id_empleado:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 "No puedes cambiar el estado de tu propia cuenta. "
                 "Pide a otro administrador que realice este cambio."
-            ),
+            )
         )
 
     empleado, efectos = await empleados_service.cambiar_estado_empleado(

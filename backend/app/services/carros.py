@@ -6,11 +6,11 @@ commit. Los routers conservan el contrato HTTP, los permisos y la
 serialización de las respuestas.
 """
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import bad_request, not_found
 from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
@@ -57,10 +57,7 @@ async def obtener_carro(db: AsyncSession, id_carro: int) -> tuple:
     row = result.one_or_none()
 
     if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun vehiculo con id={id_carro}.",
-        )
+        raise not_found(f"No se encontro ningun vehiculo con id={id_carro}.")
 
     result_asig = await db.execute(
         select(EmpleadoCarro)
@@ -80,10 +77,7 @@ async def listar_herramientas_de_carro(
         select(Carro).where(Carro.id_activo == id_carro)
     )
     if not result_carro.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun vehiculo con id={id_carro}.",
-        )
+        raise not_found(f"No se encontro ningun vehiculo con id={id_carro}.")
 
     await exigir_acceso_a_carro(db, current_user, id_carro)
 
@@ -110,10 +104,7 @@ async def asignar_herramienta(
         select(Carro).where(Carro.id_activo == id_carro)
     )
     if not result_carro.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun vehiculo con id={id_carro}.",
-        )
+        raise not_found(f"No se encontro ningun vehiculo con id={id_carro}.")
 
     result_herr = await db.execute(
         select(Herramienta, Activo)
@@ -123,20 +114,18 @@ async def asignar_herramienta(
     row_herr = result_herr.one_or_none()
 
     if not row_herr:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ninguna herramienta con id={id_herramienta}.",
+        raise not_found(
+            f"No se encontro ninguna herramienta con id={id_herramienta}."
         )
 
     herramienta, activo = row_herr
     if herramienta.estado != ESTADO_DISPONIBLE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"La herramienta '{activo.nombre_activo}' no esta disponible "
                 f"(estado actual: '{herramienta.estado}'). "
                 "Solo se pueden asignar herramientas en estado 'disponible'."
-            ),
+            )
         )
 
     result_existe = await db.execute(
@@ -146,12 +135,11 @@ async def asignar_herramienta(
         )
     )
     if result_existe.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"La herramienta '{activo.nombre_activo}' ya esta asignada "
                 "a este vehiculo."
-            ),
+            )
         )
 
     nueva_asignacion = CarroHerramienta(
@@ -181,12 +169,11 @@ async def liberar_herramienta(
     relacion = result.scalar_one_or_none()
 
     if not relacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
+        raise not_found(
+            (
                 f"La herramienta id={id_herramienta} no esta asignada al "
                 f"vehiculo id={id_carro}."
-            ),
+            )
         )
 
     await db.delete(relacion)
@@ -221,21 +208,17 @@ async def asignar_tecnico(
     row_carro = result_carro.one_or_none()
 
     if not row_carro:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun vehiculo con id={id_carro}.",
-        )
+        raise not_found(f"No se encontro ningun vehiculo con id={id_carro}.")
 
     activo_carro, carro = row_carro
     if carro.estado_vehiculo != ESTADO_DISPONIBLE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El vehiculo '{activo_carro.nombre_activo}' (placa: {carro.placa}) "
                 "no esta disponible para asignacion "
                 f"(estado actual: '{carro.estado_vehiculo}'). "
                 "Solo se pueden asignar vehiculos en estado 'disponible'."
-            ),
+            )
         )
 
     result_emp = await db.execute(
@@ -243,19 +226,15 @@ async def asignar_tecnico(
     )
     empleado = result_emp.scalar_one_or_none()
     if not empleado:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun empleado con id={id_empleado}.",
-        )
+        raise not_found(f"No se encontro ningun empleado con id={id_empleado}.")
 
     if empleado.estado != ESTADO_EMPLEADO_ACTIVO:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El empleado '{empleado.nombre} {empleado.apellido}' "
                 f"no esta activo (estado: '{empleado.estado}'). "
                 "Solo se pueden asignar empleados activos."
-            ),
+            )
         )
 
     result_tecnico_carro = await db.execute(
@@ -264,21 +243,19 @@ async def asignar_tecnico(
     asig_existente_tecnico = result_tecnico_carro.scalars().first()
     if asig_existente_tecnico:
         if asig_existente_tecnico.id_carro == id_carro:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
+            raise bad_request(
+                (
                     f"El tecnico '{empleado.nombre} {empleado.apellido}' "
                     "ya esta asignado a este vehiculo."
-                ),
+                )
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El tecnico '{empleado.nombre} {empleado.apellido}' "
                 f"ya tiene asignado el vehiculo id={asig_existente_tecnico.id_carro}. "
                 "Un tecnico solo puede tener un vehiculo a la vez. "
                 "Libera el vehiculo actual antes de reasignar."
-            ),
+            )
         )
 
     result_carro_tecnico = await db.execute(
@@ -286,13 +263,12 @@ async def asignar_tecnico(
     )
     asig_anterior = result_carro_tecnico.scalars().first()
     if asig_anterior:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise bad_request(
+            (
                 f"El vehiculo '{activo_carro.nombre_activo}' ya tiene asignado "
                 f"al empleado id={asig_anterior.id_empleado}. Libera esa "
                 "asignacion antes de asignarlo a otro tecnico."
-            ),
+            )
         )
 
     db.add(EmpleadoCarro(id_empleado=id_empleado, id_carro=id_carro))
@@ -312,10 +288,7 @@ async def liberar_tecnico(
     )
     carro = result_carro.scalar_one_or_none()
     if not carro:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontro ningun vehiculo con id={id_carro}.",
-        )
+        raise not_found(f"No se encontro ningun vehiculo con id={id_carro}.")
 
     result_asig = await db.execute(
         select(EmpleadoCarro)
@@ -324,9 +297,8 @@ async def liberar_tecnico(
     )
     asignacion = result_asig.scalars().first()
     if not asignacion:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El vehiculo id={id_carro} no tiene ningun tecnico asignado.",
+        raise bad_request(
+            f"El vehiculo id={id_carro} no tiene ningun tecnico asignado."
         )
 
     nombre_empleado = (

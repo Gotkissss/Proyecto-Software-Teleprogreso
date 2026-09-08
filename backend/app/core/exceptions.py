@@ -26,6 +26,53 @@ from jose import ExpiredSignatureError, JWTError
 logger = logging.getLogger(__name__)
 
 
+ERROR_CODES = {
+    status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
+    status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
+    status.HTTP_403_FORBIDDEN: "FORBIDDEN",
+    status.HTTP_404_NOT_FOUND: "NOT_FOUND",
+    status.HTTP_409_CONFLICT: "CONFLICT",
+    status.HTTP_422_UNPROCESSABLE_ENTITY: "VALIDATION_ERROR",
+    status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
+}
+
+
+class APIException(HTTPException):
+    """Error HTTP de la aplicación con código estable y `detail` textual."""
+
+    def __init__(
+        self,
+        status_code: int,
+        detail: str,
+        error_code: str | None = None,
+    ) -> None:
+        if not isinstance(detail, str):
+            raise TypeError("detail debe ser una cadena de texto.")
+
+        super().__init__(status_code=status_code, detail=detail)
+        self.error_code = error_code or ERROR_CODES.get(status_code, "HTTP_ERROR")
+
+
+def bad_request(detail: str) -> APIException:
+    """Construye un error 400 con el formato estándar de la API."""
+    return APIException(status.HTTP_400_BAD_REQUEST, detail, "BAD_REQUEST")
+
+
+def forbidden(detail: str) -> APIException:
+    """Construye un error 403 con el formato estándar de la API."""
+    return APIException(status.HTTP_403_FORBIDDEN, detail, "FORBIDDEN")
+
+
+def not_found(detail: str) -> APIException:
+    """Construye un error 404 con el formato estándar de la API."""
+    return APIException(status.HTTP_404_NOT_FOUND, detail, "NOT_FOUND")
+
+
+def conflict(detail: str) -> APIException:
+    """Construye un error 409 con el formato estándar de la API."""
+    return APIException(status.HTTP_409_CONFLICT, detail, "CONFLICT")
+
+
 # Formato de respuesta de error estandarizado
 
 
@@ -65,16 +112,6 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     - 403: Sin permisos para este recurso
     - 404: Recurso no encontrado
     """
-    # Mapa de codigos de estado a codigo de error legible
-    error_codes = {
-        status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
-        status.HTTP_403_FORBIDDEN:    "FORBIDDEN",
-        status.HTTP_404_NOT_FOUND:    "NOT_FOUND",
-        status.HTTP_400_BAD_REQUEST:  "BAD_REQUEST",
-        status.HTTP_422_UNPROCESSABLE_ENTITY: "VALIDATION_ERROR",
-        status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
-    }
-
     # Mensajes por defecto para errores de autenticacion
     default_messages = {
         status.HTTP_401_UNAUTHORIZED: (
@@ -86,11 +123,16 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         ),
     }
 
-    error_code = error_codes.get(exc.status_code, "HTTP_ERROR")
+    error_code = getattr(exc, "error_code", None) or ERROR_CODES.get(
+        exc.status_code,
+        "HTTP_ERROR",
+    )
 
     # Usar mensaje personalizado del lanzador si existe,
     # o el mensaje por defecto si aplica
     detail = exc.detail or default_messages.get(exc.status_code, "Error en la solicitud.")
+    if not isinstance(detail, str):
+        detail = str(detail)
 
     logger.warning(
         "HTTPException %s en %s: %s",
