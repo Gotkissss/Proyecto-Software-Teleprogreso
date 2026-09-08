@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { urlArchivo } from '../../api/client'
 import Badge from '../ui/Badge'
 import { VehiculoMiniatura } from './MiniaturaActivo'
 import { IconEdit, IconTrash } from './InventarioIcons'
@@ -18,17 +20,17 @@ const ESTADO_VEHICULO_VARIANT = {
   fuera_servicio: 'danger',
 }
 
+const IconWrench = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+  </svg>
+)
+
 const IconCar = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.5L8 4h8l1.5 3H19a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M5 17a2 2 0 1 0 4 0m6 0a2 2 0 1 0 4 0"/>
   </svg>
 )
-
-function fotoUrl(path) {
-  if (!path) return null
-  if (path.startsWith('http')) return path
-  return `http://localhost:8000${path}`
-}
 
 export default function TablaVehiculos({
   datos = [],
@@ -45,8 +47,17 @@ export default function TablaVehiculos({
       label: 'Vehículo',
       render: v => (
         <div className={styles.activoCell}>
-          <VehiculoMiniatura marca={v.marca} fotoUrl={fotoUrl(v.foto_url)} color="#1e3a5f" />
-          <span className={styles.activoNombre}>{v.nombre_activo}</span>
+          <VehiculoMiniatura marca={v.marca} fotoUrl={urlArchivo(v.foto_url)} color="#1e3a5f" />
+          {/* El nombre lleva a la ficha del vehículo. Antes esa pantalla
+              existía pero no se enlazaba desde ningún sitio: solo se llegaba
+              escribiendo /supervisor/carros/{id} a mano. */}
+          <Link
+            to={`/supervisor/carros/${v.id_activo}`}
+            className={styles.activoNombreLink}
+            title="Ver herramientas de este vehículo"
+          >
+            {v.nombre_activo}
+          </Link>
         </div>
       ),
     },
@@ -92,6 +103,13 @@ export default function TablaVehiculos({
       align: 'right',
       render: v => (
         <div className={styles.actionBtns}>
+          <Link
+            to={`/supervisor/carros/${v.id_activo}`}
+            className="btn btn-secondary btn-sm"
+            title="Ver herramientas de este vehículo"
+          >
+            <IconWrench /> Herramientas
+          </Link>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAsignarTecnico(v)}>
             Asignar técnico
           </button>

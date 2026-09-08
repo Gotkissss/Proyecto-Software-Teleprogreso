@@ -14,16 +14,10 @@ import { useCallback, useState, useEffect } from 'react'
 import PageState from '../components/ui/PageState'
 import styles from './EquipoPage.module.css'
 
-const API_BASE = import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'
-    : 'https://backend-production-6d60.up.railway.app')
-
-const fotoUrl = (url) => {
-  if (!url) return null
-  return url.startsWith('http') ? url : API_BASE + url
-}
-
+// La resolución de rutas /static vive en api/client (urlArchivo): tenerla
+// duplicada aquí obligaba a acordarse de tocar dos sitios cada vez que cambia
+// la URL del backend.
+import { urlArchivo } from '../api/client'
 import { getMiEquipo } from '../api/equipoService'
 
 /* ─── ICONOS ─────────────────────────────────────────────────────────────── */
@@ -146,8 +140,8 @@ export default function EquipoPage() {
           <div className={styles.vehiculoCard}>
             {/* Imagen / ilustración grande */}
             <div className={styles.vehiculoImagen}>
-              {fotoUrl(vehiculo.foto_url)
-                ? <img src={fotoUrl(vehiculo.foto_url)} alt={vehiculo.nombre_activo} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>
+              {urlArchivo(vehiculo.foto_url)
+                ? <img src={urlArchivo(vehiculo.foto_url)} alt={vehiculo.nombre_activo} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>
                 : <VehiculoIlustracion color="#1e3a5f" />
               }
             </div>

@@ -1,3 +1,4 @@
+import { urlArchivo } from '../../api/client'
 import Badge from '../ui/Badge'
 import { HerramientaMiniatura } from './MiniaturaActivo'
 import { IconEdit, IconTrash } from './InventarioIcons'
@@ -24,12 +25,6 @@ const IconTool = () => (
   </svg>
 )
 
-function fotoUrl(path) {
-  if (!path) return null
-  if (path.startsWith('http')) return path
-  return `http://localhost:8000${path}`
-}
-
 export default function TablaHerramientas({
   datos = [],
   loading = false,
@@ -45,7 +40,7 @@ export default function TablaHerramientas({
       label: 'Herramienta',
       render: h => (
         <div className={styles.activoCell}>
-          <HerramientaMiniatura tipo={h.tipo_herramienta} foto={fotoUrl(h.foto_url)} />
+          <HerramientaMiniatura tipo={h.tipo_herramienta} foto={urlArchivo(h.foto_url)} />
           <span className={styles.activoNombre}>{h.nombre_activo}</span>
         </div>
       ),

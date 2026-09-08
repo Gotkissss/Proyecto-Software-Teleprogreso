@@ -9,6 +9,18 @@
   color: var(--color-text);
 }
 
+/* El nombre es el enlace a la ficha del vehículo. Se subraya solo al pasar
+   por encima para que la tabla no se llene de subrayados azules. */
+.activoNombreLink {
+  composes: activoNombre;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.activoNombreLink:hover {
+  color: var(--color-primary-deep);
+  text-decoration: underline;
+}
+
 .placaBadge {
   display: inline-block;
   font-family: var(--font-mono);

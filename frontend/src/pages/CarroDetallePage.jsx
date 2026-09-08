@@ -2,12 +2,9 @@
  * Vista de detalle de un vehículo mostrando sus herramientas asignadas.
  * Incluye botón para abrir el modal de asignación y opción de liberar.
  *
- * Ruta sugerida: /supervisor/carros/:id
- *
- *  Los endpoints de backend pues igual  están comentados
- *
- * Cuando se  termine el backend:
- *   2. Los comentarios en carroService.js indican qué descomentar en cada caso
+ * Ruta: /supervisor/carros/:id — se llega desde la pestaña "Vehículos" de
+ * Inventario, tanto por el nombre del vehículo como por el botón
+ * "Herramientas" de su fila.
  * ---------------------------------------------------------------------------
  */
 
@@ -129,6 +126,20 @@ function ModalConfirmarLiberar({ herramienta, onConfirmar, onCancelar, cargando 
 export default function CarroDetallePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  /**
+   * "Volver" con destino garantizado.
+   *
+   * `navigate(-1)` a secas dejaba el botón muerto cuando esta ficha era la
+   * primera pantalla de la sesión (enlace compartido, recarga, o la URL
+   * escrita a mano): no hay entrada anterior a la que ir y el clic no hacía
+   * nada. React Router lleva su propio índice en `history.state.idx`; si vale
+   * 0 no hay historial propio, así que se cae al inventario, que es de donde
+   * cuelga esta pantalla.
+   */
+  const volver = () => {
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1)
+    else navigate('/supervisor/inventario', { replace: true })
+  }
   const toast = useToast()
 
   const [carro,            setCarro]            = useState(null)
@@ -225,7 +236,7 @@ export default function CarroDetallePage() {
       <div className={styles.pageHeader}>
         <button
           className={`btn btn-secondary btn-sm ${styles.backBtn}`}
-          onClick={() => navigate(-1)}
+          onClick={volver}
         >
           <IconBack /> Volver
         </button>

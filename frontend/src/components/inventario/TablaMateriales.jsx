@@ -1,3 +1,4 @@
+import { urlArchivo } from '../../api/client'
 import Badge from '../ui/Badge'
 import { MaterialMiniatura } from './MiniaturaActivo'
 import { IconEdit, IconTrash } from './InventarioIcons'
@@ -19,19 +20,13 @@ export default function TablaMateriales({
   onEditar,
   onEliminar,
 }) {
-  function fotoUrl(path) {
-    if (!path) return null
-    if (path.startsWith('http')) return path
-    return `http://localhost:8000${path}`
-  }
-
   const columns = [
     {
       key: 'nombre_activo',
       label: 'Material',
       render: m => (
         <div className={styles.activoCell}>
-          <MaterialMiniatura tipo={m.tipo_material} foto={fotoUrl(m.foto_url)} />
+          <MaterialMiniatura tipo={m.tipo_material} foto={urlArchivo(m.foto_url)} />
           <span className={styles.activoNombre}>{m.nombre_activo}</span>
         </div>
       ),
