@@ -200,11 +200,12 @@ def test_los_dos_caminos_de_reasignacion_usan_la_misma_regla():
     """
     import inspect
 
-    from app.routers import tareas
+    from app.services import tareas
 
-    fuente_patch = inspect.getsource(tareas.update_tarea)
+    fuente_patch = inspect.getsource(tareas.editar_tarea)
     fuente_reasignar = inspect.getsource(tareas.reasignar_tarea)
 
-    # Ambos consultan los estados cerrados antes de tocar la asignación.
+    # La regla vive en el servicio y ambos caminos la consultan antes de tocar
+    # la asignación; el router solo conserva el contrato HTTP y los permisos.
     assert "ESTADOS_TAREA_CERRADOS" in fuente_patch
-    assert "completado" in fuente_reasignar or "ESTADOS_TAREA_CERRADOS" in fuente_reasignar
+    assert "ESTADOS_TAREA_CERRADOS" in fuente_reasignar
