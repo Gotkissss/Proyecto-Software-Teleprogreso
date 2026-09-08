@@ -45,6 +45,7 @@ def mock_empleado(rol="tecnico", estado="activo"):
     emp.correo = "test@teleprogreso.com"
     emp.rol = rol
     emp.estado = estado
+    emp.version_token = 0
     return emp
 
 

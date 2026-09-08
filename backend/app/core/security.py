@@ -53,12 +53,14 @@ def create_access_token(
     subject: int | str,
     rol: str,
     extra: dict[str, Any] | None = None,
+    version_token: int = 0,
 ) -> str:
     """
     Genera un JWT con los campos:
       - sub  : id del empleado (como str)
       - rol  : rol del empleado
       - jti  : identificador único del token, necesario para revocarlo
+      - version_token: versión de sesión del empleado
       - exp  : fecha de expiración
       - iat  : fecha de emisión
     """
@@ -76,6 +78,7 @@ def create_access_token(
     }
     if extra:
         payload.update(extra)
+    payload["version_token"] = version_token
 
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

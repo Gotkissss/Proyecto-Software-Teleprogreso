@@ -65,6 +65,7 @@ def test_token_contiene_sub_y_rol():
     payload = decode_access_token(token)
     assert payload["sub"] == "42"
     assert payload["rol"] == "supervisor"
+    assert payload["version_token"] == 0
     assert "exp" in payload
     assert "iat" in payload
 
@@ -74,6 +75,16 @@ def test_token_con_campos_extra():
     token = create_access_token(subject=1, rol="admin", extra={"turno": "matutino"})
     payload = decode_access_token(token)
     assert payload["turno"] == "matutino"
+
+
+def test_token_conserva_la_version_de_sesion():
+    token = create_access_token(
+        subject=1,
+        rol="tecnico",
+        version_token=4,
+    )
+
+    assert decode_access_token(token)["version_token"] == 4
 
 
 def test_decode_token_invalido_lanza_error():

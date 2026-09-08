@@ -2,8 +2,10 @@
 Router de autenticacion.
 
 Rutas:
-  POST /auth/login   -> valida credenciales y devuelve JWT
-  POST /auth/logout  -> revoca el token activo del usuario
+  POST /auth/login              -> valida credenciales y devuelve JWT
+  POST /auth/logout             -> revoca el token activo del usuario
+  GET  /auth/perfil             -> devuelve los datos del usuario autenticado
+  POST /auth/cambiar-contrasena -> cambia la clave e invalida JWT anteriores
 """
 import logging
 from typing import Annotated
@@ -15,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado
+from app.core.exceptions import bad_request
 from app.core.rate_limit import (
     intentos_login,
     intentos_login_por_correo,
@@ -25,13 +28,19 @@ from app.core.security import (
     consumir_tiempo_de_hash,
     create_access_token,
     decode_access_token,
+    hash_password,
     purgar_tokens_expirados,
     revoke_token,
     verify_password,
 )
 from app.db.session import get_db
 from app.models.empleado import Empleado
-from app.schemas.auth import LoginRequest, TokenResponse
+from app.schemas.auth import (
+    CambiarContrasenaRequest,
+    LoginRequest,
+    PerfilResponse,
+    TokenResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +145,7 @@ async def login(
     token = create_access_token(
         subject=empleado.id_empleado,
         rol=empleado.rol,
+        version_token=empleado.version_token,
     )
 
     # Login correcto: se borra el historial de fallos de esta combinación para
@@ -198,4 +208,61 @@ async def me(
         "correo": empleado.correo,
         "rol": empleado.rol,
         "estado": empleado.estado,
+    }
+
+
+# ----------- GET /auth/perfil --------------------------------------------
+@router.get(
+    "/perfil",
+    response_model=PerfilResponse,
+    summary="Consultar el perfil del usuario autenticado",
+    status_code=status.HTTP_200_OK,
+)
+async def perfil(
+    empleado: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """Devuelve los datos personales y laborales del usuario autenticado."""
+    return empleado
+
+
+# ----------- POST /auth/cambiar-contrasena -------------------------------
+@router.post(
+    "/cambiar-contrasena",
+    summary="Cambiar la contraseña del usuario autenticado",
+    status_code=status.HTTP_200_OK,
+)
+async def cambiar_contrasena(
+    body: CambiarContrasenaRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    empleado: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Verifica la contraseña actual, guarda la nueva con bcrypt e incrementa
+    la versión de sesión para invalidar todos los JWT emitidos anteriormente.
+    """
+    contrasena_valida = await run_in_threadpool(
+        verify_password,
+        body.contrasena_actual,
+        empleado.hash_contrasena,
+    )
+    if not contrasena_valida:
+        raise bad_request("La contraseña actual es incorrecta.")
+
+    if body.nueva_contrasena == body.contrasena_actual:
+        raise bad_request(
+            "La contraseña nueva debe ser diferente de la contraseña actual."
+        )
+
+    empleado.hash_contrasena = await run_in_threadpool(
+        hash_password,
+        body.nueva_contrasena,
+    )
+    empleado.version_token += 1
+    await db.flush()
+
+    return {
+        "detail": (
+            "Contraseña actualizada correctamente. "
+            "Inicia sesión nuevamente."
+        )
     }

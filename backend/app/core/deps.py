@@ -73,6 +73,16 @@ async def get_current_empleado(
     if empleado is None:
         raise credentials_exception
 
+    # Los JWT anteriores a esta funcionalidad no incluyen version_token y se
+    # consideran versión 0. Al cambiar la contraseña, el empleado incrementa
+    # su versión y todos los tokens emitidos antes dejan de ser válidos.
+    version_token = payload.get("version_token", 0)
+    if (
+        not isinstance(version_token, int)
+        or version_token != empleado.version_token
+    ):
+        raise credentials_exception
+
     if empleado.estado != "activo":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -12,6 +12,9 @@ class Empleado(Base):
     rol:                Mapped[str]      = mapped_column(String(30), nullable=False)
     estado:             Mapped[str]      = mapped_column(String(20), nullable=False, default="activo")
     hash_contrasena:    Mapped[str]      = mapped_column(String(255), nullable=False)
+    version_token:      Mapped[int]      = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     correo:             Mapped[str]      = mapped_column(String(100), nullable=False, unique=True)
     fecha_contratacion: Mapped[date]     = mapped_column(Date, nullable=False)
     fecha_registro:     Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())

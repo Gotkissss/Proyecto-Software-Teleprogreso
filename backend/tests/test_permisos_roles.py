@@ -36,6 +36,7 @@ def _empleado(rol: str, id_empleado: int = 1):
     emp.correo = f"{rol}@teleprogreso.com"
     emp.rol = rol
     emp.estado = "activo"
+    emp.version_token = 0
     return emp
 
 
