@@ -68,7 +68,14 @@ export default function EmpleadosPage() {
     setError(null)
     try {
       const { data } = await apiClient.get('/empleados')
-      setEmpleados(Array.isArray(data) ? data : [])
+      // GET /empleados responde { total, empleados: [...] }, no un array
+      // suelto (EmpleadoListResponse en schemas/empleado.py). Sin leer la
+      // clave `empleados` la lista quedaba vacía SIEMPRE, y como no hay
+      // error de red ni 4xx, la pantalla mostraba el estado "sin resultados"
+      // en lugar de un fallo: parecía que no había personal registrado.
+      // Se admiten las dos formas por si el endpoint alguna vez devuelve la
+      // lista pelada.
+      setEmpleados(Array.isArray(data) ? data : (data?.empleados ?? []))
     } catch (err) {
       setError(err?.response?.data?.detail || 'No se pudo cargar la lista de empleados.')
     } finally {
