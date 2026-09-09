@@ -64,12 +64,28 @@ const IconChevronDown = () => (
   </svg>
 )
 
+const IconCar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.5L8 4h8l1.5 3H19a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M5 17a2 2 0 1 0 4 0m6 0a2 2 0 1 0 4 0"/>
+  </svg>
+)
+
 const IconChevronsUpDown = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <polyline points="7 15 12 20 17 15"/>
     <polyline points="7 9 12 4 17 9"/>
   </svg>
 )
+
+/** "2026-09-08T07:45:00" → "08 sept, 07:45". Sin marca, "Nunca". */
+function formatearUltimoAcceso(valor) {
+  if (!valor) return null
+  const fecha = new Date(valor)
+  if (Number.isNaN(fecha.getTime())) return null
+  const dia = fecha.toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })
+  const hora = fecha.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${dia}, ${hora}`
+}
 
 export default function TablaEmpleados({
   empleados = [],
@@ -163,7 +179,7 @@ export default function TablaEmpleados({
                       Empleado {getSortIcon('nombre')}
                     </div>
                   </th>
-                  <th className={styles.th} onClick={() => onSort('correo')}>
+                  <th className={`${styles.th} ${styles.colCorreo}`} onClick={() => onSort('correo')}>
                     <div className={styles.thContent}>
                       Correo electrónico {getSortIcon('correo')}
                     </div>
@@ -178,7 +194,21 @@ export default function TablaEmpleados({
                       Estado {getSortIcon('estado')}
                     </div>
                   </th>
-                  <th className={styles.th} onClick={() => onSort('fecha_contratacion')}>
+                  {/* Estas dos columnas solo aparecen cuando la pantalla da
+                      de sí (ver .colAmplia en el CSS): son contexto útil, no
+                      imprescindible, y en pantallas estrechas solo obligarían
+                      a hacer scroll horizontal. */}
+                  <th className={`${styles.th} ${styles.colAmplia}`} onClick={() => onSort('placa_vehiculo')}>
+                    <div className={styles.thContent}>
+                      Vehículo {getSortIcon('placa_vehiculo')}
+                    </div>
+                  </th>
+                  <th className={`${styles.th} ${styles.colAmplia}`} onClick={() => onSort('ultimo_acceso')}>
+                    <div className={styles.thContent}>
+                      Último acceso {getSortIcon('ultimo_acceso')}
+                    </div>
+                  </th>
+                  <th className={`${styles.th} ${styles.colMedia}`} onClick={() => onSort('fecha_contratacion')}>
                     <div className={styles.thContent}>
                       Contratación {getSortIcon('fecha_contratacion')}
                     </div>
@@ -194,7 +224,10 @@ export default function TablaEmpleados({
                     <tr key={emp.id_empleado} className={styles.tr}>
                       <td className={styles.td}>
                         <div className={styles.userCell}>
-                          <div className={styles.userAvatar}>
+                          {/* El color del avatar sigue al rol, igual que su
+                              etiqueta: da color a la tabla y de paso deja
+                              reconocer de un vistazo quién es qué. */}
+                          <div className={`${styles.userAvatar} ${styles[`avatar_${emp.rol}`] ?? ''}`}>
                             {inicial}
                           </div>
                           <div className={styles.userInfo}>
@@ -204,8 +237,10 @@ export default function TablaEmpleados({
                         </div>
                       </td>
 
-                      <td className={styles.td}>
-                        <span className={styles.correoText}>{emp.correo}</span>
+                      <td className={`${styles.td} ${styles.colCorreo}`}>
+                        <span className={styles.correoText} title={emp.correo}>
+                          {emp.correo}
+                        </span>
                       </td>
 
                       <td className={styles.td}>
@@ -222,7 +257,27 @@ export default function TablaEmpleados({
                         />
                       </td>
 
-                      <td className={styles.td}>
+                      <td className={`${styles.td} ${styles.colAmplia}`}>
+                        {emp.placa_vehiculo ? (
+                          <span className={styles.placaChip}>
+                            <IconCar /> {emp.placa_vehiculo}
+                          </span>
+                        ) : (
+                          <span className={styles.sinDato}>—</span>
+                        )}
+                      </td>
+
+                      <td className={`${styles.td} ${styles.colAmplia}`}>
+                        {formatearUltimoAcceso(emp.ultimo_acceso) ? (
+                          <span className={styles.fechaText}>
+                            {formatearUltimoAcceso(emp.ultimo_acceso)}
+                          </span>
+                        ) : (
+                          <span className={styles.nuncaEntro}>Nunca</span>
+                        )}
+                      </td>
+
+                      <td className={`${styles.td} ${styles.colMedia}`}>
                         <span className={styles.fechaText}>
                           {emp.fecha_contratacion
                             ? new Date(emp.fecha_contratacion + 'T12:00:00').toLocaleDateString('es-GT', {
@@ -237,20 +292,27 @@ export default function TablaEmpleados({
                           <div className={styles.actionBtns}>
                             <button
                               type="button"
-                              className="btn btn-secondary btn-sm"
+                              className="btn btn-soft-primary btn-sm"
                               onClick={() => onEditar(emp)}
                               title="Editar datos del empleado"
+                              aria-label={`Editar a ${emp.nombre} ${emp.apellido}`}
                             >
-                              <IconEdit /> Editar
+                              <IconEdit />
+                              <span className={styles.btnTexto}>Editar</span>
                             </button>
                             <button
                               type="button"
-                              className={`btn btn-ghost btn-sm ${esActivo ? styles.btnToggleOff : styles.btnToggleOn}`}
+                              className={`btn btn-sm ${esActivo ? "btn-soft-danger" : "btn-soft-success"}`}
                               onClick={() => onToggle(emp)}
                               title={esActivo ? 'Desactivar acceso' : 'Activar acceso'}
+                              aria-label={
+                                `${esActivo ? 'Desactivar' : 'Activar'} a ${emp.nombre} ${emp.apellido}`
+                              }
                             >
                               {esActivo ? <IconToggleOff /> : <IconToggleOn />}
-                              {esActivo ? 'Desactivar' : 'Activar'}
+                              <span className={styles.btnTexto}>
+                                {esActivo ? 'Desactivar' : 'Activar'}
+                              </span>
                             </button>
                           </div>
                         </td>

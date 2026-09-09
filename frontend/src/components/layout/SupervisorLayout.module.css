@@ -137,12 +137,19 @@
 
 /* El avatar y su menú desplegable viven ahora en ./shared/UserMenu */
 
+/* Contenedor de todas las pantallas del panel.
+   Estaba topado en 1280px fijos: en un monitor de 1080p o más quedaban dos
+   franjas vacías a los lados mientras las tablas se apretaban dentro. Ahora el
+   ancho lo marca `--content-max` (ver index.css) y el margen lateral crece con
+   la pantalla en lugar de ser un hueco muerto. Las pantallas que necesitan una
+   medida corta (formularios, fichas) se topan ellas mismas con
+   `--content-max-form`. */
 .main {
   flex: 1;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--space-8) var(--space-6);
+  padding: var(--space-8) clamp(var(--space-6), 3vw, var(--space-12));
 }
 
 @media (max-width: 1024px) {

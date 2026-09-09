@@ -1,4 +1,8 @@
+/* Referencia de las @container de las tablas que viven dentro (ver
+   TablaVehiculos): lo que decide si caben las etiquetas de los botones es el
+   ancho real de la tarjeta, no el de la ventana. */
 .tableCard {
+  container-type: inline-size;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);

@@ -150,6 +150,53 @@
   color: var(--color-text-secondary);
 }
 
+/* Columnas de contexto (vehículo, último acceso): aparecen solo si la tabla
+   tiene sitio para ellas sin apretar el resto.
+
+   La condición mira el ancho de la propia tarjeta (`@container`) y no el de la
+   ventana. Del ancho de la ventana hay que descontar la barra lateral y un
+   margen lateral que ahora crece con la pantalla (clamp en SupervisorLayout),
+   así que un umbral en píxeles de ventana sería un número adivinado que se
+   rompe en cuanto cambie cualquiera de los dos. Si el navegador no soporta
+   container queries, las columnas no salen y la tabla se ve como antes. */
+.tableCard { container-type: inline-size; }
+
+.colAmplia { display: none; }
+
+@container (min-width: 1400px) {
+  .colAmplia { display: table-cell; }
+}
+
+/* Segundo nivel: la fecha de contratación es la menos consultada de las
+   columnas fijas, así que es la primera en ceder el sitio cuando la ventana
+   se estrecha. Sin esto, en un portátil de 1280 la columna de acciones se
+   quedaba a medias fuera del borde. */
+.colMedia { display: none; }
+
+@container (min-width: 1000px) {
+  .colMedia { display: table-cell; }
+}
+
+/* Tercer nivel, ya en tablet: se va el correo. Es la columna más ancha con
+   diferencia y la que menos falta hace ahí, porque el buscador de arriba
+   también busca por correo y la fila ya identifica a la persona con nombre y
+   teléfono. Lo que no puede perderse de vista son las acciones. */
+.colCorreo { display: none; }
+
+@container (min-width: 820px) {
+  .colCorreo { display: table-cell; }
+}
+
+/* Las etiquetas de los botones de acción se retiran cuando la tabla va justa:
+   con ellas puestas la columna "Acciones" se salía del borde y había que
+   arrastrar la tabla para llegar a "Desactivar". Los iconos se quedan, y el
+   nombre completo sigue disponible en el title y en aria-label. */
+.btnTexto { display: none; }
+
+@container (min-width: 1100px) {
+  .btnTexto { display: inline; }
+}
+
 .tr {
   border-bottom: 1px solid var(--color-border);
   transition: background var(--transition);
@@ -209,14 +256,63 @@
 .userName {
   font-weight: 600;
   color: var(--color-text);
+  /* El nombre no se parte en dos renglones: con la fila a 36px de avatar, un
+     nombre partido descuadra el alto de toda la tabla. Si no cabe, manda el
+     scroll horizontal del contenedor. */
+  white-space: nowrap;
 }
+
+/* Un color de avatar por rol, en la misma clave que usa su etiqueta Badge
+   (admin rojo, supervisor cian, gerente ámbar, técnico azul de marca). */
+.avatar_admin      { background: var(--gradient-accent); }
+.avatar_supervisor { background: linear-gradient(135deg, #22b8cf 0%, #0891b2 100%); }
+.avatar_gerente    { background: linear-gradient(135deg, #f0a92e 0%, #b45309 100%); }
+.avatar_tecnico    { background: var(--gradient-primary); }
 
 .userPhone {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
 
+/* Placa del vehículo asignado: se lee como matrícula, en monoespaciada. */
+.placaChip {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-primary-deep);
+}
+
+.placaChip svg { width: 14px; height: 14px; }
+
+.sinDato { color: var(--color-text-muted); }
+
+/* "Nunca entró" no es un dato neutro: es la señal de una cuenta creada y sin
+   estrenar, justo lo que se mira antes de desactivarla. */
+.nuncaEntro {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-warning-dark);
+}
+
+/* Un correo es una sola palabra larguísima: el navegador no la parte, así que
+   fijaba un ancho mínimo para toda la tabla y empujaba la columna de acciones
+   fuera de la pantalla. Se recorta con puntos suspensivos y el valor completo
+   queda en el title. */
 .correoText {
+  display: inline-block;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
   color: var(--color-text-secondary);
   font-family: var(--font-sans);
 }
@@ -224,24 +320,6 @@
 .fechaText {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-}
-
-.btnToggleOff {
-  color: var(--color-danger);
-}
-
-.btnToggleOff:hover:not(:disabled) {
-  background: var(--color-danger-bg);
-  color: var(--color-danger-dark);
-}
-
-.btnToggleOn {
-  color: var(--color-success);
-}
-
-.btnToggleOn:hover:not(:disabled) {
-  background: var(--color-success-bg);
-  color: var(--color-success-dark);
 }
 
 .tableFooter {

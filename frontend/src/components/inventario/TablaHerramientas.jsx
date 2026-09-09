@@ -78,13 +78,18 @@ export default function TablaHerramientas({
       align: 'right',
       render: h => (
         <div className={styles.actionBtns}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAsignarCarro(h)}>
+          <button
+            type="button"
+            className="btn btn-soft-primary btn-sm"
+            onClick={() => onAsignarCarro(h)}
+            title="Asignar esta herramienta a un vehículo"
+          >
             Asignar a vehículo
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(h)} title="Editar herramienta">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(h)} title="Editar herramienta" aria-label={`Editar ${h.nombre_activo}`}>
             <IconEdit />
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEliminar(h)} title="Eliminar herramienta">
+          <button type="button" className="btn btn-soft-danger btn-sm" onClick={() => onEliminar(h)} title="Eliminar herramienta" aria-label={`Eliminar ${h.nombre_activo}`}>
             <IconTrash />
           </button>
         </div>

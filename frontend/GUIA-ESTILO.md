@@ -58,6 +58,12 @@ Clases globales definidas en `index.css`; ninguna pantalla inventa botones:
   `btn-secondary` (alternativas), `btn-danger` (destructivas),
   `btn-success` (confirmación positiva, p.e. "Finalizar tarea"),
   `btn-ghost` (terciarias: cancelar, cerrar).
+- Variantes suaves: `btn-soft-primary`, `btn-soft-danger`, `btn-soft-success`.
+  Mismo color pero tintado en vez de relleno, para las acciones que se repiten
+  fila a fila en una tabla (editar / eliminar / activar). Media docena de
+  botones sólidos en una tabla la vuelven ilegible; en gris, en cambio, no se
+  distingue la que edita de la que borra. Van **solas**, no encima de
+  `btn-secondary`: `class="btn btn-soft-danger btn-sm"`.
 - Tamaños: por defecto 40px de alto; `btn-sm` (32px) para tablas,
   `btn-lg` (48px) para la acción principal en móvil.
 - Desde un CSS Module se heredan con `composes: btn btn-primary from global;`
@@ -74,6 +80,20 @@ Usarlos siempre en lugar de versiones inline por página:
 - **PageState** — cargando/error/vacío de una pantalla o sección (ver sus
   advertencias de uso en el propio archivo).
 - **EmptyState** — lo usa PageState; directo solo para vacíos con acción propia.
+
+## Ancho del contenido
+
+Dos tokens, según lo que muestre la pantalla:
+
+| Token | Valor | Para |
+| --- | --- | --- |
+| `--content-max` | 1760px | Tablas, tableros y listas de tarjetas. Lo aplica `SupervisorLayout` a todo el panel. |
+| `--content-max-form` | 900px | Formularios y fichas de lectura, que **no** deben estirarse: un campo de 1700px es incómodo y una línea así de larga se pierde al saltar de renglón. Lo pone cada página. |
+
+Para decidir si una tabla enseña una columna o pliega la etiqueta de un botón,
+usar `@container` sobre la tarjeta y no `@media` sobre la ventana: entre la
+barra lateral y el margen lateral (que ahora escala con `clamp`) el ancho real
+disponible no es una resta fija del ancho de ventana.
 
 ## Layouts
 

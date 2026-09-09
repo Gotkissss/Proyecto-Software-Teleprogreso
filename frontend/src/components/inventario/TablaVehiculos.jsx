@@ -20,6 +20,13 @@ const ESTADO_VEHICULO_VARIANT = {
   fuera_servicio: 'danger',
 }
 
+const IconUser = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+)
+
 const IconWrench = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
@@ -108,15 +115,22 @@ export default function TablaVehiculos({
             className="btn btn-secondary btn-sm"
             title="Ver herramientas de este vehículo"
           >
-            <IconWrench /> Herramientas
+            <IconWrench />
+            <span className={styles.btnTexto}>Herramientas</span>
           </Link>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAsignarTecnico(v)}>
-            Asignar técnico
+          <button
+            type="button"
+            className="btn btn-soft-primary btn-sm"
+            onClick={() => onAsignarTecnico(v)}
+            title="Asignar técnico a este vehículo"
+          >
+            <IconUser />
+            <span className={styles.btnTexto}>Asignar técnico</span>
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(v)} title="Editar vehículo">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(v)} title="Editar vehículo" aria-label={`Editar ${v.nombre_activo}`}>
             <IconEdit />
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEliminar(v)} title="Eliminar vehículo">
+          <button type="button" className="btn btn-soft-danger btn-sm" onClick={() => onEliminar(v)} title="Eliminar vehículo" aria-label={`Eliminar ${v.nombre_activo}`}>
             <IconTrash />
           </button>
         </div>

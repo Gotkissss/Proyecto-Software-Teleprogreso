@@ -86,10 +86,10 @@ export default function TablaMateriales({
       align: 'right',
       render: m => (
         <div className={styles.actionBtns}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(m)} title="Editar material">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(m)} title="Editar material" aria-label={`Editar ${m.nombre_activo}`}>
             <IconEdit />
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEliminar(m)} title="Eliminar material">
+          <button type="button" className="btn btn-soft-danger btn-sm" onClick={() => onEliminar(m)} title="Eliminar material" aria-label={`Eliminar ${m.nombre_activo}`}>
             <IconTrash />
           </button>
         </div>

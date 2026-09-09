@@ -6,7 +6,8 @@
 
 .page {
   padding: 1.25rem 1rem 5.5rem;
-  max-width: 900px;
+  /* Ficha/formulario: medida corta a propósito (ver index.css). */
+  max-width: var(--content-max-form);
   margin: 0 auto;
 }
 

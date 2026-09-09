@@ -218,6 +218,11 @@ export default function DashboardPage() {
         />
       </section>
 
+      {/* Los dos bloques van uno al lado del otro cuando la pantalla da de sí.
+          Apilados dejaban media pantalla en blanco a la derecha y obligaban a
+          bajar para ver las tareas del día. */}
+      <div className={styles.panelesGrid}>
+
       {/* ── Técnicos ── */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Técnicos hoy</h2>
@@ -315,6 +320,8 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
+
+      </div>
 
       {/* Ficha de solo lectura de la tarea. Desde el panel no se reasigna:
           para eso está su pantalla, a la que se salta desde aquí. */}

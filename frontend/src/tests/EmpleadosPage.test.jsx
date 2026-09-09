@@ -103,6 +103,21 @@ describe('EmpleadosPage', () => {
     expect(screen.getByRole('button', { name: /Colaboradores \(2\)/ })).toBeInTheDocument()
   })
 
+  it('aprovecha el ancho con datos que ya venían en la respuesta', async () => {
+    // Vehículo asignado y último acceso llegan en GET /empleados desde hace
+    // tiempo y no se pintaban en ningún sitio. Son las dos columnas que
+    // rellenan el espacio que antes quedaba en blanco a los lados, así que si
+    // se cae el cableado la tabla vuelve a verse medio vacía sin avisar.
+    // (Las @container que las ocultan en pantallas estrechas no aplican en
+    // jsdom, que no calcula layout.)
+    getMock.mockResolvedValue({ data: RESPUESTA_LISTA })
+    montar()
+
+    expect(await screen.findByText('P-472BCR')).toBeInTheDocument()
+    // Marta no ha entrado nunca: eso se dice, no se deja en blanco.
+    expect(screen.getByText('Nunca')).toBeInTheDocument()
+  })
+
   it('también acepta un array pelado, por si el endpoint cambia', async () => {
     getMock.mockResolvedValue({ data: RESPUESTA_LISTA.empleados })
     montar()

@@ -62,7 +62,8 @@
   border-radius: var(--radius-xl);
   padding: var(--space-8);
   box-shadow: var(--shadow-xs);
-  max-width: 880px;
+  /* Ficha/formulario: medida corta a propósito (ver index.css). */
+  max-width: var(--content-max-form);
   margin: 0 auto;
 }
 

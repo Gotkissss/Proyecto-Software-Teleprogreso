@@ -111,6 +111,22 @@
   /* Ancho de la barra lateral del panel de supervisor. */
   --sidebar-width:     248px;
 
+  /* ── Ancho del contenido ──────────────────────────────────────────────────
+     Dos medidas, según lo que muestre la pantalla:
+
+     · `--content-max` para lo que se lee de un vistazo y agradece el ancho:
+       tablas, tableros, listas de tarjetas. El panel estaba topado en 1280px,
+       así que en un monitor normal quedaban dos franjas muertas a los lados y
+       las tablas se apretaban sin necesidad.
+     · `--content-max-form` para formularios y fichas de lectura. Estas NO
+       deben estirarse: un campo de texto de 1700px es incómodo de rellenar y
+       una línea así de larga se pierde al saltar de renglón.
+
+     El tope alto no es "sin límite": pasados los ~1800px la vista deja de
+     ganar y solo obliga a mover la cabeza de un extremo al otro. */
+  --content-max:       1760px;
+  --content-max-form:   900px;
+
   /* ── Escala tipográfica (tamaños de texto) ────────── */
   --text-xs:   0.6875rem;
   --text-sm:   0.75rem;
@@ -290,6 +306,44 @@ a {
 .btn-ghost:hover:not(:disabled) {
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+/* Variantes suaves: el color de la acción sobre un fondo tintado, en lugar de
+   relleno sólido. Son para las acciones que se repiten en cada fila de una
+   tabla, donde media docena de botones sólidos convierten la pantalla en un
+   semáforo y ya no se distingue lo importante. Aun así llevan color en reposo
+   —no solo al pasar el ratón—, que es lo que permite distinguir de un vistazo
+   la acción que edita de la que corta el acceso.
+
+   Se usan solas, no encima de .btn-secondary:  <button class="btn btn-soft-danger btn-sm">  */
+.btn-soft-primary {
+  background: var(--color-primary-50);
+  color: var(--color-primary-deep);
+  border-color: var(--color-primary-light);
+}
+.btn-soft-primary:hover:not(:disabled) {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
+.btn-soft-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-dark);
+  border-color: var(--color-danger-light);
+}
+.btn-soft-danger:hover:not(:disabled) {
+  background: var(--color-danger-light);
+  border-color: var(--color-danger);
+}
+
+.btn-soft-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
+  border-color: var(--color-success-light);
+}
+.btn-soft-success:hover:not(:disabled) {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
 }
 
 /* Tamaños alternativos */

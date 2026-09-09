@@ -11,7 +11,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  max-width: 900px;
+  /* Ficha/formulario: medida corta a propósito (ver index.css). */
+  max-width: var(--content-max-form);
 }
 
 /* ── Header ── */
