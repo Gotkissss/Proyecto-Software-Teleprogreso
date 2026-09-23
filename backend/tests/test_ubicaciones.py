@@ -28,6 +28,7 @@ from app.core.tiempo import ahora as ahora_local
 from app.db.session import get_db
 from app.routers import ubicaciones
 from app.services.asistencia import es_del_turno_en_curso
+from app.core.reglas import DURACION_MAXIMA_TURNO_HORAS
 
 # Coordenadas de la Ciudad de Guatemala: latitud positiva (hemisferio norte) y
 # longitud negativa (al oeste de Greenwich). Cruzarlas se nota a simple vista.
@@ -210,6 +211,7 @@ HOY = date(2026, 9, 23)
 AYER = HOY - timedelta(days=1)
 MADRUGADA = datetime(2026, 9, 23, 2, 0)   # dentro de un turno de 22:00 a 06:00
 MANANA = datetime(2026, 9, 23, 9, 0)
+TOPE = timedelta(hours=DURACION_MAXIMA_TURNO_HORAS)
 
 
 def test_la_jornada_de_hoy_es_del_turno_en_curso():
@@ -231,11 +233,35 @@ def test_una_jornada_diurna_de_ayer_sin_salida_ya_no_esta_en_curso():
 
 
 def test_el_turno_de_ayer_sigue_en_curso_hasta_el_tope_de_duracion():
-    # Entrada 22:00 de ayer: con el tope de 16 h sigue en curso hasta las 14:00.
+    # Entrada 22:00 de ayer: sigue en curso hasta 22:00 + el tope, ni un
+    # minuto más.
     nocturna = _jornada(fecha=AYER, hora_entrada=time(22, 0))
+    limite = datetime(2026, 9, 22, 22, 0) + TOPE
 
-    assert es_del_turno_en_curso(nocturna, datetime(2026, 9, 23, 14, 0))
-    assert not es_del_turno_en_curso(nocturna, datetime(2026, 9, 23, 14, 1))
+    assert es_del_turno_en_curso(nocturna, limite)
+    assert not es_del_turno_en_curso(nocturna, limite + timedelta(minutes=1))
+
+
+@pytest.mark.parametrize(
+    "duracion, en_curso",
+    [
+        (TOPE - timedelta(minutes=1), True),
+        (TOPE, True),                                     # el corte es inclusivo
+        (TOPE + timedelta(seconds=1), False),
+        (TOPE + timedelta(minutes=1), False),
+    ],
+)
+def test_borde_exacto_del_tope_de_duracion(duracion, en_curso):
+    """
+    Fija el límite exacto: la regla compara `transcurrido <= tope`, así que el
+    tope en punto todavía cuenta como turno en curso y un segundo después ya
+    no. Se calcula desde la constante para que ajustar el número en
+    reglas.py no obligue a reescribir la prueba.
+    """
+    entrada = datetime(2026, 9, 22, 22, 0)
+    nocturna = _jornada(fecha=entrada.date(), hora_entrada=entrada.time())
+
+    assert es_del_turno_en_curso(nocturna, entrada + duracion) is en_curso
 
 
 def test_una_salida_olvidada_no_pasa_por_turno_nocturno():
