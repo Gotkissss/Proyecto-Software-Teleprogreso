@@ -37,6 +37,7 @@ from app.routers.tareas     import router as tareas_router
 from app.routers.incidencias import router as incidencias_router
 from app.routers.asistencia import router as asistencia_router
 from app.routers.descanso   import router as descanso_router
+from app.routers.ubicaciones import router as ubicaciones_router
 from app.routers.empleados  import router as empleados_router
 from app.routers.metricas   import router as metricas_router
 from app.routers.inventario import router as inventario_router
@@ -128,6 +129,7 @@ app.include_router(tareas_router)      # GET/POST/PATCH /tareas/*
 app.include_router(incidencias_router) # POST/GET/DELETE /tareas/{id}/incidencias/*
 app.include_router(asistencia_router)  # POST /asistencia/entrada | salida | GET /hoy | /historial
 app.include_router(descanso_router)    # POST /descanso/iniciar | finalizar | GET /activo
+app.include_router(ubicaciones_router) # POST /ubicaciones (posición del técnico en jornada)
 app.include_router(empleados_router)   # GET/POST/PATCH /empleados/*
 app.include_router(metricas_router)    # GET /metricas/supervisor | /empleados/tecnicos/disponibles
 # Los tres routers comparten el prefijo /activos. Antes lo único que evitaba
