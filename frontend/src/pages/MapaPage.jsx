@@ -17,6 +17,7 @@ import { useCallback, useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getServiciosMapa } from '../api/rutaService'
 import { getEstadoPausas } from '../api/asistenciaService'
+import { useUbicacion } from '../context/UbicacionContext'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTarea from '../components/mapa/MarcadorTarea'
 import MarcadorMiUbicacion from '../components/mapa/MarcadorMiUbicacion'
@@ -25,7 +26,6 @@ import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSelec
 import { ESTADO_COLOR, PRIORIDAD_COLOR } from '../components/mapa/estadoColor'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
-import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
 import styles from './MapaPage.module.css'
 
 const IconMapa = () => (
@@ -83,11 +83,7 @@ export default function MapaPage() {
   const servicioSeleccionadoId = servicioSeleccionadoIdRef.current
   const avisoSinUbicacionMostrado = useRef(false)
 
-  // SCRUM-163: ubicación en vivo del técnico (Geolocation API), con manejo
-  // propio de permiso denegado / sin soporte / sin lectura disponible.
-  // SCRUM-219: con la jornada abierta, además la reporta al backend.
-  const { posicion: miUbicacion, estado: estadoUbicacion } =
-    useGeolocalizacionTecnico({ jornadaActiva })
+  const { posicion: miUbicacion, estado: estadoUbicacion } = useUbicacion()
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)

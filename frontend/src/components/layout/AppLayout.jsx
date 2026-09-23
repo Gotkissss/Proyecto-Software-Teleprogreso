@@ -14,6 +14,8 @@ import { Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import LayoutHeader from './shared/LayoutHeader'
 import LayoutBottomNav from './shared/LayoutBottomNav'
+import { UbicacionProvider } from '../../context/UbicacionContext'
+import IndicadorUbicacion from './shared/IndicadorUbicacion'
 import UserMenu from './shared/UserMenu'
 import styles from './AppLayout.module.css'
 
@@ -72,22 +74,32 @@ export default function AppLayout() {
   const primerNombre = (user?.nombre || 'Técnico').split(' ')[0]
 
   return (
-    <div className={styles.wrapper}>
-      <LayoutHeader
-        variant="app"
-        logo={<span className={styles.logoBox}><IconLogo /></span>}
-        // En móvil el saludo pesa más que repetir la marca (el logo ya
-        // identifica la app): el técnico ve su nombre como título.
-        title={`Hola, ${primerNombre}`}
-        subtitle="Teleprogreso · Técnico"
-        right={<UserMenu user={user} onLogout={logoutUser} variant="app" />}
-      />
+    // HU-215: el reporte de ubicación y su indicador viven a este nivel (y no
+    // dentro de MapaPage) para que sigan corriendo sin importar qué pantalla
+    // del técnico esté abierta. Ver UbicacionContext.jsx para el porqué.
+    <UbicacionProvider>
+      <div className={styles.wrapper}>
+        <LayoutHeader
+          variant="app"
+          logo={<span className={styles.logoBox}><IconLogo /></span>}
+          // En móvil el saludo pesa más que repetir la marca (el logo ya
+          // identifica la app): el técnico ve su nombre como título.
+          title={`Hola, ${primerNombre}`}
+          subtitle="Teleprogreso · Técnico"
+          right={
+            <>
+              <IndicadorUbicacion />
+              <UserMenu user={user} onLogout={logoutUser} variant="app" />
+            </>
+          }
+        />
 
-      <main className={styles.main}>
-        <Outlet />
-      </main>
+        <main className={styles.main}>
+          <Outlet />
+        </main>
 
-      <LayoutBottomNav items={NAV_ITEMS} />
-    </div>
+        <LayoutBottomNav items={NAV_ITEMS} />
+      </div>
+    </UbicacionProvider>
   )
 }
