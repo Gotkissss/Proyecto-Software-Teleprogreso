@@ -66,3 +66,17 @@ ROL_GERENTE = "gerente"
 ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
+
+# Horas máximas que puede durar un turno para seguir considerándolo "en curso".
+#
+# Sin tope, una jornada de ayer contaba como turno nocturno mientras la hora
+# actual fuera anterior a la de entrada. Eso confundía dos casos opuestos: el
+# técnico que entró a las 22:00 y sigue trabajando a las 02:00, y el que entró
+# ayer a las 09:00, olvidó marcar salida y hoy llega a las 08:00. Al segundo se
+# le mostraba una jornada de 23 horas "en curso" y, al cerrarla, quedaba
+# registrada con esa duración.
+#
+# El Código de Trabajo limita la jornada, sumando horas extraordinarias, a 12
+# horas diarias. Las 4 horas restantes son margen para quien marca la salida
+# tarde; pasado ese tiempo la jornada se trata como abandonada.
+DURACION_MAXIMA_TURNO_HORAS = 16

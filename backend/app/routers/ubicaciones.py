@@ -35,22 +35,25 @@ from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado
 from app.models.ubicacion import UbicacionEmpleado
 from app.schemas.ubicacion import UbicacionCreate, UbicacionResponse
+from app.services.asistencia import es_del_turno_en_curso
 
 router = APIRouter(prefix="/ubicaciones", tags=["Ubicaciones"])
 
 
-async def _jornada_abierta(db: AsyncSession, id_empleado: int) -> Optional[Asistencia]:
+async def _jornada_en_curso(db: AsyncSession, id_empleado: int) -> Optional[Asistencia]:
     """
-    Jornada abierta (entrada sin salida) más reciente del empleado, o None.
+    Jornada del turno en marcha (entrada sin salida), o None.
 
-    Se piden todas las filas y se toma la primera en lugar de usar
-    `scalar_one_or_none()`: ese método lanza MultipleResultsFound en cuanto
-    hay dos jornadas abiertas —un doble clic en "Entrada" ya las crea— y el
-    técnico se quedaría sin poder reportar su ubicación, con un 500 sin
-    explicación. Es el mismo criterio que sigue app/routers/asistencia.py.
+    No basta con "cualquier jornada sin salida": un técnico que olvidó marcar
+    salida el lunes seguiría figurando en jornada el jueves, y este endpoint
+    le aceptaría posiciones sin que hubiera abierto turno. Se aplica la misma
+    regla que POST /asistencia/salida (es_del_turno_en_curso): vale la jornada
+    de hoy, o la de ayer si el turno cruzó la medianoche.
 
-    El orden descendente evita que una jornada vieja sin cerrar se adelante a
-    la del turno de hoy.
+    Se piden todas las filas en lugar de usar `scalar_one_or_none()`: ese
+    método lanza MultipleResultsFound en cuanto hay dos jornadas abiertas —un
+    doble clic en "Entrada" ya las crea— y el técnico se quedaría sin poder
+    reportar su ubicación, con un 500 sin explicación.
     """
     result = await db.execute(
         select(Asistencia)
@@ -60,7 +63,11 @@ async def _jornada_abierta(db: AsyncSession, id_empleado: int) -> Optional[Asist
         )
         .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
     )
-    return result.scalars().first()
+    ahora = ahora_local()
+    return next(
+        (j for j in result.scalars().all() if es_del_turno_en_curso(j, ahora)),
+        None,
+    )
 
 
 # ─── POST /ubicaciones ───────────────────────────────────────────────────────
@@ -91,13 +98,13 @@ async def registrar_ubicacion(
     - 409 si no hay jornada abierta.
     - 422 si lat o lng faltan o caen fuera del rango válido.
     """
-    # 1. Sin jornada abierta no se guarda nada.
+    # 1. Sin jornada del turno en curso no se guarda nada.
     #
     #    Responde 409 y no 400: el cuerpo que mandó el técnico está perfecto,
     #    lo que no encaja es el estado en que se encuentra su jornada. Esa
     #    diferencia le sirve al frontend para distinguir "corrige el dato" de
     #    "marca tu entrada primero".
-    if await _jornada_abierta(db, current_user.id_empleado) is None:
+    if await _jornada_en_curso(db, current_user.id_empleado) is None:
         raise conflict(
             "No tienes una jornada abierta. "
             "Registra tu entrada antes de reportar tu ubicación."

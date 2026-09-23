@@ -32,6 +32,7 @@ from app.routers.descanso import (
     iniciar_descanso,
 )
 from app.services.pausas import tipo_valido
+import app.routers.descanso as descanso_router
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -310,7 +311,9 @@ async def test_endpoint_activo_devuelve_la_pausa_en_curso():
 
 @pytest.mark.asyncio
 async def test_hoy_sin_jornada_devuelve_estructura_vacia():
-    db = _db([_resultado(None)])
+    # Dos consultas: la jornada de hoy y, al no haberla, el respaldo que busca
+    # un turno nocturno de ayer todavía en curso.
+    db = _db([_resultado(None), _resultado([], lista=True)])
 
     respuesta = await get_descansos_hoy(db, _empleado())
 
@@ -379,3 +382,108 @@ async def test_hoy_con_jornada_cerrada_no_sigue_sumando_tiempo():
     assert respuesta["segundos_en_pausa"] == 3600
     assert respuesta["segundos_trabajados"] == 8 * 3600
     assert respuesta["pausa_activa"] is None
+
+
+# ─── GET /descanso/hoy con turno nocturno ────────────────────────────────────
+#
+# El reloj se fija sobre el módulo del router: el turno nocturno solo se
+# distingue de una jornada olvidada por la relación entre la hora actual y la
+# hora de entrada, así que con el reloj real la prueba dependería de la hora a
+# la que corra la suite.
+
+HOY = date(2026, 9, 23)
+AYER = HOY - timedelta(days=1)
+
+
+def _jornada_de(fecha, hora_entrada, descansos=None):
+    asistencia = Asistencia(
+        id_asistencia=7,
+        id_empleado=2,
+        fecha=fecha,
+        hora_entrada=hora_entrada,
+        hora_salida=None,
+    )
+    asistencia.descansos = descansos or []
+    return asistencia
+
+
+def _fijar_reloj(monkeypatch, hora):
+    monkeypatch.setattr(descanso_router, "hoy_local", lambda: HOY)
+    monkeypatch.setattr(descanso_router, "hora_local", lambda: hora)
+
+
+@pytest.mark.asyncio
+async def test_hoy_reconoce_el_turno_nocturno_pasada_la_medianoche(monkeypatch):
+    """
+    El caso del defecto: entró ayer a las 22:00 y son las 02:00.
+
+    Antes el endpoint respondía jornada_activa=false: la pantalla de Pausas
+    ofrecía "Registrar entrada" a un técnico en pleno turno y el mapa dejaba de
+    reportar su ubicación.
+    """
+    _fijar_reloj(monkeypatch, time(2, 0))
+    nocturna = _jornada_de(
+        AYER,
+        time(22, 0),
+        descansos=[_descanso(1, "tecnica", time(23, 30), time(23, 45))],
+    )
+    db = _db([_resultado(None), _resultado([nocturna], lista=True)])
+
+    respuesta = await get_descansos_hoy(db, _empleado())
+
+    assert respuesta["jornada_activa"] is True
+    assert respuesta["id_asistencia"] == 7
+    # La fecha es la de la jornada (ayer), no la del reloj.
+    assert respuesta["fecha"] == str(AYER)
+    assert respuesta["hora_entrada"] == "22:00:00"
+    # 22:00 → 02:00 cruza la medianoche: 4 horas, no un negativo.
+    assert respuesta["segundos_brutos"] == 4 * 3600
+    assert respuesta["segundos_en_pausa"] == 15 * 60
+    assert respuesta["tipos_usados"] == ["tecnica"]
+
+
+@pytest.mark.asyncio
+async def test_hoy_no_revive_una_jornada_diurna_olvidada(monkeypatch):
+    """
+    Entró ayer a las 09:00, olvidó la salida y hoy llega a las 08:00.
+
+    Pasaron 23 horas: no es un turno nocturno. Sin el tope de duración, el
+    respaldo le habría mostrado una jornada de casi un día entero corriendo.
+    """
+    _fijar_reloj(monkeypatch, time(8, 0))
+    olvidada = _jornada_de(AYER, time(9, 0))
+    db = _db([_resultado(None), _resultado([olvidada], lista=True)])
+
+    respuesta = await get_descansos_hoy(db, _empleado())
+
+    assert respuesta["jornada_activa"] is False
+    assert respuesta["id_asistencia"] is None
+    assert respuesta["fecha"] == str(HOY)
+
+
+@pytest.mark.asyncio
+async def test_hoy_prefiere_la_jornada_de_hoy_sin_consultar_el_respaldo(monkeypatch):
+    # Si hay jornada de hoy, el respaldo no se ejecuta: _db levantaría
+    # IndexError si el router pidiera una segunda consulta.
+    _fijar_reloj(monkeypatch, time(10, 0))
+    db = _db([_resultado(_jornada_de(HOY, time(8, 0)))])
+
+    respuesta = await get_descansos_hoy(db, _empleado())
+
+    assert respuesta["jornada_activa"] is True
+    assert respuesta["fecha"] == str(HOY)
+
+
+@pytest.mark.asyncio
+async def test_hoy_filtra_el_respaldo_por_ayer_y_sin_salida(monkeypatch):
+    _fijar_reloj(monkeypatch, time(2, 0))
+    db = _db([_resultado(None), _resultado([], lista=True)])
+
+    await get_descansos_hoy(db, _empleado())
+
+    consulta = db.execute.await_args_list[1].args[0]
+    sql = str(consulta.compile(compile_kwargs={"literal_binds": True}))
+    assert "asistencia.id_empleado = 2" in sql
+    assert f"asistencia.fecha = '{AYER}'" in sql
+    assert "asistencia.hora_salida IS NULL" in sql
+

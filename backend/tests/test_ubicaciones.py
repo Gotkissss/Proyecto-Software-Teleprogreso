@@ -27,6 +27,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.tiempo import ahora as ahora_local
 from app.db.session import get_db
 from app.routers import ubicaciones
+from app.services.asistencia import es_del_turno_en_curso
 
 # Coordenadas de la Ciudad de Guatemala: latitud positiva (hemisferio norte) y
 # longitud negativa (al oeste de Greenwich). Cruzarlas se nota a simple vista.
@@ -49,13 +50,19 @@ def _empleado(id_empleado=ID_TECNICO, rol="tecnico"):
     )
 
 
-def _jornada(hora_salida=None):
-    """Fila de `asistencia`; sigue abierta mientras no tenga hora de salida."""
+def _jornada(fecha=None, hora_entrada=time(8, 0), hora_salida=None):
+    """
+    Fila de `asistencia`; sigue abierta mientras no tenga hora de salida.
+
+    La fecha por defecto es la de hoy en Guatemala y no una fija: con una
+    fecha escrita a mano la prueba pasaba el día en que se escribió y fallaba
+    al siguiente, porque esa jornada dejaba de ser la del turno en curso.
+    """
     return SimpleNamespace(
         id_asistencia=10,
         id_empleado=ID_TECNICO,
-        fecha=date(2026, 9, 22),
-        hora_entrada=time(8, 0),
+        fecha=fecha or ahora_local().date(),
+        hora_entrada=hora_entrada,
         hora_salida=hora_salida,
     )
 
@@ -69,7 +76,7 @@ def _db_simulada(jornada):
     no pasaría su propia validación.
     """
     resultado = MagicMock()
-    resultado.scalars.return_value.first.return_value = jornada
+    resultado.scalars.return_value.all.return_value = [jornada] if jornada else []
 
     db = MagicMock()
     db.execute = AsyncMock(return_value=resultado)
@@ -193,6 +200,87 @@ async def test_el_mensaje_de_error_no_filtra_detalles_internos():
         assert filtracion not in detalle
 
 
+# ─── SCRUM-217: qué cuenta como "jornada del turno en curso" ─────────────────
+#
+# Se fija el reloj para que los casos no dependan de la hora a la que corra la
+# suite: el turno nocturno solo se distingue de una jornada olvidada por la
+# relación entre la hora actual y la hora de entrada.
+
+HOY = date(2026, 9, 23)
+AYER = HOY - timedelta(days=1)
+MADRUGADA = datetime(2026, 9, 23, 2, 0)   # dentro de un turno de 22:00 a 06:00
+MANANA = datetime(2026, 9, 23, 9, 0)
+
+
+def test_la_jornada_de_hoy_es_del_turno_en_curso():
+    assert es_del_turno_en_curso(_jornada(fecha=HOY), MANANA)
+
+
+def test_el_turno_nocturno_de_ayer_sigue_en_curso_de_madrugada():
+    nocturna = _jornada(fecha=AYER, hora_entrada=time(22, 0))
+
+    assert es_del_turno_en_curso(nocturna, MADRUGADA)
+
+
+def test_una_jornada_diurna_de_ayer_sin_salida_ya_no_esta_en_curso():
+    # Entró ayer a las 08:00 y hoy son las 09:00: no es un turno nocturno,
+    # es una salida que se olvidó marcar.
+    olvidada = _jornada(fecha=AYER, hora_entrada=time(8, 0))
+
+    assert not es_del_turno_en_curso(olvidada, MANANA)
+
+
+def test_el_turno_de_ayer_sigue_en_curso_hasta_el_tope_de_duracion():
+    # Entrada 22:00 de ayer: con el tope de 16 h sigue en curso hasta las 14:00.
+    nocturna = _jornada(fecha=AYER, hora_entrada=time(22, 0))
+
+    assert es_del_turno_en_curso(nocturna, datetime(2026, 9, 23, 14, 0))
+    assert not es_del_turno_en_curso(nocturna, datetime(2026, 9, 23, 14, 1))
+
+
+def test_una_salida_olvidada_no_pasa_por_turno_nocturno():
+    """
+    Entró ayer a las 09:00 y hoy llega a las 08:00: la hora actual es anterior
+    a la de entrada, que era la única señal que usaba la regla. Pasaron 23
+    horas, así que es una salida olvidada y no un turno en curso.
+    """
+    olvidada = _jornada(fecha=AYER, hora_entrada=time(9, 0))
+
+    assert not es_del_turno_en_curso(olvidada, datetime(2026, 9, 23, 8, 0))
+
+
+def test_una_jornada_abandonada_hace_dias_no_esta_en_curso():
+    abandonada = _jornada(fecha=HOY - timedelta(days=3), hora_entrada=time(22, 0))
+
+    assert not es_del_turno_en_curso(abandonada, MADRUGADA)
+
+
+@pytest.mark.asyncio
+async def test_acepta_la_ubicacion_de_un_turno_nocturno(monkeypatch):
+    monkeypatch.setattr(ubicaciones, "ahora_local", lambda: MADRUGADA)
+    db = _db_simulada(_jornada(fecha=AYER, hora_entrada=time(22, 0)))
+
+    respuesta = await _post(_app(db), {"lat": LAT, "lng": LNG})
+
+    assert respuesta.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_rechaza_si_la_unica_jornada_abierta_quedo_abandonada(monkeypatch):
+    """
+    El caso que motivó la corrección: el técnico se fue el lunes sin marcar
+    salida y el jueves, sin haber marcado entrada, el endpoint le aceptaba
+    posiciones como si estuviera en turno.
+    """
+    monkeypatch.setattr(ubicaciones, "ahora_local", lambda: MANANA)
+    db = _db_simulada(_jornada(fecha=HOY - timedelta(days=3)))
+
+    respuesta = await _post(_app(db), {"lat": LAT, "lng": LNG})
+
+    assert respuesta.status_code == 409
+    db.add.assert_not_called()
+
+
 # ─── Control de acceso: el dueño de la ubicación sale del token ──────────────
 
 @pytest.mark.asyncio
@@ -267,7 +355,7 @@ def _db_autenticada(empleado, jornada):
         if "token_revocado" in sql:
             resultado.scalar_one_or_none.return_value = None
         elif "asistencia" in sql:
-            resultado.scalars.return_value.first.return_value = jornada
+            resultado.scalars.return_value.all.return_value = [jornada] if jornada else []
         else:
             resultado.scalar_one_or_none.return_value = empleado
         return resultado
