@@ -20,7 +20,7 @@
  * ---------------------------------------------------------------------------
  */
 import L from 'leaflet'
-import { colorPorEstado, colorPorTarea } from './estadoColor'
+import { colorPorEstado, colorPorEstadoTecnico, colorPorTarea } from './estadoColor'
 import styles from './iconoMarcador.module.css'
 
 /**
@@ -109,4 +109,31 @@ export function iconoPorEstado(estado, tamano = 'md', { pulso } = {}) {
 /** Pin del selector de ubicación: color de marca, sin depender de una tarea. */
 export function iconoSeleccion(tamano = 'lg') {
   return crearIconoPin({ color: 'var(--color-primary)', tamano })
+}
+
+const TAMANO_TECNICO = 36
+
+const svgTecnico = `
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8z"/>
+  </svg>
+`
+
+export function iconoTecnico(estado) {
+  const color = colorPorEstadoTecnico(estado)
+  const clave = `tecnico|${color}`
+  const enCache = cacheIconos.get(clave)
+  if (enCache) return enCache
+
+  const icono = L.divIcon({
+    html: `<div class="${styles.tecnico}" style="background:${color}">${svgTecnico}</div>`,
+    className: styles.icon,
+    iconSize: [TAMANO_TECNICO, TAMANO_TECNICO],
+    iconAnchor: [TAMANO_TECNICO / 2, TAMANO_TECNICO / 2],
+    popupAnchor: [0, -(TAMANO_TECNICO / 2)],
+  })
+
+  cacheIconos.set(clave, icono)
+  return icono
 }

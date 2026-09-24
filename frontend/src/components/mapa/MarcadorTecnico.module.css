@@ -1,0 +1,29 @@
+.popup {
+  min-width: 180px;
+  font-family: var(--font-sans);
+}
+
+.nombre {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.fila {
+  margin: 4px 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.fila strong {
+  color: var(--color-text);
+  font-weight: 600;
+}

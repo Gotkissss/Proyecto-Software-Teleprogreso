@@ -108,3 +108,29 @@ export function colorPorTarea(servicio) {
 
   return colorPorPrioridad(servicio?.prioridad)
 }
+
+export const ESTADO_TECNICO_COLOR = {
+  en_tarea:   'var(--color-primary)',
+  en_pausa:   'var(--color-warning)',
+  disponible: 'var(--color-success)',
+}
+
+export const ESTADO_TECNICO_LABEL = {
+  en_tarea:   'En tarea',
+  en_pausa:   'En pausa',
+  disponible: 'Disponible',
+}
+
+export const ESTADO_TECNICO_BADGE_VARIANT = {
+  en_tarea:   'info',
+  en_pausa:   'warning',
+  disponible: 'success',
+}
+
+export function colorPorEstadoTecnico(estado) {
+  return ESTADO_TECNICO_COLOR[estado] ?? 'var(--color-text-muted)'
+}
+
+export function variantePorEstadoTecnico(estado) {
+  return ESTADO_TECNICO_BADGE_VARIANT[estado] ?? 'muted'
+}
