@@ -66,3 +66,15 @@ ROL_GERENTE = "gerente"
 ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
+
+# Tope de horas para que una jornada de ayer siga contando como "turno en
+# curso" (ver es_del_turno_en_curso). Sin este tope, un técnico diurno que
+# olvida marcar salida y llega al día siguiente también calificaría como
+# turno nocturno, mostrando una jornada de hasta casi 24 horas.
+#
+# El valor (14 h) es una estimación de "12 horas legales
+# con horas extra + 2 de margen", sin que existiera una historia de usuario
+# que definiera este límite. Si se ajusta este número, revisar también
+# POST /asistencia/entrada, POST /asistencia/salida, GET /descanso/hoy y
+# POST /ubicaciones, que comparten esta regla.
+DURACION_MAXIMA_TURNO_HORAS = 14

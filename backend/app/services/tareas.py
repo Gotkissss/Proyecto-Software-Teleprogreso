@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import bad_request, forbidden, not_found
+from app.core.geo import punto_wkt
 from app.core.reglas import (
     ESTADOS_TAREA_ACTIVOS,
     ESTADOS_TAREA_CERRADOS,
@@ -151,11 +152,6 @@ def es_de_hoy(momento: datetime | None, hoy_referencia: date | None = None) -> b
     if momento is None:
         return False
     return momento.date() == (hoy_referencia or hoy())
-
-
-def _punto_servicio(lat: float, lng: float) -> str:
-    """WKT para PostGIS; un POINT almacena longitud antes que latitud."""
-    return f"SRID=4326;POINT({lng} {lat})"
 
 
 async def _contar_tareas_activas(
@@ -500,7 +496,7 @@ async def crear_tarea(db: AsyncSession, data: TareaCreate) -> TareaResponse:
         fecha_finalizacion=data.fecha_finalizacion,
         fecha_asignacion=hoy() if data.id_tecnico else None,
         coordenada_servicio=(
-            _punto_servicio(data.lat, data.lng)
+            punto_wkt(data.lat, data.lng)
             if data.lat is not None
             else None
         ),
@@ -560,7 +556,7 @@ async def editar_tarea(
         tarea.fecha_finalizacion = cambios["fecha_finalizacion"]
     if "lat" in cambios:
         tarea.coordenada_servicio = (
-            _punto_servicio(data.lat, data.lng)
+            punto_wkt(data.lat, data.lng)
             if data.lat is not None
             else None
         )

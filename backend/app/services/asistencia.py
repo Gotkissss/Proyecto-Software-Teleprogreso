@@ -13,10 +13,43 @@ probarlas con unit tests sin necesidad de PostgreSQL.
 """
 
 from dataclasses import dataclass, field
-from datetime import time
+from datetime import datetime, time, timedelta
 from typing import Iterable, List, Optional
 
+from app.core.reglas import DURACION_MAXIMA_TURNO_HORAS
+
 SEGUNDOS_POR_DIA = 24 * 3600
+
+
+# ── Turno en curso ───────────────────────────────────────────────────────────
+
+def es_del_turno_en_curso(jornada, ahora: datetime) -> bool:
+    """
+    ¿Esta jornada abierta corresponde al turno que está en marcha ahora?
+
+    Es la de hoy, o bien una de ayer que todavía no terminó porque el turno
+    cruzó la medianoche (se entró a las 22:00 y son las 02:00). Para distinguir
+    ese turno nocturno de una salida olvidada se mide cuánto pasó desde la
+    entrada: si supera DURACION_MAXIMA_TURNO_HORAS, nadie sigue trabajando ese
+    turno y la jornada se considera abandonada.
+
+    Tratar como vigente una jornada abandonada tiene efectos malos en cadena:
+    POST /asistencia/salida la cerraría con la hora de hoy (una salida a las
+    09:00 del día siguiente), POST /ubicaciones aceptaría posiciones de alguien
+    que nunca abrió turno y GET /descanso/hoy le mostraría al técnico una
+    jornada de casi un día entero todavía corriendo.
+
+    Vive aquí, y no dentro de un router, para que la entrada, la salida, las
+    pausas y el reporte de ubicación apliquen exactamente la misma regla.
+    """
+    hoy = ahora.date()
+    if jornada.fecha == hoy:
+        return True
+    ayer = hoy - timedelta(days=1)
+    if jornada.fecha != ayer:
+        return False
+    transcurrido = ahora - datetime.combine(ayer, jornada.hora_entrada)
+    return transcurrido <= timedelta(hours=DURACION_MAXIMA_TURNO_HORAS)
 
 
 # ── Utilidades de tiempo ─────────────────────────────────────────────────────

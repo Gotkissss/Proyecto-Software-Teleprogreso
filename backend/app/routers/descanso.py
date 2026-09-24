@@ -20,7 +20,7 @@ usadas) se reconstruye desde `/descanso/hoy`, para que cerrar sesión, recargar 
 cambiar de pestaña no reinicie el estado.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -36,7 +36,7 @@ from app.core.deps import get_current_empleado
 from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado
-from app.services.asistencia import segundos_entre
+from app.services.asistencia import es_del_turno_en_curso, segundos_entre
 from app.services.pausas import (
     Catalogo,
     cargar_catalogo,
@@ -108,6 +108,40 @@ async def _jornada_activa(db: AsyncSession, id_empleado: int) -> Optional[Asiste
         .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
     )
     return result.scalars().first()
+
+
+async def _turno_nocturno_en_curso(
+    db: AsyncSession, id_empleado: int, hoy: date, ahora: time
+) -> Optional[Asistencia]:
+    """
+    Jornada de ayer que sigue en curso porque el turno cruzó la medianoche.
+
+    GET /descanso/hoy busca la jornada por `fecha == hoy`, y un turno que empezó
+    ayer a las 22:00 no la cumple a las 02:00. Sin este respaldo el endpoint
+    respondía "sin jornada" a mitad del turno: la pantalla de Pausas le ofrecía
+    al técnico "Registrar entrada" (y al pulsarlo se cerraba su turno como
+    abandonado) y el mapa dejaba de reportar su ubicación.
+
+    Solo se miran las jornadas abiertas de ayer: las de hoy ya las cubre la
+    consulta principal, y cualquier otra fecha queda fuera de la regla de turno
+    en curso. La decisión final la toma es_del_turno_en_curso, la misma que
+    aplican la salida y el reporte de ubicación.
+    """
+    result = await db.execute(
+        select(Asistencia)
+        .options(selectinload(Asistencia.descansos))
+        .where(
+            Asistencia.id_empleado == id_empleado,
+            Asistencia.fecha == hoy - timedelta(days=1),
+            Asistencia.hora_salida.is_(None),
+        )
+        .order_by(Asistencia.hora_entrada.desc())
+    )
+    momento = datetime.combine(hoy, ahora)
+    return next(
+        (j for j in result.scalars().all() if es_del_turno_en_curso(j, momento)),
+        None,
+    )
 
 
 async def _descanso_activo(db: AsyncSession, id_asistencia: int) -> Optional[Descanso]:
@@ -392,6 +426,11 @@ async def get_descansos_hoy(
         .order_by(Asistencia.hora_entrada.desc())
     )
     jornada = result.scalars().first()
+
+    # Turno nocturno pasada la medianoche: la jornada sigue abierta, pero su
+    # fecha es la de ayer.
+    if jornada is None:
+        jornada = await _turno_nocturno_en_curso(db, current_user.id_empleado, hoy, ahora)
 
     if jornada is None:
         return {

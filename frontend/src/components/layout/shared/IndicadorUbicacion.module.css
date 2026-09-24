@@ -1,0 +1,74 @@
+
+
+.indicador {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 132px;
+  overflow: hidden;
+}
+
+.icono {
+  display: flex;
+  flex-shrink: 0;
+}
+.icono svg {
+  width: 14px;
+  height: 14px;
+}
+
+.texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Punto pulsante sobre el ícono: la misma idea de "en vivo" que
+   MarcadorMiUbicacion.module.css, para que el técnico asocie ambas señales. */
+.pulso {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: indicador-ubicacion-pulso 2s ease-out infinite;
+}
+
+@keyframes indicador-ubicacion-pulso {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.ok        { background: var(--color-success-light); color: var(--color-success-dark); }
+.pendiente { background: var(--color-bg-alt);         color: var(--color-text-secondary); }
+.alerta    { background: var(--color-warning-light);  color: var(--color-warning-dark); }
+
+/* En pantallas muy angostas el texto se oculta y solo queda el ícono (con su
+   pulso o aviso), para no empujar el menú de usuario fuera del header. */
+@media (max-width: 360px) {
+  .indicador {
+    max-width: none;
+    padding: 4px 6px;
+  }
+  .texto {
+    display: none;
+  }
+}

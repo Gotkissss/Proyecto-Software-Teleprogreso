@@ -14,7 +14,7 @@ Endpoints que se tieneen:
   GET  /asistencia/historial  = Historial de jornadas con filtros y paginación
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from math import ceil
 from typing import Annotated, Optional
 
@@ -36,7 +36,11 @@ from app.schemas.asistencia import (
     HistorialTotales,
     JornadaResponse,
 )
-from app.services.asistencia import calcular_jornada, formatear_hhmm
+from app.services.asistencia import (
+    calcular_jornada,
+    es_del_turno_en_curso,
+    formatear_hhmm,
+)
 
 router = APIRouter(prefix="/asistencia", tags=["Asistencia"])
 
@@ -119,6 +123,17 @@ async def registrar_entrada(
                        "Registra la salida antes de iniciar una nueva.",
             )
 
+        # Turno nocturno de ayer que sigue en curso (entró a las 22:00 y son
+        # las 02:00). Antes se trataba como abandonado: la entrada lo cerraba
+        # a las 23:59:59 y el técnico perdía, en silencio, las horas trabajadas
+        # después de medianoche. Se rechaza igual que la jornada de hoy.
+        if es_del_turno_en_curso(jornada, now):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tu turno de ayer sigue abierto. "
+                       "Registra la salida antes de iniciar una nueva jornada.",
+            )
+
         # Jornada de un día anterior que nunca se cerró: el técnico se fue sin
         # marcar salida. Bloquear la entrada de hoy por eso lo dejaba atrapado
         # sin forma de trabajar. Se cierra al final de aquel día y se sigue.
@@ -166,8 +181,6 @@ async def registrar_salida(
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
     now = ahora_local()
-    hoy = now.date()
-    ayer = hoy - timedelta(days=1)
 
     # 1. Todas las jornadas abiertas del empleado, de la más reciente a la más
     #    antigua.
@@ -187,23 +200,8 @@ async def registrar_salida(
     )
     abiertas = list(result.scalars().all())
 
-    def _es_del_turno_en_curso(jornada: Asistencia) -> bool:
-        """
-        ¿Esta jornada abierta corresponde al turno que se está cerrando ahora?
-
-        Es la de hoy, o bien una de ayer que todavía no ha terminado porque el
-        turno cruzó la medianoche. Ese segundo caso se reconoce porque la hora
-        actual es ANTERIOR a la hora de entrada (se entró a las 22:00 y se sale
-        a las 02:00). Sin esa condición, una jornada de ayer simplemente
-        olvidada se cerraría con la hora de hoy: el registro de ayer terminaba
-        mostrando una salida a las 09:00 de la mañana siguiente.
-        """
-        if jornada.fecha == hoy:
-            return True
-        return jornada.fecha == ayer and now.time() < jornada.hora_entrada
-
     asistencia_activa = next(
-        (j for j in abiertas if _es_del_turno_en_curso(j)), None
+        (j for j in abiertas if es_del_turno_en_curso(j, now)), None
     )
 
     if not asistencia_activa:

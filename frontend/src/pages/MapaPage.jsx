@@ -16,6 +16,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getServiciosMapa } from '../api/rutaService'
+import { useUbicacion } from '../context/UbicacionContext'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTarea from '../components/mapa/MarcadorTarea'
 import MarcadorMiUbicacion from '../components/mapa/MarcadorMiUbicacion'
@@ -24,7 +25,6 @@ import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSelec
 import { ESTADO_COLOR, PRIORIDAD_COLOR } from '../components/mapa/estadoColor'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
-import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
 import styles from './MapaPage.module.css'
 
 const IconMapa = () => (
@@ -66,6 +66,8 @@ export default function MapaPage() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
 
+
+
   // SCRUM-158: id de la tarea que RutaDiariaPage pidió centrar/resaltar,
   // recibido por `state` de navegación (no por query string). Se lee una
   // sola vez al montar: si el técnico interactúa con el mapa después no
@@ -74,9 +76,7 @@ export default function MapaPage() {
   const servicioSeleccionadoId = servicioSeleccionadoIdRef.current
   const avisoSinUbicacionMostrado = useRef(false)
 
-  // SCRUM-163: ubicación en vivo del técnico (Geolocation API), con manejo
-  // propio de permiso denegado / sin soporte / sin lectura disponible.
-  const { posicion: miUbicacion, estado: estadoUbicacion } = useGeolocalizacionTecnico()
+  const { posicion: miUbicacion, estado: estadoUbicacion } = useUbicacion()
 
   const fetchServicios = useCallback(async () => {
     setLoading(true)
@@ -96,6 +96,8 @@ export default function MapaPage() {
   useEffect(() => {
     fetchServicios()
   }, [fetchServicios])
+
+
 
   // Limpia el `state` de navegación al consumirlo, para que recargar la
   // página o volver con el botón "atrás" no vuelva a forzar el centrado.
