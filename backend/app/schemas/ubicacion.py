@@ -12,7 +12,7 @@ llega a ninguna parte: el router toma ese dato del token y nunca del cuerpo.
 """
 
 from datetime import datetime
-
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
@@ -43,3 +43,11 @@ class UbicacionResponse(BaseModel):
     id_ubicacion: int
     fecha_hora_registro: datetime
     mensaje: str = "Ubicación registrada correctamente."
+
+class UbicacionTecnicoResponse(BaseModel):
+    id_empleado: int
+    nombre: str
+    lat: float
+    lng: float
+    fecha_hora_registro: datetime
+    estado: Literal["en_tarea", "en_pausa", "disponible"]

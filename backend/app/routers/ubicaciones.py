@@ -23,7 +23,14 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_empleado
+from app.schemas.ubicacion import (
+    UbicacionCreate,
+    UbicacionResponse,
+    UbicacionTecnicoResponse,
+)
+from app.services.asistencia import es_del_turno_en_curso
+from app.services.ubicaciones import obtener_ultimas_ubicaciones
+
 from app.core.exceptions import conflict
 from app.core.geo import punto_wkt
 
@@ -130,3 +137,14 @@ async def registrar_ubicacion(
         id_ubicacion=ubicacion.id_ubicacion,
         fecha_hora_registro=ubicacion.fecha_hora_registro,
     )
+
+@router.get(
+    "/tecnicos",
+    response_model=list[UbicacionTecnicoResponse],
+    summary="Última posición conocida de cada técnico en jornada",
+)
+async def listar_ubicaciones_tecnicos(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+):
+    return await obtener_ultimas_ubicaciones(db)
