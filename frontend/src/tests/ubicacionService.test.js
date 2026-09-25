@@ -11,17 +11,19 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { postMock } = vi.hoisted(() => ({
+const { postMock, getMock } = vi.hoisted(() => ({
   postMock: vi.fn(),
+  getMock: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({
   default: {
     post: postMock,
+    get: getMock,
   },
 }))
 
-import { enviarUbicacion } from '../api/ubicacionService'
+import { enviarUbicacion, getUbicacionesTecnicos } from '../api/ubicacionService'
 
 // Ciudad de Guatemala: latitud norte, longitud oeste.
 const COORDENADAS = { lat: 14.6349, lng: -90.5069 }
@@ -97,5 +99,38 @@ describe('enviarUbicacion', () => {
     postMock.mockRejectedValue(new Error('Network Error'))
 
     await expect(enviarUbicacion(COORDENADAS)).rejects.toThrow('Network Error')
+  })
+})
+
+describe('getUbicacionesTecnicos', () => {
+  beforeEach(() => {
+    getMock.mockReset()
+  })
+
+  it('pide GET /ubicaciones/tecnicos y devuelve la lista tal cual', async () => {
+    const lista = [
+      {
+        id_empleado: 7,
+        nombre: 'Ana López',
+        lat: 14.6349,
+        lng: -90.5069,
+        fecha_hora_registro: '2026-09-23T09:45:12',
+        estado: 'en_tarea',
+      },
+    ]
+    getMock.mockResolvedValue({ data: lista })
+
+    const resultado = await getUbicacionesTecnicos()
+
+    expect(getMock).toHaveBeenCalledWith('/ubicaciones/tecnicos')
+    expect(resultado).toEqual(lista)
+  })
+
+  it('devuelve un arreglo vacío si la respuesta no es un arreglo', async () => {
+    getMock.mockResolvedValue({ data: null })
+
+    const resultado = await getUbicacionesTecnicos()
+
+    expect(resultado).toEqual([])
   })
 })

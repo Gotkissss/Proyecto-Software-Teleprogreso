@@ -23,17 +23,35 @@
  * HU-166 (leyenda + contador) va en <LeyendaMapaSupervisor>, en la misma
  * columna lateral que el filtro de técnicos: a la derecha del mapa en
  * pantalla ancha y encima del mapa en móvil.
+ *
+ * SCRUM-225 — Además de los pines de tareas, se superpone la posición en
+ * vivo de cada técnico con jornada abierta (GET /ubicaciones/tecnicos,
+ * <MarcadorTecnico>). Se pintan sujetos a los MISMOS filtros que ya existían
+ * para las tareas del panel lateral:
+ *   - el <select> de técnico (`idTecnico`): si hay uno elegido, solo se
+ *     pinta ese técnico.
+ *   - las casillas de <FiltroTecnicosMapa> (`ocultos`): un técnico apagado
+ *     ahí tampoco se pinta aquí, usando la misma clave (`id_empleado`).
+ * Solo tiene sentido mostrarlas en el día de HOY: la posición en vivo no
+ * significa nada sobre un día pasado.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getMapaSupervisor, getTecnicosDisponibles } from '../api/tareaService'
+import { getUbicacionesTecnicos } from '../api/ubicacionService'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTareaSupervisor from '../components/mapa/MarcadorTareaSupervisor'
+import MarcadorTecnico from '../components/mapa/MarcadorTecnico'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
 import FiltroTecnicosMapa from '../components/mapa/FiltroTecnicosMapa'
 import LeyendaMapaSupervisor from '../components/mapa/LeyendaMapaSupervisor'
 import PageState from '../components/ui/PageState'
 import { hoyISO } from '../utils/fecha'
 import styles from './MapaSupervisorPage.module.css'
+
+/** Refresco de la posición en vivo de los técnicos (mismo criterio que
+ * useAlertasPendientesCount: polling simple, sin depender de que el
+ * supervisor recargue la página). */
+const INTERVALO_UBICACIONES_MS = 30000
 
 const IconMapa = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -131,6 +149,52 @@ export default function MapaSupervisorPage() {
   useEffect(() => {
     fetchTareas()
   }, [fetchTareas])
+
+  // SCRUM-225: posición en vivo de los técnicos, solo para HOY. Al cambiar a
+  // un día pasado se limpia la lista en vez de dejar pines "en vivo" que no
+  // corresponden a ese día; al volver a HOY, el propio efecto la vuelve a
+  // pedir porque `esHoy` cambia.
+  const [ubicacionesTecnicos, setUbicacionesTecnicos] = useState([])
+
+  useEffect(() => {
+    if (!esHoy) {
+      setUbicacionesTecnicos([])
+      return
+    }
+
+    let vigente = true
+
+    const fetchUbicaciones = async () => {
+      try {
+        const lista = await getUbicacionesTecnicos()
+        if (vigente) setUbicacionesTecnicos(lista)
+      } catch {
+        // Si falla el refresco no rompemos el mapa de tareas, que ya se
+        // cargó por su cuenta; simplemente se deja de actualizar la capa de
+        // técnicos hasta el próximo intento.
+        if (vigente) setUbicacionesTecnicos([])
+      }
+    }
+
+    fetchUbicaciones()
+    const id = setInterval(fetchUbicaciones, INTERVALO_UBICACIONES_MS)
+
+    return () => {
+      vigente = false
+      clearInterval(id)
+    }
+  }, [esHoy])
+
+  // Mismos filtros que ya existen para las tareas: el <select> de técnico y
+  // las casillas de FiltroTecnicosMapa (`ocultos`), comparando por
+  // `id_empleado` en ambos casos.
+  const tecnicosVisibles = useMemo(() => {
+    return ubicacionesTecnicos.filter((t) => {
+      if (idTecnico && String(t.id_empleado) !== idTecnico) return false
+      if (ocultos.has(t.id_empleado)) return false
+      return true
+    })
+  }, [ubicacionesTecnicos, idTecnico, ocultos])
 
   // Tareas que pasan el filtro de técnico, tengan o no coordenadas (se usa
   // para el aviso de "sin ubicación"). La fecha ya la recortó el backend.
@@ -240,6 +304,10 @@ export default function MapaSupervisorPage() {
 
               {visibles.map((s) => (
                 <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />
+              ))}
+
+              {tecnicosVisibles.map((t) => (
+                <MarcadorTecnico key={t.id_empleado} tecnico={t} />
               ))}
             </MapaBase>
           </div>

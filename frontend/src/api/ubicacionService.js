@@ -4,7 +4,9 @@
  * SCRUM-218 — Reporte de la ubicación del técnico mientras está en jornada.
  *
  * Mapeo de endpoints reales:
- *   POST /ubicaciones → guarda la posición actual del empleado autenticado
+ *   POST /ubicaciones          → guarda la posición actual del empleado autenticado
+ *   GET  /ubicaciones/tecnicos → última posición de cada técnico en jornada
+ *                                (solo admin/supervisor/gerente)
  *
  * El empleado dueño de la ubicación nunca viaja en el cuerpo: el backend lo
  * saca del JWT que el interceptor de client.js ya adjunta en cada petición.
@@ -56,4 +58,28 @@ export const enviarUbicacion = async ({ lat, lng }) => {
     }
     throw err
   }
+}
+
+/**
+ * SCRUM-225 — Última posición conocida de cada técnico que tiene jornada
+ * abierta ahora mismo. La usa el mapa del supervisor para pintar dónde está
+ * cada técnico en vivo, además de los pines de tareas.
+ *
+ * Solo trae técnicos EN JORNADA: un técnico que ya marcó salida, o que
+ * todavía no marcó entrada, no aparece en la respuesta (así lo resuelve
+ * GET /ubicaciones/tecnicos en el backend), así que no hace falta filtrar
+ * nada más aquí.
+ *
+ * @returns {Promise<Array<{
+ *   id_empleado: number,
+ *   nombre: string,
+ *   lat: number,
+ *   lng: number,
+ *   fecha_hora_registro: string,
+ *   estado: 'en_tarea' | 'en_pausa' | 'disponible'
+ * }>>}
+ */
+export async function getUbicacionesTecnicos() {
+  const { data } = await apiClient.get('/ubicaciones/tecnicos')
+  return Array.isArray(data) ? data : []
 }
