@@ -320,15 +320,17 @@ export default function MapaSupervisorPage() {
               ))}
             </MapaBase>
           </div>
-
-          {/* HU-166: contador de tareas visibles + leyenda por estado. */}
+ {/* HU-166: contador de tareas visibles + leyenda por estado.
+              SCRUM-225: + leyenda de estados de técnico (tecnicosVisibles),
+              para que el punto verde/azul/amarillo de un técnico no se lea
+              como el de una tarea. */}
           <div className={styles.leyendaSlot}>
             <LeyendaMapaSupervisor
               servicios={visibles}
               estados={esHoy ? ESTADOS_HOY : ESTADOS_DIA_PASADO}
+              tecnicos={tecnicosVisibles}
             />
           </div>
-
           <aside className={styles.filtroSlot}>
             <FiltroTecnicosMapa
               grupos={grupos}

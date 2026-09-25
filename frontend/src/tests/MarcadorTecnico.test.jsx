@@ -8,7 +8,7 @@ vi.mock('react-leaflet', () => ({
 
 import MarcadorTecnico from '../components/mapa/MarcadorTecnico'
 import { iconoTecnico } from '../components/mapa/iconoMarcador'
-import { ESTADO_TECNICO_COLOR } from '../components/mapa/estadoColor'
+import { ESTADO_TECNICO_COLOR, ESTADO_TECNICO_LABEL } from '../components/mapa/estadoColor'
 
 const tecnico = {
   id_empleado: 7,
@@ -47,4 +47,15 @@ describe('iconoTecnico', () => {
     expect(iconoTecnico('en_pausa')).not.toBe(iconoTecnico('disponible'))
     expect(iconoTecnico('en_pausa').options.html).toContain(ESTADO_TECNICO_COLOR.en_pausa)
   })
+
+  // El pin en el mapa y la fila de la leyenda (LeyendaMapaSupervisor) leen el
+  // color del mismo mapa (ESTADO_TECNICO_COLOR), así que si un estado nuevo
+  // se agrega ahí sin agregarlo aquí, esta prueba lo detecta antes de que el
+  // pin salga sin color.
+  it.each(Object.keys(ESTADO_TECNICO_LABEL))(
+    'usa el color de estadoColor.js (fuente que comparte con la leyenda) para "%s"',
+    (estado) => {
+      expect(iconoTecnico(estado).options.html).toContain(ESTADO_TECNICO_COLOR[estado])
+    }
+  )
 })

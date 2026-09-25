@@ -9,6 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from app.core.deps import get_current_empleado
 from app.core.exceptions import register_exception_handlers
+from app.core.tiempo import hoy as hoy_local
 from app.db.session import get_db
 from app.routers import ubicaciones
 from app.services.ubicaciones import obtener_ultimas_ubicaciones
@@ -188,9 +189,14 @@ async def _get(aplicacion):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("rol", ["supervisor", "admin", "gerente"])
 async def test_roles_administrativos_pueden_consultar(rol):
+    # Aquí no se le pasa `ahora` al servicio (el router usa la hora real), así
+    # que la jornada se ancla al día de hoy en vez de a AHORA/HOY (fijos en
+    # 2026-09-23): con una fecha fija esta prueba dejaba de pasar apenas
+    # cambiaba el día en que se corría.
+    hoy = hoy_local()
     db = _db(
-        jornadas=[(_jornada(10), _tecnico(7))],
-        ubicaciones=[(7, datetime(2026, 9, 23, 9, 45), 14.63, -90.50)],
+        jornadas=[(_jornada(10, fecha=hoy), _tecnico(7))],
+        ubicaciones=[(7, datetime.combine(hoy, time(9, 45)), 14.63, -90.50)],
     )
     empleado = SimpleNamespace(id_empleado=1, rol=rol, estado="activo")
 

@@ -31,6 +31,7 @@ from app.schemas.ubicacion import (
 from app.services.asistencia import es_del_turno_en_curso
 from app.services.ubicaciones import obtener_ultimas_ubicaciones
 
+from app.core.deps import get_current_empleado, require_admin_supervisor_gerente
 from app.core.exceptions import conflict
 from app.core.geo import punto_wkt
 
