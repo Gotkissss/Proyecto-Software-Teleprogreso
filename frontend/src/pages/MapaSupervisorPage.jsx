@@ -34,10 +34,17 @@
  *     ahí tampoco se pinta aquí, usando la misma clave (`id_empleado`).
  * Solo tiene sentido mostrarlas en el día de HOY: la posición en vivo no
  * significa nada sobre un día pasado.
+ *
+ * SCRUM-226 — Tanto las tareas como las posiciones de técnico se refrescan
+ * solas cada cierto tiempo (ver hooks/useRefrescoAutomatico), pausándose por
+ * completo mientras la pestaña está en segundo plano: si el supervisor deja
+ * esta pantalla abierta en una pestaña de fondo, no tiene sentido seguir
+ * pegándole al backend por datos que nadie está mirando.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getMapaSupervisor, getTecnicosDisponibles } from '../api/tareaService'
 import { getUbicacionesTecnicos } from '../api/ubicacionService'
+import { useRefrescoAutomatico } from '../hooks/useRefrescoAutomatico'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTareaSupervisor from '../components/mapa/MarcadorTareaSupervisor'
 import MarcadorTecnico from '../components/mapa/MarcadorTecnico'
@@ -48,10 +55,14 @@ import PageState from '../components/ui/PageState'
 import { hoyISO } from '../utils/fecha'
 import styles from './MapaSupervisorPage.module.css'
 
-/** Refresco de la posición en vivo de los técnicos (mismo criterio que
- * useAlertasPendientesCount: polling simple, sin depender de que el
- * supervisor recargue la página). */
-const INTERVALO_UBICACIONES_MS = 30000
+/**
+ * SCRUM-226 — Cada cuánto se repiten las peticiones mientras la pestaña está
+ * en primer plano (ver hooks/useRefrescoAutomatico). Las tareas cambian más
+ * despacio que la posición de un técnico caminando, así que cada capa tiene
+ * su propia cadencia.
+ */
+const INTERVALO_REFRESCO_TAREAS_MS = 30000
+const INTERVALO_UBICACIONES_MS = 15000
 
 const IconMapa = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -150,40 +161,38 @@ export default function MapaSupervisorPage() {
     fetchTareas()
   }, [fetchTareas])
 
-  // SCRUM-225: posición en vivo de los técnicos, solo para HOY. Al cambiar a
-  // un día pasado se limpia la lista en vez de dejar pines "en vivo" que no
-  // corresponden a ese día; al volver a HOY, el propio efecto la vuelve a
-  // pedir porque `esHoy` cambia.
+  // SCRUM-226: mientras la pestaña esté visible, vuelve a pedir las tareas
+  // cada INTERVALO_REFRESCO_TAREAS_MS sin tocar `loading` (fetchTareas ya lo
+  // deja en false tras la primera carga, así que los refrescos siguientes
+  // son silenciosos y no hacen parpadear la pantalla).
+  useRefrescoAutomatico(fetchTareas, INTERVALO_REFRESCO_TAREAS_MS)
+
+  // SCRUM-225/226: posición en vivo de los técnicos, solo para HOY y solo
+  // con la pestaña en primer plano. Al cambiar a un día pasado se limpia la
+  // lista en vez de dejar pines "en vivo" que no corresponden a ese día.
   const [ubicacionesTecnicos, setUbicacionesTecnicos] = useState([])
+
+  const fetchUbicaciones = useCallback(async () => {
+    try {
+      const lista = await getUbicacionesTecnicos()
+      setUbicacionesTecnicos(lista)
+    } catch {
+      // Si falla el refresco no rompemos el mapa de tareas, que ya se cargó
+      // por su cuenta; simplemente se deja de actualizar la capa de
+      // técnicos hasta el próximo intento.
+      setUbicacionesTecnicos([])
+    }
+  }, [])
 
   useEffect(() => {
     if (!esHoy) {
       setUbicacionesTecnicos([])
       return
     }
-
-    let vigente = true
-
-    const fetchUbicaciones = async () => {
-      try {
-        const lista = await getUbicacionesTecnicos()
-        if (vigente) setUbicacionesTecnicos(lista)
-      } catch {
-        // Si falla el refresco no rompemos el mapa de tareas, que ya se
-        // cargó por su cuenta; simplemente se deja de actualizar la capa de
-        // técnicos hasta el próximo intento.
-        if (vigente) setUbicacionesTecnicos([])
-      }
-    }
-
     fetchUbicaciones()
-    const id = setInterval(fetchUbicaciones, INTERVALO_UBICACIONES_MS)
+  }, [esHoy, fetchUbicaciones])
 
-    return () => {
-      vigente = false
-      clearInterval(id)
-    }
-  }, [esHoy])
+  useRefrescoAutomatico(fetchUbicaciones, INTERVALO_UBICACIONES_MS, { activo: esHoy })
 
   // Mismos filtros que ya existen para las tareas: el <select> de técnico y
   // las casillas de FiltroTecnicosMapa (`ocultos`), comparando por

@@ -13,8 +13,8 @@
  *     no significa nada sobre el pasado.
  * ---------------------------------------------------------------------------
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { hoyISO } from '../utils/fecha'
 
@@ -140,6 +140,57 @@ describe('MapaSupervisorPage — marcadores de técnico (SCRUM-225)', () => {
     fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: ayer } })
 
     await waitFor(() => expect(getMapaSupervisorMock).toHaveBeenCalledWith(ayer))
+    expect(getUbicacionesTecnicosMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('MapaSupervisorPage — refresco automático (SCRUM-226)', () => {
+  beforeEach(() => {
+    getMapaSupervisorMock.mockReset().mockResolvedValue([TAREA_BASE])
+    getTecnicosDisponiblesMock.mockReset().mockResolvedValue([
+      { id_empleado: 2, nombre_completo: 'Juan Pérez' },
+    ])
+    getUbicacionesTecnicosMock.mockReset().mockResolvedValue([TECNICO_UBICACION])
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    delete document.hidden
+  })
+
+  it('vuelve a pedir tareas y ubicaciones solas, sin acción del usuario', async () => {
+    render(<MapaSupervisorPage />)
+
+    await vi.waitFor(() => expect(getMapaSupervisorMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(getUbicacionesTecnicosMock).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      // Ubicaciones cada 15s, tareas cada 30s: a los 30s ya se pidieron
+      // ambas al menos una vez más.
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+
+    expect(getMapaSupervisorMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(getUbicacionesTecnicosMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('deja de refrescar mientras la pestaña está en segundo plano', async () => {
+    render(<MapaSupervisorPage />)
+
+    await vi.waitFor(() => expect(getUbicacionesTecnicosMock).toHaveBeenCalledTimes(1))
+
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    getMapaSupervisorMock.mockClear()
+    getUbicacionesTecnicosMock.mockClear()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000)
+    })
+
+    expect(getMapaSupervisorMock).not.toHaveBeenCalled()
     expect(getUbicacionesTecnicosMock).not.toHaveBeenCalled()
   })
 })
