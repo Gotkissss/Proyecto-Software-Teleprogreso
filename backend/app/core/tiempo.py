@@ -62,3 +62,17 @@ def hoy() -> date:
 def hora_actual() -> time:
     """Hora del día en la zona de la operación."""
     return ahora().time()
+
+
+def a_hora_local(momento: datetime) -> datetime:
+    """
+    Convierte un instante a la hora local de la operación, sin tzinfo.
+
+    Lo usan los datos que vienen del teléfono con su propia zona (p. ej. la
+    hora a la que se tomó una lectura de GPS guardada sin conexión): se pasan a
+    hora de Guatemala para compararlos y guardarlos igual que el resto. Un
+    valor sin zona se toma como que ya es hora local.
+    """
+    if momento.tzinfo is None:
+        return momento
+    return momento.astimezone(_zona()).replace(tzinfo=None)

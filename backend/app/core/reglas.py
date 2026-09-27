@@ -99,3 +99,36 @@ ESTADO_EMPLEADO_ACTIVO = "activo"
 # POST /asistencia/entrada, POST /asistencia/salida, GET /descanso/hoy y
 # POST /ubicaciones, que comparten esta regla.
 DURACION_MAXIMA_TURNO_HORAS = 14
+
+
+# ── Recorrido del técnico (HU-5) ─────────────────────────────────────────────
+#
+# Por qué se guardó cada punto de `ubicacion_empleado`:
+#   - periodico:    reporte automático mientras la app está abierta y hay
+#                   jornada. El frontend manda uno cada 2 min si el técnico se
+#                   mueve (≥ 30 m) y uno de control cada 5 min si está quieto;
+#                   descarta lecturas con precisión peor que 100 m.
+#   - inicio_tarea: al iniciar una tarea (PATCH /tareas/{id}/iniciar).
+#   - fin_tarea:    al finalizar una tarea (PATCH /tareas/{id}/finalizar).
+# 'entrada' y 'salida' no se guardan aquí: salen de `asistencia` (HU-4) y el
+# recorrido los intercala al construir la respuesta.
+EVENTO_PERIODICO = "periodico"
+EVENTO_INICIO_TAREA = "inicio_tarea"
+EVENTO_FIN_TAREA = "fin_tarea"
+EVENTO_ENTRADA = "entrada"
+EVENTO_SALIDA = "salida"
+EVENTOS_UBICACION = (EVENTO_PERIODICO, EVENTO_INICIO_TAREA, EVENTO_FIN_TAREA)
+
+# Si entre dos puntos seguidos pasan más de estos minutos, el tramo se marca
+# como "sin datos" en vez de dibujarse como un trayecto real. Es el doble del
+# punto de control de un técnico quieto (5 min), para que estar parado no se
+# confunda con un hueco. Casi siempre significa que la app estuvo cerrada, el
+# teléfono bloqueado o sin GPS: la web no puede leer ubicación en segundo plano.
+MINUTOS_HUECO_RECORRIDO = 10
+
+# Máximo de puntos por envío en lote (cola sin conexión del frontend).
+MAX_PUNTOS_LOTE = 500
+
+# Margen para puntos en lote con hora ligeramente "futura" por diferencias
+# entre el reloj del teléfono y el del servidor.
+TOLERANCIA_RELOJ_SEGUNDOS = 120
