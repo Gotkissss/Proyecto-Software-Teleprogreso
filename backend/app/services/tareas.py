@@ -18,7 +18,7 @@ from datetime import date, datetime, time, timedelta
 from typing import List, Optional
 
 from geoalchemy2 import Geometry
-from sqlalchemy import DateTime, and_, cast, delete, func, or_, select
+from sqlalchemy import DateTime, and_, case, cast, delete, func, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +29,8 @@ from app.core.reglas import (
     ESTADOS_TAREA_CERRADOS,
     ESTADO_EMPLEADO_ACTIVO,
     LIMITE_TAREAS_ACTIVAS,
+    PRIORIDAD_URGENTE,
+    PRIORIDADES_TAREA,
     ROL_TECNICO,
 )
 
@@ -376,24 +378,79 @@ def _filtro_mapa_del_dia(fecha: date, hoy_referencia: date):
     return or_(Tarea.estado_tarea.in_(ESTADOS_ACTIVOS), cerradas_ese_dia)
 
 
+def _orden_ruta_diaria(distancia_col=None) -> list:
+    """
+    Criterio ORDER BY de la ruta diaria (regla documentada en core/reglas.py).
+
+    Sin `distancia_col` (el técnico no envió posición) se ordena por prioridad.
+    Con ella: urgentes primero y, dentro de cada grupo, la más cercana primero.
+    El id de tarea cierra el orden para que sea estable entre recargas.
+    """
+    completada_al_final = case((Tarea.estado_tarea == "completado", 1), else_=0)
+    rango_prioridad = case(
+        *[
+            (Tarea.prioridad == prioridad, rango)
+            for rango, prioridad in enumerate(PRIORIDADES_TAREA)
+        ],
+        else_=len(PRIORIDADES_TAREA),
+    )
+
+    if distancia_col is None:
+        return [completada_al_final, rango_prioridad, Tarea.id_tarea]
+
+    urgente_primero = case((Tarea.prioridad == PRIORIDAD_URGENTE, 0), else_=1)
+    return [
+        completada_al_final,
+        urgente_primero,
+        distancia_col.asc().nulls_last(),
+        rango_prioridad,
+        Tarea.id_tarea,
+    ]
+
+
 async def obtener_mi_ruta(
     db: AsyncSession,
     current_user: Empleado,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
 ) -> List[TareaRutaResponse]:
-    """Obtiene las tareas del mapa diario del empleado autenticado."""
+    """
+    Obtiene las tareas del mapa diario del empleado autenticado.
+
+    Si llegan `lat` y `lng` (posición actual del técnico), cada tarea trae su
+    distancia en metros y la lista sale ordenada por cercanía; si no, por
+    prioridad. La posición solo se usa para calcular: no se guarda.
+    """
     coord = cast(Tarea.coordenada_servicio, Geometry)
     lat_col = func.ST_Y(coord).label("lat")
     lng_col = func.ST_X(coord).label("lng")
     hoy_referencia = hoy()
 
+    # ST_Distance entre dos geography devuelve metros sobre el elipsoide, sin
+    # tener que proyectar. El punto se arma con punto_wkt para no invertir
+    # latitud y longitud.
+    distancia_col = None
+    if lat is not None and lng is not None:
+        distancia_col = func.ST_Distance(
+            Tarea.coordenada_servicio,
+            func.ST_GeogFromText(punto_wkt(lat, lng)),
+        )
+
     query = (
-        select(Tarea, lat_col, lng_col)
+        select(
+            Tarea,
+            lat_col,
+            lng_col,
+            (distancia_col if distancia_col is not None else null()).label(
+                "distancia_m"
+            ),
+        )
         .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
         .where(
             EmpleadoTarea.id_empleado == current_user.id_empleado,
             _filtro_mapa_del_dia(hoy_referencia, hoy_referencia),
         )
-        .order_by(Tarea.id_tarea)
+        .order_by(*_orden_ruta_diaria(distancia_col))
     )
     result = await db.execute(query)
 
@@ -406,10 +463,12 @@ async def obtener_mi_ruta(
             estado_tarea=tarea.estado_tarea,
             prioridad=tarea.prioridad,
             fecha_completado=tarea.fecha_completado,
-            lat=lat,
-            lng=lng,
+            lat=lat_tarea,
+            lng=lng_tarea,
+            fecha_finalizacion=tarea.fecha_finalizacion,
+            distancia_m=distancia_m,
         )
-        for tarea, lat, lng in result.all()
+        for tarea, lat_tarea, lng_tarea, distancia_m in result.all()
     ]
 
 
