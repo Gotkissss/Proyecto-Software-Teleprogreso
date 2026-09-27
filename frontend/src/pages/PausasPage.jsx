@@ -28,6 +28,8 @@ import Modal from '../components/ui/Modal'
 import Spinner from '../components/ui/Spinner'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
+import { useUbicacion } from '../context/UbicacionContext'
+import { obtenerPosicionActual } from '../utils/posicionActual'
 import styles from './PausasPage.module.css'
 
 
@@ -122,8 +124,16 @@ function HistorialRow({ item }) {
   )
 }
 
+/** HU-4: aviso cuando la marca se registró, pero sin el lugar. */
+const AVISO_SIN_UBICACION =
+  'No se pudo obtener tu ubicación: la marca quedó registrada sin ella. ' +
+  'Activa el GPS y el permiso de ubicación para las próximas.'
+
 export default function PausasPage() {
   const toast = useToast()
+  // HU-4: última posición conocida, como respaldo si la lectura nueva del GPS
+  // no llega a tiempo al marcar entrada o salida.
+  const { posicion } = useUbicacion()
 
   // Estado tal como lo reporta el backend. Es la única fuente de verdad.
   const [estado,     setEstado]     = useState(null)
@@ -194,9 +204,13 @@ export default function PausasPage() {
   const handleRegistrarEntrada = async () => {
     setActionLoading(true)
     try {
-      await registrarEntrada()
+      // HU-4: lugar de la marca. Nunca bloquea: si no hay GPS, llega null y
+      // la entrada se registra igual, sin ubicación.
+      const lugar = await obtenerPosicionActual({ respaldo: posicion })
+      const respuesta = await registrarEntrada(lugar)
       await fetchData({ silencioso: true })
       toast.success('¡Entrada registrada correctamente!')
+      if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo registrar la entrada.')
     } finally {
@@ -238,9 +252,11 @@ export default function PausasPage() {
     if (!window.confirm('¿Confirmas que deseas finalizar la jornada de hoy?')) return
     setActionLoading(true)
     try {
-      await finalizarJornada()
+      const lugar = await obtenerPosicionActual({ respaldo: posicion })
+      const respuesta = await finalizarJornada(lugar)
       await fetchData({ silencioso: true })
       toast.success('¡Jornada finalizada! Tu estado se actualizó.')
+      if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'No se pudo finalizar la jornada.')
     } finally {
