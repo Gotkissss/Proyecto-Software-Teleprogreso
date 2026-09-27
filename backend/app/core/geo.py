@@ -24,7 +24,54 @@ se concatena dentro de una sentencia.
 -----------------------------------------------------------------------------
 """
 
+import struct
+from typing import Optional, Tuple
+
+# Códigos de WKB/EWKB que usa lat_lng_de para reconocer un POINT.
+_WKB_POINT = 1
+_EWKB_CON_SRID = 0x20000000
+
 
 def punto_wkt(lat: float, lng: float) -> str:
     """WKT para PostGIS; un POINT almacena longitud antes que latitud."""
     return f"SRID=4326;POINT({lng} {lat})"
+
+
+def lat_lng_de(valor) -> Optional[Tuple[float, float]]:
+    """
+    (lat, lng) de un punto leído de una columna Geography, o None.
+
+    Al cargar un modelo, geoalchemy2 entrega la columna como WKBElement: el
+    punto en binario (WKB) tal como lo devuelve ST_AsBinary. Se decodifica
+    aquí, sin shapely, porque un POINT es fijo y simple:
+
+        1 byte  orden de bytes (1 = little endian, 0 = big endian)
+        4 bytes tipo de geometría (1 = POINT; con el bit 0x20000000 lleva SRID)
+        4 bytes SRID, solo si el bit anterior está encendido (EWKB)
+        8 bytes X = LONGITUD
+        8 bytes Y = LATITUD
+
+    Igual que al escribir, X es la longitud: se devuelve (lat, lng) ya en el
+    orden en que las usa el resto de la aplicación.
+    """
+    if valor is None:
+        return None
+
+    datos = getattr(valor, "data", valor)
+    if isinstance(datos, str):
+        datos = bytes.fromhex(datos)
+    datos = bytes(datos)
+
+    if len(datos) < 21:
+        return None
+
+    orden = "<" if datos[0] == 1 else ">"
+    (tipo,) = struct.unpack_from(f"{orden}I", datos, 1)
+    desplazamiento = 5
+    if tipo & _EWKB_CON_SRID:
+        desplazamiento += 4
+    if (tipo & 0xFF) != _WKB_POINT or len(datos) < desplazamiento + 16:
+        return None
+
+    lng, lat = struct.unpack_from(f"{orden}dd", datos, desplazamiento)
+    return lat, lng
