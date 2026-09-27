@@ -11,9 +11,11 @@ llega a ninguna parte: el router toma ese dato del token y nunca del cuerpo.
 -----------------------------------------------------------------------------
 """
 
-from datetime import datetime
-from typing import Literal
+from datetime import date, datetime
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
+
+from app.core.reglas import MAX_PUNTOS_LOTE
 
 
 class UbicacionCreate(BaseModel):
@@ -51,3 +53,59 @@ class UbicacionTecnicoResponse(BaseModel):
     lng: float
     fecha_hora_registro: datetime
     estado: Literal["en_tarea", "en_pausa", "disponible"]
+
+
+# ─── HU-5: envío en lote (cola sin conexión) ─────────────────────────────────
+
+class PuntoLote(UbicacionCreate):
+    """Punto tomado sin conexión, con la hora real de la lectura del GPS."""
+
+    fecha_hora: datetime = Field(
+        ...,
+        description=(
+            "Momento en que se tomó la lectura, en ISO 8601 con zona "
+            "(p. ej. el `toISOString()` del navegador)."
+        ),
+    )
+
+
+class UbicacionLoteCreate(BaseModel):
+    """Puntos acumulados sin señal que el técnico envía al reconectarse."""
+
+    puntos: List[PuntoLote] = Field(..., min_length=1, max_length=MAX_PUNTOS_LOTE)
+
+
+class UbicacionLoteResponse(BaseModel):
+    """
+    Cuántos puntos se guardaron y cuántos se descartaron (fuera de jornada,
+    con hora futura o ya guardados en un envío anterior).
+    """
+
+    guardados: int
+    descartados: int
+
+
+# ─── HU-5: recorrido del día ─────────────────────────────────────────────────
+
+class PuntoRecorrido(BaseModel):
+    """Un punto del recorrido, en orden cronológico."""
+
+    lat: float
+    lng: float
+    fecha_hora: datetime
+    evento: Literal["periodico", "inicio_tarea", "fin_tarea", "entrada", "salida"]
+    id_tarea: Optional[int] = None
+    titulo_tarea: Optional[str] = None
+    # True si antes de este punto pasaron más de `minutos_hueco` sin datos: el
+    # tramo que llega a él no es un trayecto real y se dibuja distinto.
+    tras_hueco: bool = False
+
+
+class RecorridoResponse(BaseModel):
+    """Recorrido de un técnico en un día (GET /ubicaciones/{id}/recorrido)."""
+
+    id_empleado: int
+    nombre: str
+    fecha: date
+    minutos_hueco: int
+    puntos: List[PuntoRecorrido] = []
