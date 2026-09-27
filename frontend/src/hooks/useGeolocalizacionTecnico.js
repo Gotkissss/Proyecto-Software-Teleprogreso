@@ -5,7 +5,13 @@
  * sobre el mapa de la ruta (MapaPage + MarcadorMiUbicacion).
  *
  * SCRUM-219 — Además reporta esa posición al backend (POST /ubicaciones)
- * como máximo una vez por minuto mientras el técnico tenga jornada abierta.
+ * mientras el técnico tenga jornada abierta.
+ *
+ * HU-5 — Cuándo se reporta lo deciden las reglas del recorrido
+ * (utils/reglasUbicacion.js): cada 2 min si se mueve, un punto de control
+ * cada 5 min si está quieto, y nunca lecturas imprecisas. Sin conexión, el
+ * punto se guarda en la cola (utils/colaUbicaciones.js) con su hora real y se
+ * envía en lote al reconectar.
  *
  * Es un hook independiente: no toca la carga de tareas/servicios que ya
  * existe en MapaPage (SCRUM-162), solo expone la posición del dispositivo
@@ -20,7 +26,7 @@
  *
  * Uso:
  *   const { posicion, estado, mensaje, errorEnvio } =
- *     useGeolocalizacionTecnico({ jornadaActiva })
+ *     useGeolocalizacionTecnico({ jornadaActiva, idEmpleado })
  *   // posicion: { lat, lng, accuracy } | null
  *
  * El parámetro es opcional: sin él el hook se comporta igual que antes de
@@ -28,6 +34,8 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { enviarUbicacion } from '../api/ubicacionService'
+import { debeReportar } from '../utils/reglasUbicacion'
+import { encolarPunto, enviarCola } from '../utils/colaUbicaciones'
 
 const OPCIONES_GEOLOCALIZACION = {
   enableHighAccuracy: true,
@@ -35,17 +43,17 @@ const OPCIONES_GEOLOCALIZACION = {
   maximumAge: 15000,
 }
 
-/**
- * Tiempo mínimo entre dos escrituras en el backend.
- *
+/*
  * watchPosition dispara una lectura cada pocos segundos mientras el técnico
  * camina o va en el carro. Mandarlas todas llenaría la tabla de ubicaciones
  * con cientos de puntos por jornada y convertiría a cada teléfono en una
  * fuente de tráfico constante contra el backend; con veinte técnicos en la
  * calle eso es un ataque de denegación de servicio hecho por la propia
- * aplicación. Un punto por minuto basta de sobra para seguir una ruta.
+ * aplicación. La frecuencia la fija debeReportar (utils/reglasUbicacion.js).
  */
-const INTERVALO_ENVIO_MS = 60 * 1000
+
+const AVISO_SIN_CONEXION =
+  'Sin conexión: tu ubicación se guarda en el teléfono y se enviará al reconectar.'
 
 function mensajePorError(error) {
   switch (error.code) {
@@ -60,7 +68,10 @@ function mensajePorError(error) {
   }
 }
 
-export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}) {
+export default function useGeolocalizacionTecnico({
+  jornadaActiva = false,
+  idEmpleado = null,
+} = {}) {
   const [posicion, setPosicion] = useState(null)
   const [estado, setEstado] = useState('cargando')
   const [mensaje, setMensaje] = useState(null)
@@ -75,10 +86,16 @@ export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}
     jornadaActivaRef.current = jornadaActiva
   }, [jornadaActiva])
 
-  // Momento del último envío. Vive en una referencia y no en el estado porque
-  // cambiarlo no debe repintar nada, y porque el valor tiene que sobrevivir
-  // entre lecturas del GPS sin reiniciar el efecto.
-  const ultimoEnvioRef = useRef(0)
+  // Mismo motivo: el efecto del GPS no se reinicia al cambiar de usuario.
+  const idEmpleadoRef = useRef(idEmpleado)
+  useEffect(() => {
+    idEmpleadoRef.current = idEmpleado
+  }, [idEmpleado])
+
+  // Último punto reportado {lat, lng, t}. Vive en una referencia y no en el
+  // estado porque cambiarlo no debe repintar nada, y porque el valor tiene
+  // que sobrevivir entre lecturas del GPS sin reiniciar el efecto.
+  const ultimoEnvioRef = useRef(null)
 
   // El envío es asíncrono y puede resolverse después de que el técnico cambió
   // de pantalla; sin esta marca se intentaría actualizar el estado de un hook
@@ -104,20 +121,34 @@ export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}
      * mandando la última posición conocida aunque el GPS llevara rato sin
      * responder, y habría que sincronizarlos a mano.
      */
-    const reportarUbicacion = (lat, lng) => {
+    const reportarUbicacion = (lat, lng, accuracy, timestamp) => {
       // Fuera de jornada el backend responde 409, así que ni se intenta: la
       // petición sería trabajo tirado para el servidor. Y si el técnico marca
       // salida desde otra pestaña, el 409 que sí llegue lo avisa abajo.
       if (!jornadaActivaRef.current) return
 
       const ahora = Date.now()
-      if (ahora - ultimoEnvioRef.current < INTERVALO_ENVIO_MS) return
+      if (!debeReportar(ultimoEnvioRef.current, { lat, lng, accuracy }, ahora)) return
 
       // El sello se pone ANTES de esperar la respuesta, a propósito: si se
       // pusiera al resolverse, todas las lecturas que llegan mientras la
       // petición viaja pasarían el filtro y saldría una ráfaga de escrituras,
       // que es justo lo que este control evita.
-      ultimoEnvioRef.current = ahora
+      ultimoEnvioRef.current = { lat, lng, t: ahora }
+
+      // HU-5: hora real de la lectura, por si el punto termina en la cola.
+      const punto = {
+        lat,
+        lng,
+        fecha_hora: new Date(Number.isFinite(timestamp) ? timestamp : ahora).toISOString(),
+      }
+
+      // Sin red no tiene sentido esperar a que falle la petición.
+      if (navigator.onLine === false) {
+        encolarPunto(idEmpleadoRef.current, punto)
+        setErrorEnvio(AVISO_SIN_CONEXION)
+        return
+      }
 
       enviarUbicacion({ lat, lng })
         .then((resultado) => {
@@ -127,14 +158,22 @@ export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}
               ? 'Tu jornada no está abierta, así que tu ubicación no se está registrando.'
               : null
           )
+          // Hay conexión: se aprovecha para vaciar lo que quedó pendiente.
+          if (resultado?.ok !== false) enviarCola(idEmpleadoRef.current)
         })
-        .catch(() => {
-          // El marcador no depende de esto. Un fallo de red o del backend se
-          // anota y se vuelve a intentar en la siguiente lectura pasado el
-          // minuto; el técnico nunca se queda sin verse en el mapa por no
-          // haber podido reportar su posición.
+        .catch((err) => {
+          // El marcador no depende de esto; el técnico nunca se queda sin
+          // verse en el mapa por no haber podido reportar su posición.
+          // Sin respuesta del servidor es falta de red: el punto va a la cola
+          // en vez de perderse. Con respuesta es un fallo del backend: se
+          // avisa y se reintenta con la siguiente lectura que toque.
+          if (!err?.response) encolarPunto(idEmpleadoRef.current, punto)
           if (montadoRef.current) {
-            setErrorEnvio('No se pudo reportar tu ubicación. Se reintentará en un minuto.')
+            setErrorEnvio(
+              err?.response
+                ? 'No se pudo reportar tu ubicación. Se reintentará en unos minutos.'
+                : AVISO_SIN_CONEXION
+            )
           }
         })
     }
@@ -148,9 +187,14 @@ export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}
       setEstado('ok')
       setMensaje(null)
 
-      // Solo lat y lng: la precisión sirve para dibujar el círculo en el mapa,
-      // pero la tabla del backend guarda un punto y nada más.
-      reportarUbicacion(pos.coords.latitude, pos.coords.longitude)
+      // La precisión no se guarda en el backend (la tabla guarda un punto),
+      // pero sí decide si la lectura es confiable para el recorrido.
+      reportarUbicacion(
+        pos.coords.latitude,
+        pos.coords.longitude,
+        pos.coords.accuracy,
+        pos.timestamp,
+      )
     }
 
     const handleError = (error) => {
@@ -172,6 +216,19 @@ export default function useGeolocalizacionTecnico({ jornadaActiva = false } = {}
       navigator.geolocation.clearWatch(watchId)
     }
   }, [])
+
+  // HU-5: al volver la señal (y al abrir la app) se envía lo que quedó en la
+  // cola. `online` lo dispara el navegador al recuperar la red.
+  useEffect(() => {
+    const vaciarCola = () => {
+      enviarCola(idEmpleadoRef.current).then((enviados) => {
+        if (enviados > 0 && montadoRef.current) setErrorEnvio(null)
+      })
+    }
+    vaciarCola()
+    window.addEventListener('online', vaciarCola)
+    return () => window.removeEventListener('online', vaciarCola)
+  }, [idEmpleado])
 
   return { posicion, estado, mensaje, errorEnvio }
 }
