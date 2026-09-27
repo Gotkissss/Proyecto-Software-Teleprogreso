@@ -33,7 +33,14 @@ def _descanso(id_descanso, inicio, fin):
     )
 
 
-def _asistencia(entrada, salida, descansos=None, fecha=date(2026, 7, 20)):
+def _asistencia(
+    entrada,
+    salida,
+    descansos=None,
+    fecha=date(2026, 7, 20),
+    coordenada_entrada=None,
+    coordenada_salida=None,
+):
     return SimpleNamespace(
         id_asistencia=1,
         id_empleado=2,
@@ -42,6 +49,8 @@ def _asistencia(entrada, salida, descansos=None, fecha=date(2026, 7, 20)):
         hora_salida=salida,
         descansos=descansos or [],
         empleado=SimpleNamespace(nombre="Juan", apellido="Pérez", rol="tecnico"),
+        coordenada_entrada=coordenada_entrada,
+        coordenada_salida=coordenada_salida,
     )
 
 

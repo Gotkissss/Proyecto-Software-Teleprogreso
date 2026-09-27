@@ -5,8 +5,8 @@
  *
  * Mapeo de endpoints reales:
  *   GET   /asistencia/hoy        → AsistenciaHoy
- *   POST  /asistencia/entrada    → registrar entrada
- *   POST  /asistencia/salida     → finalizar jornada
+ *   POST  /asistencia/entrada    → registrar entrada ({lat, lng} opcional, HU-4)
+ *   POST  /asistencia/salida     → finalizar jornada ({lat, lng} opcional, HU-4)
  *   POST  /descanso/iniciar      → iniciar pausa
  *   POST  /descanso/finalizar    → finalizar pausa activa
  *   GET   /descanso/tipos        → TipoPausa[] (configuración estática)
@@ -49,11 +49,28 @@ export const getAsistenciaHoy = async () => {
 }
 
 /**
- * Registra la entrada al inicio de la jornada.
+ * Cuerpo de la marca de entrada/salida (HU-4): `{lat, lng}` si hay posición.
+ * Sin posición no se manda cuerpo y el backend registra la marca "sin
+ * ubicación"; nunca se bloquea al técnico por no tener GPS.
  */
-export const registrarEntrada = async () => {
-  const { data } = await apiClient.post('/asistencia/entrada')
-  return normalizarAsistencia(data)
+function cuerpoMarca(posicion) {
+  return Number.isFinite(posicion?.lat) && Number.isFinite(posicion?.lng)
+    ? { lat: posicion.lat, lng: posicion.lng }
+    : undefined
+}
+
+/**
+ * Registra la entrada al inicio de la jornada.
+ *
+ * @param {{lat:number, lng:number}|null} [posicion] - lugar de la marca (HU-4)
+ * @returns {Promise<Object>} asistencia normalizada + `ubicacion_registrada`
+ */
+export const registrarEntrada = async (posicion = null) => {
+  const { data } = await apiClient.post('/asistencia/entrada', cuerpoMarca(posicion))
+  return {
+    ...normalizarAsistencia(data),
+    ubicacion_registrada: Boolean(data?.ubicacion_registrada),
+  }
 }
 
 /**
@@ -128,9 +145,12 @@ export const getTiposPausa = async () => {
 
 /**
  * Finaliza la jornada laboral del día (registra la hora de salida).
+ *
+ * @param {{lat:number, lng:number}|null} [posicion] - lugar de la marca (HU-4)
+ * @returns {Promise<Object>} respuesta del backend, con `ubicacion_registrada`
  */
-export const finalizarJornada = async () => {
-  const { data } = await apiClient.post('/asistencia/salida')
+export const finalizarJornada = async (posicion = null) => {
+  const { data } = await apiClient.post('/asistencia/salida', cuerpoMarca(posicion))
   return data
 }
 

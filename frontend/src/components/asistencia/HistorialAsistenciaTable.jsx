@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Badge from '../ui/Badge'
 import PageState from '../ui/PageState'
+import MiniMapaAsistencia from '../mapa/MiniMapaAsistencia'
 import {
   getEmpleadosParaFiltro,
   getHistorialAsistencia,
@@ -103,6 +104,27 @@ function esSinSalida(jornada) {
   return jornada.jornada_activa && jornada.fecha < HOY_ISO
 }
 
+/**
+ * HU-4: ¿la marca de entrada/salida tiene lugar registrado? Una marca sin
+ * ubicación (GPS denegado o sin señal) se señala para que el supervisor la
+ * revise. La salida solo cuenta si existe: una jornada en curso todavía no
+ * tiene salida que ubicar.
+ */
+function entradaSinUbicacion(jornada) {
+  return Boolean(jornada.hora_entrada) && (jornada.lat_entrada == null || jornada.lng_entrada == null)
+}
+
+function salidaSinUbicacion(jornada) {
+  return Boolean(jornada.hora_salida) && (jornada.lat_salida == null || jornada.lng_salida == null)
+}
+
+function tieneAlgunaUbicacion(jornada) {
+  return (
+    (jornada.lat_entrada != null && jornada.lng_entrada != null) ||
+    (jornada.lat_salida != null && jornada.lng_salida != null)
+  )
+}
+
 /** Variante de color para el total de horas trabajadas de la jornada. */
 function varianteHoras(minutosTrabajados) {
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA) return 'success'
@@ -111,19 +133,23 @@ function varianteHoras(minutosTrabajados) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Fila de una jornada (expandible para ver el detalle de pausas)
+   Fila de una jornada (expandible para ver el lugar de las marcas
+   y el detalle de pausas)
    ───────────────────────────────────────────────────────────── */
 function FilaJornada({ jornada }) {
   const [abierta, setAbierta] = useState(false)
   const tienePausas = jornada.descansos?.length > 0
+  const tieneUbicacion = tieneAlgunaUbicacion(jornada)
+  // HU-4: la fila también se expande para ver el mini-mapa de las marcas.
+  const expandible = tienePausas || tieneUbicacion
   const llegadaTarde = esLlegadaTarde(jornada)
   const sinSalida = esSinSalida(jornada)
 
   return (
     <>
       <tr
-        className={`${styles.fila} ${tienePausas ? styles.filaClickable : ''}`}
-        onClick={() => tienePausas && setAbierta((v) => !v)}
+        className={`${styles.fila} ${expandible ? styles.filaClickable : ''}`}
+        onClick={() => expandible && setAbierta((v) => !v)}
       >
         <td className={styles.celda}>
           <span className={styles.fecha}>{formatearFecha(jornada.fecha)}</span>
@@ -141,6 +167,11 @@ function FilaJornada({ jornada }) {
               <Badge label="Llegada tarde" variant="warning" />
             </span>
           )}
+          {entradaSinUbicacion(jornada) && (
+            <span className={styles.indicadorWrap}>
+              <Badge label="Sin ubicación" variant="danger" />
+            </span>
+          )}
         </td>
         <td className={styles.celda}>
           {sinSalida ? (
@@ -150,7 +181,14 @@ function FilaJornada({ jornada }) {
           ) : jornada.jornada_activa ? (
             <Badge label="En curso" variant="info" />
           ) : (
-            formatearHora(jornada.hora_salida)
+            <>
+              {formatearHora(jornada.hora_salida)}
+              {salidaSinUbicacion(jornada) && (
+                <span className={styles.indicadorWrap}>
+                  <Badge label="Sin ubicación" variant="danger" />
+                </span>
+              )}
+            </>
           )}
         </td>
         <td className={`${styles.celda} ${styles.numero}`}>
@@ -167,26 +205,36 @@ function FilaJornada({ jornada }) {
           )}
         </td>
         <td className={`${styles.celda} ${styles.numero}`}>
-          {tienePausas && (
+          {expandible && (
             <span className={styles.chevron}>{abierta ? '▾' : '▸'}</span>
           )}
         </td>
       </tr>
 
-      {abierta && tienePausas && (
+      {abierta && expandible && (
         <tr className={styles.filaDetalle}>
           <td className={styles.detalleCelda} colSpan={7}>
-            <span className={styles.detalleTitulo}>Pausas de la jornada</span>
-            <ul className={styles.pausasList}>
-              {jornada.descansos.map((p) => (
-                <li key={p.id_descanso} className={styles.pausaItem}>
-                  <span>
-                    {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
-                  </span>
-                  <span className={styles.pausaMin}>{p.minutos} min</span>
-                </li>
-              ))}
-            </ul>
+            {tieneUbicacion && (
+              <>
+                <span className={styles.detalleTitulo}>Lugar de las marcas</span>
+                <MiniMapaAsistencia jornada={jornada} />
+              </>
+            )}
+            {tienePausas && (
+              <>
+                <span className={styles.detalleTitulo}>Pausas de la jornada</span>
+                <ul className={styles.pausasList}>
+                  {jornada.descansos.map((p) => (
+                    <li key={p.id_descanso} className={styles.pausaItem}>
+                      <span>
+                        {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
+                      </span>
+                      <span className={styles.pausaMin}>{p.minutos} min</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </td>
         </tr>
       )}
@@ -336,6 +384,9 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
         </span>
         <span className={styles.leyendaItem}>
           <Badge label="Sin salida" variant="danger" /> No se marcó salida en una jornada anterior
+        </span>
+        <span className={styles.leyendaItem}>
+          <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS: revisar con el técnico
         </span>
         <span className={styles.leyendaItem}>
           <span className={`${styles.horasChip} ${styles.horas_success}`}>00:00</span> Jornada completa (≥ 8h)

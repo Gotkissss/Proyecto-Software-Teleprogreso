@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import get_current_empleado
+from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado
@@ -36,6 +37,7 @@ from app.schemas.asistencia import (
     HistorialTotales,
     JornadaResponse,
 )
+from app.schemas.ubicacion import UbicacionCreate
 from app.services.asistencia import (
     calcular_jornada,
     es_del_turno_en_curso,
@@ -53,6 +55,19 @@ ROLES_SUPERVISION = ("admin", "supervisor", "gerente")
 # hora: es una marca de "esta jornada quedó sin cerrar" que además permite
 # seguir operando. La alternativa (dejarla abierta) bloqueaba al empleado.
 HORA_CIERRE_FORZADO = time(23, 59, 59)
+
+
+def _punto_de_la_marca(ubicacion: Optional[UbicacionCreate]) -> Optional[str]:
+    """
+    Punto PostGIS de la marca de entrada o salida (HU-4), o None.
+
+    La ubicación es opcional a propósito: si el GPS está denegado o sin señal,
+    la marca se registra igual y queda "sin ubicación" para que el supervisor
+    la revise. Bloquear la entrada dejaría al técnico sin poder trabajar.
+    """
+    if ubicacion is None:
+        return None
+    return punto_wkt(ubicacion.lat, ubicacion.lng)
 
 
 async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> None:
@@ -88,6 +103,7 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
 async def registrar_entrada(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    ubicacion: Optional[UbicacionCreate] = None,
 ):
     """
     Registra la hora de entrada del empleado autenticado.
@@ -95,6 +111,9 @@ async def registrar_entrada(
     - Solo el propio empleado puede registrar su entrada (el token lo identifica).
     - No permite registrar una segunda entrada si ya existe una jornada activa
       (sin hora de salida) para el día actual.
+    - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
+      lugar de la entrada; si no, la entrada se registra igual sin ubicación.
+      Coordenadas fuera de rango responden 422.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
     # 1. Buscar jornadas abiertas (entrada sin salida) del empleado.
@@ -146,7 +165,7 @@ async def registrar_entrada(
         id_empleado=current_user.id_empleado,
         fecha=now.date(),
         hora_entrada=now.time(),
-        coordenada_entrada=None,  # GPS opcional pueda ser  para  sprint futuro
+        coordenada_entrada=_punto_de_la_marca(ubicacion),
     )
 
     db.add(nueva_asistencia)
@@ -158,6 +177,7 @@ async def registrar_entrada(
         "empleado": f"{current_user.nombre} {current_user.apellido}",
         "fecha": str(now.date()),
         "hora_entrada": str(now.time().strftime("%H:%M:%S")),
+        "ubicacion_registrada": ubicacion is not None,
     }
 
 
@@ -171,6 +191,7 @@ async def registrar_entrada(
 async def registrar_salida(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    ubicacion: Optional[UbicacionCreate] = None,
 ):
     """
     Registra la hora de salida del empleado autenticado.
@@ -178,6 +199,8 @@ async def registrar_salida(
     - Cierra la jornada del turno en curso (la de hoy, o la de ayer si se trata
       de un turno nocturno que cruzó la medianoche).
     - Si no hay ninguna jornada del turno en curso, retorna 400.
+    - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
+      lugar de la salida; si no, la salida se registra igual sin ubicación.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
     now = ahora_local()
@@ -211,8 +234,9 @@ async def registrar_salida(
                    "Registra la entrada primero.",
         )
 
-    # 2. Registrar la hora de salida
+    # 2. Registrar la hora de salida y, si llegó, el lugar (HU-4)
     asistencia_activa.hora_salida = now.time()
+    asistencia_activa.coordenada_salida = _punto_de_la_marca(ubicacion)
 
     # 3. Cerrar también el descanso que hubiera quedado en curso: si no, la
     #    pausa seguiría "abierta" dentro de una jornada ya cerrada y el
@@ -243,6 +267,7 @@ async def registrar_salida(
         "fecha": str(asistencia_activa.fecha),
         "hora_entrada": str(asistencia_activa.hora_entrada.strftime("%H:%M:%S")),
         "hora_salida": str(now.time().strftime("%H:%M:%S")),
+        "ubicacion_registrada": ubicacion is not None,
     }
 
 
@@ -311,6 +336,9 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
     resumen = calcular_jornada(asistencia, asistencia.descansos, referencia=referencia)
 
     empleado = asistencia.empleado
+    # HU-4: lugar de cada marca; None si se registró sin ubicación.
+    entrada = lat_lng_de(asistencia.coordenada_entrada)
+    salida = lat_lng_de(asistencia.coordenada_salida)
 
     return JornadaResponse(
         id_asistencia=asistencia.id_asistencia,
@@ -323,6 +351,10 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
         hora_entrada=asistencia.hora_entrada,
         hora_salida=asistencia.hora_salida,
         jornada_activa=resumen.jornada_activa,
+        lat_entrada=entrada[0] if entrada else None,
+        lng_entrada=entrada[1] if entrada else None,
+        lat_salida=salida[0] if salida else None,
+        lng_salida=salida[1] if salida else None,
         minutos_brutos=resumen.minutos_brutos,
         minutos_pausa=resumen.minutos_pausa,
         minutos_trabajados=resumen.minutos_trabajados,

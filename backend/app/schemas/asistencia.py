@@ -45,6 +45,14 @@ class JornadaResponse(BaseModel):
     hora_salida: Optional[time] = None
     jornada_activa: bool
 
+    # Lugar de cada marca (HU-4). None = la marca se registró sin ubicación
+    # (GPS denegado o sin señal); la UI la señala para que el supervisor la
+    # revise.
+    lat_entrada: Optional[float] = None
+    lng_entrada: Optional[float] = None
+    lat_salida: Optional[float] = None
+    lng_salida: Optional[float] = None
+
     # Metricas (en minutos, redondeados hacia abajo)
     minutos_brutos: int = 0        # salida - entrada
     minutos_pausa: int = 0         # suma de todas las pausas
