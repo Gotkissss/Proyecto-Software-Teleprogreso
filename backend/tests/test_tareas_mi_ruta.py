@@ -46,11 +46,12 @@ def _tarea(id_tarea, estado, **campos):
         estado_tarea=estado,
         prioridad=campos.get("prioridad", "media"),
         fecha_completado=campos.get("fecha_completado"),
+        fecha_finalizacion=campos.get("fecha_finalizacion"),
     )
 
 
 def _db_con_filas(filas):
-    """AsyncSession simulada: `filas` son tuplas (tarea, lat, lng)."""
+    """AsyncSession simulada: `filas` son tuplas (tarea, lat, lng, distancia_m)."""
     resultado = MagicMock()
     resultado.all.return_value = filas
 
@@ -105,7 +106,9 @@ def test_el_endpoint_no_acepta_un_empleado_por_parametro():
 
     assert "id_tecnico" not in parametros
     assert "id_empleado" not in parametros
-    assert parametros == {"db", "current_user"}
+    # lat/lng (HU-3) son la posición del propio técnico para ordenar su ruta,
+    # no un selector de empleado.
+    assert parametros == {"db", "current_user", "lat", "lng"}
 
 
 # ─── Recorte por día ──────────────────────────────────────────────────────────
@@ -153,12 +156,13 @@ async def test_las_canceladas_no_entran_al_mapa():
 
 
 @pytest.mark.asyncio
-async def test_ordena_las_paradas_por_id_de_tarea():
+async def test_el_id_de_tarea_cierra_el_orden_para_que_sea_estable():
     db = _db_con_filas([])
 
     await get_mi_ruta(db=db, current_user=_empleado())
 
-    assert "ORDER BY tarea.id_tarea" in _sql_de(db)
+    orden = _sql_de(db).split("ORDER BY", 1)[1]
+    assert orden.rstrip().endswith("tarea.id_tarea")
 
 
 # ─── Serialización de coordenadas ─────────────────────────────────────────────
@@ -207,8 +211,8 @@ async def test_lat_es_ST_Y_y_lng_es_ST_X():
 @pytest.mark.asyncio
 async def test_devuelve_las_paradas_con_sus_coordenadas():
     db = _db_con_filas([
-        (_tarea(1, "pendiente"), 14.4744, -90.4425),
-        (_tarea(2, "en_progreso"), 14.4751, -90.4437),
+        (_tarea(1, "pendiente"), 14.4744, -90.4425, None),
+        (_tarea(2, "en_progreso"), 14.4751, -90.4437, None),
     ])
 
     ruta = await get_mi_ruta(db=db, current_user=_empleado())
@@ -240,6 +244,7 @@ async def test_la_parada_trae_lo_que_el_popup_del_mapa_necesita():
             ),
             14.47,
             -90.44,
+            None,
         ),
     ])
 
@@ -254,7 +259,7 @@ async def test_la_parada_trae_lo_que_el_popup_del_mapa_necesita():
 async def test_una_tarea_sin_ubicacion_no_rompe_la_ruta():
     # La coordenada es opcional (SCRUM-169): las tareas viejas solo tienen
     # dirección escrita. El mapa las omite, pero la respuesta no debe fallar.
-    db = _db_con_filas([(_tarea(5, "pendiente"), None, None)])
+    db = _db_con_filas([(_tarea(5, "pendiente"), None, None, None)])
 
     ruta = await get_mi_ruta(db=db, current_user=_empleado())
 
@@ -271,3 +276,4 @@ async def test_sin_tareas_hoy_devuelve_lista_vacia():
     ruta = await get_mi_ruta(db=db, current_user=_empleado())
 
     assert ruta == []
+
