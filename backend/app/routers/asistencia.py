@@ -27,7 +27,7 @@ from sqlalchemy.orm import selectinload
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
 from app.core.deps import get_current_empleado
-from app.core.geo import punto_wkt
+from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado
@@ -336,6 +336,9 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
     resumen = calcular_jornada(asistencia, asistencia.descansos, referencia=referencia)
 
     empleado = asistencia.empleado
+    # HU-4: lugar de cada marca; None si se registró sin ubicación.
+    entrada = lat_lng_de(asistencia.coordenada_entrada)
+    salida = lat_lng_de(asistencia.coordenada_salida)
 
     return JornadaResponse(
         id_asistencia=asistencia.id_asistencia,
@@ -348,6 +351,10 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
         hora_entrada=asistencia.hora_entrada,
         hora_salida=asistencia.hora_salida,
         jornada_activa=resumen.jornada_activa,
+        lat_entrada=entrada[0] if entrada else None,
+        lng_entrada=entrada[1] if entrada else None,
+        lat_salida=salida[0] if salida else None,
+        lng_salida=salida[1] if salida else None,
         minutos_brutos=resumen.minutos_brutos,
         minutos_pausa=resumen.minutos_pausa,
         minutos_trabajados=resumen.minutos_trabajados,
