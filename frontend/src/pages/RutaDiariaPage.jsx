@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUbicacion } from '../context/UbicacionContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
@@ -16,6 +16,7 @@ import {
 } from '../components/mapa/estadoColor'
 import { describirVencimiento } from '../utils/vencimiento'
 import { formatearDistancia, urlGoogleMaps, urlWaze } from '../utils/navegacion'
+import { obtenerPosicionActual } from '../utils/posicionActual'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -30,7 +31,7 @@ const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconMap      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>
 
 // Panel de detalle / modal de tarea
-function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa }) {
+function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa, bloqueado = false }) {
   const isInProgress = servicio.estado === 'en_progreso'
   const isCompleted  = servicio.estado === 'completado'
 
@@ -95,12 +96,21 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa })
           </button>
 
           {/* Acciones */}
+          {/* HU-5: sin jornada abierta no se trabaja en tareas. */}
+          {!isCompleted && bloqueado && (
+            <p className={styles.avisoJornada}>
+              Registra tu entrada en <Link to="/pausas">Pausas</Link> para{' '}
+              {isInProgress ? 'finalizar' : 'iniciar'} esta tarea.
+            </p>
+          )}
+
           {!isCompleted && (
             <div className={styles.panelActions}>
               {!isInProgress ? (
                 <button
                   className={styles.iniciarBtn}
                   onClick={() => onIniciar(servicio.id_servicio)}
+                  disabled={bloqueado}
                 >
                   <IconPlay />
                   <span>Iniciar Tarea</span>
@@ -109,6 +119,7 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa })
                 <button
                   className={styles.terminarBtn}
                   onClick={() => onTerminar(servicio.id_servicio)}
+                  disabled={bloqueado}
                 >
                   <IconCheck />
                   <span>Terminar Tarea</span>
@@ -233,7 +244,10 @@ export default function RutaDiariaPage() {
   const { user } = useAuth()
   // HU-3: la posición sale del mismo seguimiento GPS que usa el mapa
   // (UbicacionContext); no se abre un segundo watchPosition.
-  const { posicion } = useUbicacion()
+  // HU-5: jornadaActiva bloquea iniciar/finalizar tareas sin haber marcado
+  // entrada; refrescarJornada evita esperar el ciclo de 30 s del contexto.
+  const { posicion, jornadaActiva, jornadaCargada, refrescarJornada } = useUbicacion()
+  const sinJornada = jornadaCargada && !jornadaActiva
   const toast = useToast()
   const navigate = useNavigate()
   const [ruta,           setRuta]           = useState(null)
@@ -294,6 +308,12 @@ export default function RutaDiariaPage() {
     fetchRuta({ silencioso: yaCargoRef.current })
   }, [fetchRuta, hayPosicion])
 
+  // HU-5: el técnico puede venir de marcar entrada en Pausas; se consulta la
+  // jornada al entrar para no mostrarle un bloqueo que ya no aplica.
+  useEffect(() => {
+    refrescarJornada?.()
+  }, [refrescarJornada])
+
   // Tras un cambio local, las completadas bajan al final sin alterar el orden
   // que decidió el backend para el resto.
   const completadasAlFinal = (lista) => [
@@ -302,6 +322,10 @@ export default function RutaDiariaPage() {
   ]
 
   const handleIniciar = async (idServicio) => {
+    if (sinJornada) {
+      toast.error('Registra tu entrada para iniciar la jornada antes de iniciar tareas.')
+      return
+    }
     // Se guarda el estado previo para poder revertir con exactitud si el
     // backend rechaza el inicio (antes se revertía siempre a 'pendiente',
     // aunque la tarea viniera de otro estado).
@@ -318,7 +342,10 @@ export default function RutaDiariaPage() {
       prev && prev.id_servicio === idServicio ? { ...prev, estado: 'en_progreso' } : prev
     )
     try {
-      await iniciarServicio(idServicio)
+      // HU-5: lugar del inicio para el recorrido. Nunca bloquea: sin GPS
+      // llega null y la tarea se inicia igual.
+      const lugar = await obtenerPosicionActual({ respaldo: posicion })
+      await iniciarServicio(idServicio, lugar)
       toast.success('Servicio iniciado.')
     } catch (err) {
       const detalle = err?.response?.data?.detail ?? err.message
@@ -345,6 +372,10 @@ export default function RutaDiariaPage() {
    * así no se marca como completada una tarea cuya foto no llegó a subirse.
    */
   const handleTerminar = (idServicio) => {
+    if (sinJornada) {
+      toast.error('Registra tu entrada para iniciar la jornada antes de finalizar tareas.')
+      return
+    }
     const servicio = servicios.find((s) => s.id_servicio === idServicio)
     if (!servicio) return
     setDetalleAbierto(null)
@@ -446,6 +477,17 @@ export default function RutaDiariaPage() {
         </div>
       </section>
 
+      {/* HU-5: aviso de que sin jornada abierta no se trabaja en tareas. */}
+      {sinJornada && (
+        <div className={styles.avisoJornadaBanner} role="status">
+          <IconAlert />
+          <span>
+            Registra tu entrada en <Link to="/pausas">Pausas</Link> para poder
+            iniciar y finalizar tus tareas.
+          </span>
+        </div>
+      )}
+
       {ruta?.alerta && (
         <div className={styles.alertBanner}>
           <IconAlert />
@@ -499,6 +541,7 @@ export default function RutaDiariaPage() {
           onIniciar={handleIniciar}
           onTerminar={handleTerminar}
           onVerEnMapa={handleVerEnMapa}
+          bloqueado={sinJornada}
         />
       )}
 
@@ -508,6 +551,7 @@ export default function RutaDiariaPage() {
         servicio={tareaFinalizando}
         onClose={() => setTareaFinalizando(null)}
         onFinalizada={handleFinalizada}
+        posicionRespaldo={posicion}
       />
     </div>
   )

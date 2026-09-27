@@ -142,6 +142,8 @@ describe('ModalFinalizarTarea', () => {
       expect(finalizarTareaConEvidencia).toHaveBeenCalledWith(7, {
         descripcion: 'Se instaló la acometida y se configuró la ONT.',
         foto: expect.any(File),
+        // HU-5: jsdom no tiene GPS y el modal no recibió respaldo.
+        posicion: null,
       })
     })
     await waitFor(() => expect(onFinalizada).toHaveBeenCalled())

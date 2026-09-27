@@ -9,6 +9,10 @@
  * La foto se valida en el navegador antes de enviarla (extensión y tamaño,
  * con las mismas reglas del backend) para no gastar una subida por datos
  * móviles que va a rebotar igual.
+ *
+ * HU-5: al cerrar se envía también la posición del técnico, para que el
+ * lugar del cierre quede en su recorrido. `posicionRespaldo` es la última
+ * posición conocida, por si la lectura nueva del GPS no llega a tiempo.
  * ---------------------------------------------------------------------------
  */
 
@@ -23,6 +27,7 @@ import {
   finalizarTareaConEvidencia,
   validarFoto,
 } from '../../api/incidenciaService'
+import { obtenerPosicionActual } from '../../utils/posicionActual'
 import styles from './ModalFinalizarTarea.module.css'
 
 const IconCamara = () => (
@@ -39,7 +44,13 @@ const IconBasura = () => (
   </svg>
 )
 
-export default function ModalFinalizarTarea({ open, servicio, onClose, onFinalizada }) {
+export default function ModalFinalizarTarea({
+  open,
+  servicio,
+  onClose,
+  onFinalizada,
+  posicionRespaldo = null,
+}) {
   const toast = useToast()
   const inputFoto = useRef(null)
 
@@ -121,9 +132,13 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
 
     setGuardando(true)
     try {
+      // HU-5: nunca bloquea el cierre; sin GPS llega null y la tarea se
+      // cierra igual, solo que sin punto en el recorrido.
+      const posicion = await obtenerPosicionActual({ respaldo: posicionRespaldo })
       const incidencia = await finalizarTareaConEvidencia(servicio.id_servicio, {
         descripcion: descripcion.trim(),
         foto,
+        posicion,
       })
       toast.success('Tarea finalizada y evidencia registrada.')
       onFinalizada?.(servicio.id_servicio, incidencia)
@@ -134,7 +149,7 @@ export default function ModalFinalizarTarea({ open, servicio, onClose, onFinaliz
 
       if (status === 403) {
         setErrores({ general: detail || 'Solo el técnico asignado puede finalizar esta tarea.' })
-      } else if (status === 400 || status === 404 || status === 422) {
+      } else if (status === 400 || status === 404 || status === 409 || status === 422) {
         setErrores({ general: detail || 'No se pudo registrar la evidencia. Revisa los datos.' })
       } else if (!err?.response) {
         setErrores({
