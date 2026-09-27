@@ -1,0 +1,39 @@
+/* HU-4 — Mini-mapa de las marcas de entrada/salida (historial de asistencia). */
+
+.wrap {
+  max-width: 520px;
+  margin-bottom: var(--space-4);
+}
+
+.mapa {
+  height: 200px !important;
+  min-height: 200px !important;
+  border-radius: var(--radius-md);
+}
+
+.leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.leyendaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.faltante {
+  color: var(--color-danger);
+  font-weight: 600;
+}
