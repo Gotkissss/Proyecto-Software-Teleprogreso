@@ -1,6 +1,7 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useUbicacion } from '../context/UbicacionContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -14,6 +15,7 @@ import {
   variantePorPrioridad,
 } from '../components/mapa/estadoColor'
 import { describirVencimiento } from '../utils/vencimiento'
+import { formatearDistancia, urlGoogleMaps, urlWaze } from '../utils/navegacion'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -170,6 +172,13 @@ function ServicioCard({ servicio, onVerDetalle }) {
             {servicio.direccion}
           </p>
           <p className={styles.tipo}>{servicio.tipo}</p>
+          {/* HU-3: distancia desde donde está el técnico. Sin GPS o sin
+              coordenada no se muestra nada: nunca una distancia inventada. */}
+          {!isCompleted && formatearDistancia(servicio.distancia_m) && (
+            <p className={styles.distancia}>
+              {formatearDistancia(servicio.distancia_m)}
+            </p>
+          )}
         </div>
 
         <button
@@ -180,6 +189,30 @@ function ServicioCard({ servicio, onVerDetalle }) {
           <IconChevron />
         </button>
       </div>
+
+      {/* HU-3: "Cómo llegar" abre la app de mapas del teléfono con la
+          coordenada de la tarea. Solo si la tarea tiene coordenada. */}
+      {!isCompleted && urlGoogleMaps(servicio.lat, servicio.lng) && (
+        <div className={styles.comoLlegar}>
+          <span className={styles.comoLlegarLabel}>Cómo llegar</span>
+          <a
+            className={styles.comoLlegarBtn}
+            href={urlGoogleMaps(servicio.lat, servicio.lng)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Google Maps
+          </a>
+          <a
+            className={styles.comoLlegarBtn}
+            href={urlWaze(servicio.lat, servicio.lng)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Waze
+          </a>
+        </div>
+      )}
 
       {!isCompleted && (
         <button
@@ -198,6 +231,9 @@ function ServicioCard({ servicio, onVerDetalle }) {
 
 export default function RutaDiariaPage() {
   const { user } = useAuth()
+  // HU-3: la posición sale del mismo seguimiento GPS que usa el mapa
+  // (UbicacionContext); no se abre un segundo watchPosition.
+  const { posicion } = useUbicacion()
   const toast = useToast()
   const navigate = useNavigate()
   const [ruta,           setRuta]           = useState(null)
@@ -212,33 +248,58 @@ export default function RutaDiariaPage() {
   // arrancaban en 0 en cada montaje, así que al recargar la pantalla decían
   // "0 paradas" aunque el técnico ya hubiera cerrado tareas ese día.
 
-  const fetchRuta = useCallback(async () => {
-    setLoading(true)
+  // La posición cambia cada pocos segundos mientras el técnico se mueve.
+  // Se lee desde una referencia para que cada lectura del GPS no vuelva a
+  // pedir la ruta: se pide al entrar, cuando llega la primera posición y
+  // después de cerrar una tarea.
+  const posicionRef = useRef(posicion)
+  posicionRef.current = posicion
+  const hayPosicion = Boolean(posicion)
+  const yaCargoRef = useRef(false)
+  // Número de la última petición. La primera carga (sin GPS) y la que se
+  // dispara al llegar la posición pueden resolverse en desorden; solo se
+  // aplica la respuesta de la más reciente.
+  const ultimaPeticionRef = useRef(0)
+
+  const fetchRuta = useCallback(async ({ silencioso = false } = {}) => {
+    // Silencioso: recargas que no deben tapar la lista con el spinner (p.e.
+    // reordenar cuando llega la primera lectura del GPS).
+    const peticion = ++ultimaPeticionRef.current
+    if (!silencioso) setLoading(true)
     try {
       setError(null)
-      const data = await getMiRuta(user?.id_empleado)
+      const pos = posicionRef.current
+      const data = await getMiRuta(pos ? { lat: pos.lat, lng: pos.lng } : null)
+      if (peticion !== ultimaPeticionRef.current) return
       setRuta(data)
-      // Ordena: urgentes primero, luego por prioridad, completadas al final
-      setServicios(ordenarServicios(data.servicios))
+      // HU-3: el orden viene del backend (urgentes primero y luego por
+      // cercanía; sin GPS, por prioridad). No se reordena aquí.
+      setServicios(data.servicios)
+      yaCargoRef.current = true
     } catch (err) {
-      setError(err?.response?.data?.detail || 'No se pudo cargar la ruta.')
+      if (!silencioso && peticion === ultimaPeticionRef.current) {
+        setError(err?.response?.data?.detail || 'No se pudo cargar la ruta.')
+      }
     } finally {
-      setLoading(false)
+      // Solo la petición más reciente apaga el spinner: si lo apagara una
+      // reemplazada, se vería un instante el estado vacío antes de que llegue
+      // la respuesta buena.
+      if (peticion === ultimaPeticionRef.current) setLoading(false)
     }
-  }, [user?.id_empleado])
+  }, [])
 
+  // Al entrar, y otra vez cuando el GPS pasa de no tener a tener posición (o
+  // la pierde), para ordenar por cercanía o volver al orden por prioridad.
   useEffect(() => {
-    fetchRuta()
-  }, [fetchRuta])
+    fetchRuta({ silencioso: yaCargoRef.current })
+  }, [fetchRuta, hayPosicion])
 
-  const ordenarServicios = (lista) => {
-    const prioridadOrden = { urgente: 0, alta: 1, media: 2, baja: 3 }
-    const pendientes = lista
-      .filter((s) => s.estado !== 'completado')
-      .sort((a, b) => (prioridadOrden[a.prioridad] ?? 99) - (prioridadOrden[b.prioridad] ?? 99))
-    const completadas = lista.filter((s) => s.estado === 'completado')
-    return [...pendientes, ...completadas]
-  }
+  // Tras un cambio local, las completadas bajan al final sin alterar el orden
+  // que decidió el backend para el resto.
+  const completadasAlFinal = (lista) => [
+    ...lista.filter((s) => s.estado !== 'completado'),
+    ...lista.filter((s) => s.estado === 'completado'),
+  ]
 
   const handleIniciar = async (idServicio) => {
     // Se guarda el estado previo para poder revertir con exactitud si el
@@ -292,7 +353,7 @@ export default function RutaDiariaPage() {
 
   const handleFinalizada = (idServicio) => {
     setServicios((prev) =>
-      ordenarServicios(
+      completadasAlFinal(
         prev.map((s) =>
           s.id_servicio === idServicio
             ? {
@@ -338,7 +399,7 @@ export default function RutaDiariaPage() {
         loading={loading}
         loadingLabel="Cargando tu ruta del día..."
         error={error}
-        onRetry={fetchRuta}
+        onRetry={() => fetchRuta()}
         errorTitle="No se pudo cargar tu ruta"
       />
     )
@@ -401,6 +462,12 @@ export default function RutaDiariaPage() {
             })}
           </span>
         </div>
+        {/* HU-3: el técnico sabe por qué la lista está en este orden. */}
+        <p className={styles.listOrden}>
+          {ruta?.ordenadoPorCercania
+            ? 'Urgentes primero, luego por cercanía'
+            : 'Por prioridad · activa tu ubicación para ordenar por cercanía'}
+        </p>
 
         {servicios.length > 0 ? (
           <div className={styles.list}>

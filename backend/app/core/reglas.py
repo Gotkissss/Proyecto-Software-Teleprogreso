@@ -28,6 +28,27 @@ ESTADOS_TAREA_ACTIVOS = ("pendiente", "en_progreso")
 ESTADOS_TAREA_CERRADOS = ("completado", "cancelado")
 
 
+# ── Ruta diaria del técnico ──────────────────────────────────────────────────
+#
+# Orden de las paradas en GET /tareas/mi-ruta (HU-3):
+#
+#   1. El trabajo abierto va antes que lo completado hoy.
+#   2. Si el técnico envía su posición, las URGENTES van primero y, dentro de
+#      cada grupo (urgentes / resto), la parada más cercana primero. El resto
+#      NO se separa por alta/media/baja: ahí manda la cercanía, porque es lo
+#      que evita cruzar el municipio de ida y vuelta. Una urgente, en cambio,
+#      no puede quedar detrás de una tarea menor solo por estar más lejos.
+#   3. Las tareas sin coordenada no tienen distancia: van al final de su grupo.
+#   4. Sin posición del técnico (GPS denegado, sin señal), se ordena solo por
+#      prioridad, que es el comportamiento que tenía la pantalla antes.
+#
+# El orden de esta tupla es el rango de prioridad (índice 0 = la más alta).
+PRIORIDADES_TAREA = ("urgente", "alta", "media", "baja")
+
+# Prioridad que siempre va por delante de la cercanía.
+PRIORIDAD_URGENTE = "urgente"
+
+
 # ── Inventario ───────────────────────────────────────────────────────────────
 #
 # Estos conjuntos son la lista blanca de valores admitidos. Antes las columnas

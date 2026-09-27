@@ -124,6 +124,13 @@
   font-family: var(--font-mono);
 }
 
+/* HU-3: criterio con el que está ordenada la lista */
+.listOrden {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -257,6 +264,45 @@
 }
 .chevronBtn:hover { color: var(--color-primary); }
 .chevronBtn svg { width: 18px; height: 18px; }
+
+/* HU-3: distancia desde el técnico */
+.distancia {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary-deep);
+}
+
+/* HU-3: "Cómo llegar" — enlaces a Google Maps y Waze */
+.comoLlegar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.comoLlegarLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-right: auto;
+}
+
+.comoLlegarBtn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary-deep);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.comoLlegarBtn:hover { background: var(--color-primary-50); }
 
 /* Botón navegar */
 .navBtn {

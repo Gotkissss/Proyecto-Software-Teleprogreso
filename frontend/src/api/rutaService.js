@@ -3,9 +3,10 @@
  * ---------------------------------------------------------------------------
  * Servicio para la pantalla "Mi Ruta Diaria" del técnico.
  *
- * No existe un endpoint /servicios/mi-ruta en el backend.
- * Las tareas del técnico se obtienen de GET /tareas?id_tecnico={id}
- * y se transforman al formato que espera RutaDiariaPage.
+ * Las tareas del día se obtienen de GET /tareas/mi-ruta (el técnico sale del
+ * token) y se transforman al formato que espera RutaDiariaPage. Si se envía
+ * la posición del técnico, el backend las devuelve ordenadas por cercanía y
+ * con su distancia (HU-3); si no, ordenadas por prioridad.
  *
  * Mapeo de tareas → servicios:
  *   tarea.id_tarea          → servicio.id_servicio
@@ -23,15 +24,25 @@ import { esDelDia, hoyISO } from '../utils/fecha'
 /**
  * Obtiene la ruta diaria del técnico autenticado.
  *
- * @param {number} idTecnico - ID del empleado autenticado (de useAuth)
- * @returns {{ fecha, tecnico, alerta, servicios }}
+ * HU-3: el orden lo decide el backend (urgentes primero, luego la parada más
+ * cercana; sin posición, por prioridad). Aquí no se reordena.
+ *
+ * @param {{lat: number, lng: number}|null} posicion - posición actual del
+ *   técnico, o null si el GPS no está disponible. Solo se usa para calcular
+ *   el orden y la distancia; el backend no la guarda.
+ * @returns {{ fecha, tecnico, alerta, servicios, ordenadoPorCercania }}
  */
-export const getMiRuta = async (idTecnico) => {
-  // Fetch tareas del técnico (incluye pendientes y en_progreso del día)
+export const getMiRuta = async (posicion = null) => {
   const params = {}
-  if (idTecnico) params.id_tecnico = idTecnico
+  const conPosicion =
+    Number.isFinite(posicion?.lat) && Number.isFinite(posicion?.lng)
+  if (conPosicion) {
+    params.lat = posicion.lat
+    params.lng = posicion.lng
+  }
 
-  const { data: tareas } = await apiClient.get('/tareas', { params })
+  const { data } = await apiClient.get('/tareas/mi-ruta', { params })
+  const tareas = Array.isArray(data) ? data : []
 
   // Mapear cada tarea al formato de "servicio" que espera la UI
   const servicios = tareas
@@ -43,16 +54,18 @@ export const getMiRuta = async (idTecnico) => {
       direccion:        t.direccion_servicio ?? 'Dirección no especificada',
       tipo:             _inferirTipo(t.titulo, t.descripcion),
       fecha_completado: t.fecha_completado ?? null,
-      total_incidencias: t.total_incidencias ?? 0,
       // Fecha límite: la pantalla la usa para avisar al técnico de lo que
       // vence hoy o ya venció, en vez de dejarle deducirlo de la lista.
       fecha_finalizacion: t.fecha_finalizacion ?? null,
       estado_tarea: t.estado_tarea,
+      // HU-3: coordenada para "Cómo llegar" y distancia desde el técnico
+      // (null sin GPS o si la tarea no tiene coordenada).
+      lat:              t.lat ?? null,
+      lng:              t.lng ?? null,
+      distancia_m:      t.distancia_m ?? null,
     }))
-    // La ruta del día es eso: el día. Se muestran todas las tareas abiertas
-    // más las que el técnico cerró hoy (para que vea su avance), pero no el
-    // histórico completo: antes la lista arrastraba todas las tareas que le
-    // habían asignado alguna vez y parecía "quemada".
+    // El backend ya recorta al día (abiertas + cerradas hoy); el filtro se
+    // conserva como red de seguridad y no altera el orden recibido.
     .filter((s) => esTareaDeHoy(s))
 
   // Calcular alerta si hay urgentes pendientes
@@ -66,11 +79,14 @@ export const getMiRuta = async (idTecnico) => {
   return {
     fecha:    new Date().toISOString().split('T')[0],
     tecnico:  {
-      nombre_completo: tareas[0]?.tecnico?.nombre ?? 'Técnico',
+      // /tareas/mi-ruta no trae el técnico (es el del token): la pantalla
+      // toma el nombre del usuario autenticado.
+      nombre_completo: null,
       cargo:           'Técnico de Campo',
     },
     alerta,
     servicios,
+    ordenadoPorCercania: conPosicion,
   }
 }
 

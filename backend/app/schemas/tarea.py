@@ -128,6 +128,11 @@ class TareaRutaResponse(BaseModel):
     fecha_completado:   Optional[datetime] = None
     lat:                Optional[float]    = None
     lng:                Optional[float]    = None
+    # Fecha límite: la ruta diaria la usa para avisar qué vence hoy o ya venció.
+    fecha_finalizacion: Optional[date]     = None
+    # Distancia en metros desde la posición que envió el técnico (HU-3). None
+    # si no envió posición o si la tarea no tiene coordenada.
+    distancia_m:        Optional[float]    = None
 
 
 # Mapa del supervisor: los mismos campos de la ruta del técnico más el técnico
