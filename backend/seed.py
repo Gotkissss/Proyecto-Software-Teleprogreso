@@ -934,11 +934,20 @@ async def crear_historial_asistencia(
       - llegadas tarde (después de las 08:00) para el badge "Llegada tarde"
       - una jornada antigua sin hora_salida para el badge "Sin salida"
       - un técnico SIN entrada hoy → dispara la alerta 'tecnico_sin_entrada'
+      - HU-4: entradas y salidas con el lugar de la marca, y algunas (~10 %)
+        sin ubicación, para el badge "Sin ubicación" del historial
     """
     print("\n🕒 Generando historial de asistencia...")
     jornadas = 0
     pausas = 0
     omitidas_futuro = 0
+    marcas_sin_ubicacion = 0
+
+    # HU-4: generador propio para el lugar de las marcas. Si se usara el
+    # `random` global, cada número extra correría la secuencia sembrada con
+    # random.seed(2026) y cambiarían las pausas, ausencias y horas del resto
+    # del escenario de demostración.
+    azar_ubicacion = random.Random(4)
 
     # Reloj de la operación (no UTC): es la referencia para recortar hoy.
     hora_ahora = ahora_local().time()
@@ -993,15 +1002,33 @@ async def crear_historial_asistencia(
             else:
                 hora_salida = salida_prevista
 
+            coordenada_entrada = punto(
+                14.4744 + random.uniform(-0.004, 0.004),
+                -90.4425 + random.uniform(-0.004, 0.004),
+            )
+            # La salida se marca en la última zona de trabajo del día, así que
+            # queda más dispersa que la entrada.
+            coordenada_salida = punto(
+                14.4744 + azar_ubicacion.uniform(-0.012, 0.012),
+                -90.4425 + azar_ubicacion.uniform(-0.012, 0.012),
+            ) if hora_salida else None
+
+            # ~10 % de las marcas quedan sin ubicación (GPS denegado o sin
+            # señal), como pasará en la operación real.
+            if azar_ubicacion.random() < 0.10:
+                coordenada_entrada = None
+                marcas_sin_ubicacion += 1
+            if coordenada_salida and azar_ubicacion.random() < 0.10:
+                coordenada_salida = None
+                marcas_sin_ubicacion += 1
+
             asistencia = Asistencia(
                 id_empleado=tecnico.id_empleado,
                 fecha=dia,
                 hora_entrada=hora_entrada,
                 hora_salida=hora_salida,
-                coordenada_entrada=punto(
-                    14.4744 + random.uniform(-0.004, 0.004),
-                    -90.4425 + random.uniform(-0.004, 0.004),
-                ),
+                coordenada_entrada=coordenada_entrada,
+                coordenada_salida=coordenada_salida,
             )
             db.add(asistencia)
             await db.flush()
@@ -1049,6 +1076,7 @@ async def crear_historial_asistencia(
 
     await db.flush()
     print(f"   ✅ {jornadas} jornadas con {pausas} pausas registradas")
+    print(f"   ℹ️  {marcas_sin_ubicacion} marcas de entrada/salida quedaron sin ubicación")
     if omitidas_futuro:
         print(
             f"   ℹ️  {omitidas_futuro} jornadas de hoy no se sembraron: son las "
