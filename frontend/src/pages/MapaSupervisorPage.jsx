@@ -56,6 +56,7 @@ import MarcadorTecnico from '../components/mapa/MarcadorTecnico'
 import CapaRecorrido from '../components/mapa/CapaRecorrido'
 import PanelRecorrido from '../components/mapa/PanelRecorrido'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
+import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSeleccionado'
 import FiltroTecnicosMapa from '../components/mapa/FiltroTecnicosMapa'
 import LeyendaMapaSupervisor from '../components/mapa/LeyendaMapaSupervisor'
 import PageState from '../components/ui/PageState'
@@ -209,6 +210,12 @@ export default function MapaSupervisorPage() {
   const [recorrido, setRecorrido] = useState(null)
   const [cargandoRecorrido, setCargandoRecorrido] = useState(false)
   const [errorRecorrido, setErrorRecorrido] = useState(null)
+  // Última ubicación del recorrido en la que se centra el mapa. Solo cambia
+  // al activar el recorrido o al elegir otro técnico o fecha, no en los
+  // refrescos automáticos: recentrar cada minuto movería la vista mientras
+  // el supervisor la está explorando. `n` fuerza el recentrado aunque el
+  // punto coincida con el anterior (volver al mismo técnico).
+  const [centroRecorrido, setCentroRecorrido] = useState(null)
   const recorridoActivo = verRecorrido && Boolean(idTecnico)
 
   const fetchRecorrido = useCallback(async ({ silencioso = false } = {}) => {
@@ -216,9 +223,22 @@ export default function MapaSupervisorPage() {
     if (!silencioso) setCargandoRecorrido(true)
     try {
       setErrorRecorrido(null)
-      setRecorrido(await getRecorrido(idTecnico, fecha))
+      const datos = await getRecorrido(idTecnico, fecha)
+      setRecorrido(datos)
+      if (!silencioso) {
+        const ultimo = datos.puntos[datos.puntos.length - 1]
+        setCentroRecorrido((prev) =>
+          ultimo ? { punto: [ultimo.lat, ultimo.lng], n: (prev?.n ?? 0) + 1 } : null
+        )
+      }
     } catch (err) {
       setErrorRecorrido(err?.response?.data?.detail || 'No se pudo cargar el recorrido.')
+      // Si falló al cambiar de técnico o de fecha, no se deja dibujado el
+      // recorrido anterior como si fuera el que se pidió.
+      if (!silencioso) {
+        setRecorrido(null)
+        setCentroRecorrido(null)
+      }
     } finally {
       setCargandoRecorrido(false)
     }
@@ -228,6 +248,7 @@ export default function MapaSupervisorPage() {
     if (!recorridoActivo) {
       setRecorrido(null)
       setErrorRecorrido(null)
+      setCentroRecorrido(null)
       return
     }
     fetchRecorrido()
@@ -303,12 +324,6 @@ export default function MapaSupervisorPage() {
     [conUbicacion, ocultos]
   )
 
-  // HU-5: con el recorrido a la vista, el mapa se encuadra en él; si no, en
-  // las tareas, como antes.
-  const puntosVista = useMemo(
-    () => (puntosRecorrido.length > 0 ? puntosRecorrido.map((p) => [p.lat, p.lng]) : puntos),
-    [puntosRecorrido, puntos]
-  )
   const hayQuePintar = conUbicacion.length > 0 || puntosRecorrido.length > 0
 
   if (loading || error) {
@@ -395,7 +410,18 @@ export default function MapaSupervisorPage() {
         <div className={styles.mapaLayout}>
           <div className={styles.mapWrap}>
             <MapaBase>
-              <AjustarVistaMarcadores puntos={puntosVista} />
+              {/* HU-5: con el recorrido activo el mapa se centra en la última
+                  ubicación del técnico; oculto (o sin recorrido ese día),
+                  encuadra las tareas como antes. */}
+              {recorridoActivo && centroRecorrido ? (
+                <CentrarMarcadorSeleccionado
+                  key={centroRecorrido.n}
+                  punto={centroRecorrido.punto}
+                  zoom={16}
+                />
+              ) : (
+                <AjustarVistaMarcadores puntos={puntos} />
+              )}
 
               {/* HU-5: debajo de los pines, para no tapar tareas ni técnicos. */}
               {recorridoActivo && <CapaRecorrido puntos={puntosRecorrido} />}

@@ -15,6 +15,11 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { hoyISO } from '../utils/fecha'
 
+// Mapa simulado que registra hacia dónde se centra la vista.
+const { mapa } = vi.hoisted(() => ({
+  mapa: { getZoom: () => 13, setView: vi.fn(), fitBounds: vi.fn() },
+}))
+
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }) => <div>{children}</div>,
   TileLayer: () => null,
@@ -34,7 +39,7 @@ vi.mock('react-leaflet', () => ({
   ),
   Popup: ({ children }) => <div>{children}</div>,
   Tooltip: ({ children }) => <div>{children}</div>,
-  useMap: () => ({ getZoom: () => 13, setView: vi.fn(), fitBounds: vi.fn() }),
+  useMap: () => mapa,
 }))
 
 const HOY = hoyISO()
@@ -89,6 +94,8 @@ const RECORRIDO = {
 }
 
 beforeEach(() => {
+  mapa.setView.mockReset()
+  mapa.fitBounds.mockReset()
   getMapaSupervisorMock.mockReset().mockResolvedValue([])
   getTecnicosDisponiblesMock.mockReset().mockResolvedValue([
     { id_empleado: 2, nombre_completo: 'Juan Pérez' },
@@ -180,5 +187,90 @@ describe('MapaSupervisorPage — recorrido del técnico (HU-5)', () => {
       expect(screen.queryByText('Recorrido de Juan Pérez')).not.toBeInTheDocument()
     )
     expect(screen.getByRole('button', { name: 'Ver recorrido' })).toBeDisabled()
+  })
+
+  // ── Centrado del mapa ─────────────────────────────────────────────────────
+
+  it('al activar el recorrido centra el mapa en la última ubicación', async () => {
+    const user = userEvent.setup()
+    await abrirRecorrido(user)
+
+    // Último punto de RECORRIDO: 10:32, lat 14.471.
+    await waitFor(() =>
+      expect(mapa.setView).toHaveBeenLastCalledWith([14.471, -90.44], 16, { animate: true })
+    )
+  })
+
+  it('al cambiar de técnico con el recorrido activo centra en la última ubicación del nuevo', async () => {
+    getTecnicosDisponiblesMock.mockResolvedValue([
+      { id_empleado: 2, nombre_completo: 'Juan Pérez' },
+      { id_empleado: 3, nombre_completo: 'María Gómez' },
+    ])
+    getRecorridoMock.mockImplementation(async (id) =>
+      id === '3'
+        ? {
+            ...RECORRIDO,
+            id_empleado: 3,
+            nombre: 'María Gómez',
+            puntos: [punto('09:00', 'periodico', { lat: 14.5, lng: -90.5 }),
+                     punto('09:05', 'periodico', { lat: 14.51, lng: -90.52 })],
+          }
+        : RECORRIDO
+    )
+    const user = userEvent.setup()
+    await abrirRecorrido(user)
+    await screen.findByText('Recorrido de Juan Pérez')
+
+    await user.selectOptions(screen.getByLabelText('Técnico'), '3')
+
+    await screen.findByText('Recorrido de María Gómez')
+    await waitFor(() =>
+      expect(mapa.setView).toHaveBeenLastCalledWith([14.51, -90.52], 16, { animate: true })
+    )
+  })
+
+  it('con el recorrido oculto vuelve a encuadrar las tareas del técnico', async () => {
+    getMapaSupervisorMock.mockResolvedValue([
+      {
+        id_tarea: 9,
+        titulo: 'Instalación fibra',
+        estado_tarea: 'pendiente',
+        prioridad: 'alta',
+        lat: 14.6,
+        lng: -90.6,
+        tecnico: { id_empleado: 2, nombre: 'Juan Pérez' },
+      },
+    ])
+    const user = userEvent.setup()
+    await abrirRecorrido(user)
+    await waitFor(() =>
+      expect(mapa.setView).toHaveBeenLastCalledWith([14.471, -90.44], 16, { animate: true })
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Ocultar recorrido' }))
+
+    // Una sola tarea: AjustarVistaMarcadores centra en ella.
+    await waitFor(() =>
+      expect(mapa.setView).toHaveBeenLastCalledWith([14.6, -90.6], 14)
+    )
+  })
+
+  it('si falla el recorrido del técnico nuevo no deja dibujado el anterior', async () => {
+    getTecnicosDisponiblesMock.mockResolvedValue([
+      { id_empleado: 2, nombre_completo: 'Juan Pérez' },
+      { id_empleado: 3, nombre_completo: 'María Gómez' },
+    ])
+    getRecorridoMock.mockImplementation(async (id) => {
+      if (id === '3') throw { response: { data: { detail: 'Error del servidor' } } }
+      return RECORRIDO
+    })
+    const user = userEvent.setup()
+    await abrirRecorrido(user)
+    await screen.findAllByTestId('tramo')
+
+    await user.selectOptions(screen.getByLabelText('Técnico'), '3')
+
+    expect(await screen.findByText('Error del servidor')).toBeInTheDocument()
+    expect(screen.queryByTestId('tramo')).not.toBeInTheDocument()
   })
 })
