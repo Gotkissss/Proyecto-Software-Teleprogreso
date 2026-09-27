@@ -28,6 +28,7 @@ from app.core.deps import (
     require_supervisor,
     require_tecnico,
 )
+from app.core.exceptions import bad_request
 from app.core.reglas import ESTADOS_TAREA_ACTIVOS, LIMITE_TAREAS_ACTIVAS
 from app.db.session import get_db
 from app.models.empleado import Empleado
@@ -88,6 +89,14 @@ async def get_tareas(
 async def get_mi_ruta(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
+    lat: Annotated[
+        Optional[float],
+        Query(ge=-90, le=90, description="Latitud actual del técnico (opcional)."),
+    ] = None,
+    lng: Annotated[
+        Optional[float],
+        Query(ge=-180, le=180, description="Longitud actual del técnico (opcional)."),
+    ] = None,
 ):
     """
     Devuelve las tareas del técnico autenticado que corresponden al mapa de
@@ -99,8 +108,20 @@ async def get_mi_ruta(
     aparece — vive en el historial, no en el mapa del día.
 
     "Hoy" se calcula con la hora de Guatemala (hoy_local), no en UTC.
+
+    HU-3: si se envían `lat` y `lng` (posición actual del técnico), cada tarea
+    trae `distancia_m` y la lista se ordena por cercanía, con las urgentes
+    siempre primero. Sin posición se ordena por prioridad. La regla completa
+    está documentada en `app/core/reglas.py`. La posición no se guarda.
+
+    Errores:
+    - 400 si solo llega una de las dos coordenadas.
+    - 422 si alguna cae fuera de rango.
     """
-    return await tareas_service.obtener_mi_ruta(db, current_user)
+    if (lat is None) != (lng is None):
+        raise bad_request("Debes enviar lat y lng juntos.")
+
+    return await tareas_service.obtener_mi_ruta(db, current_user, lat=lat, lng=lng)
 
 
 @router.get(
