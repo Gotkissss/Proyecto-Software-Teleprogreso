@@ -28,6 +28,13 @@ vi.mock('../context/AuthContext', () => ({
   AuthProvider: ({ children }) => children,
 }))
 
+// RutaDiariaPage lee la posición del técnico del contexto de ubicación (HU-3);
+// aquí se monta sin UbicacionProvider, así que se simula sin GPS.
+vi.mock('../context/UbicacionContext', () => ({
+  useUbicacion: () => ({ posicion: null, estado: 'cargando' }),
+  UbicacionProvider: ({ children }) => children,
+}))
+
 vi.mock('../api/rutaService', () => ({
   getMiRuta: vi.fn(async () => ({
     fecha: '2026-07-28',
