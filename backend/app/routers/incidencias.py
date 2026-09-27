@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_empleado, require_supervisor
 from app.core.reglas import ROLES_GESTION, ROL_GERENTE
+from app.services.ubicaciones import exigir_jornada_abierta
 from app.db.session import get_db
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
@@ -198,6 +199,11 @@ async def crear_incidencia(
     Roles: el técnico asignado, admin o supervisor.
     """
     tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    # HU-5: el técnico no trabaja en tareas sin jornada abierta. Se comprueba
+    # aquí, al crear la evidencia, porque es el primer paso del cierre: si solo
+    # se bloqueara PATCH /finalizar, la subida de la foto ya habría cerrado la
+    # tarea con el flag `finalizar_tarea`.
+    await exigir_jornada_abierta(db, current_user)
     # Una tarea cerrada no recibe trabajo nuevo. Sin esta comprobación, un
     # técnico con la pantalla ya cargada podía seguir documentando una tarea
     # que el supervisor acababa de cancelar.
@@ -297,6 +303,7 @@ async def upload_foto_evidencia(
     Roles: el técnico asignado, admin o supervisor.
     """
     tarea = await _obtener_tarea_autorizada(db, id, current_user, escritura=True)
+    await exigir_jornada_abierta(db, current_user)  # HU-5: ver crear_incidencia
     validar_tarea_abierta(tarea)
     incidencia = await _obtener_incidencia(db, id, id_incidencia)
 
