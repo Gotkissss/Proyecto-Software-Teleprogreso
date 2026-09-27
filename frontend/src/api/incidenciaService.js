@@ -14,6 +14,7 @@
  */
 
 import apiClient from './client'
+import { cuerpoUbicacion } from './rutaService'
 
 /** Extensiones que acepta el backend (app/services/uploads.py). */
 export const EXTENSIONES_FOTO = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
@@ -134,7 +135,7 @@ export async function eliminarIncidencia(idTarea, idIncidencia) {
  * @param {{descripcion: string, foto: File}} datos
  * @returns {Promise<Object>} la incidencia creada, ya con su foto
  */
-export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto }) {
+export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, posicion = null }) {
   const incidencia = await crearIncidencia(idTarea, {
     descripcion,
     finalizarTarea: false,
@@ -160,7 +161,7 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto })
   // se avisa pero no se pierde el trabajo del técnico.
   let tarea = null
   try {
-    tarea = await finalizarTarea(idTarea)
+    tarea = await finalizarTarea(idTarea, posicion)
   } catch (err) {
     console.error('La evidencia se guardó pero no se pudo confirmar el cierre:', err)
     throw err
@@ -173,9 +174,16 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto })
  * Cierra la tarea (PATCH /tareas/{id}/finalizar).
  * Requiere que ya exista al menos una evidencia registrada.
  *
+ * HU-5: si llega la posición, el lugar del cierre queda en el recorrido del
+ * técnico (una sola vez por tarea, aunque se reintente).
+ *
  * @param {number} idTarea
+ * @param {{lat:number, lng:number}|null} [posicion]
  */
-export async function finalizarTarea(idTarea) {
-  const { data } = await apiClient.patch(`/tareas/${idTarea}/finalizar`)
+export async function finalizarTarea(idTarea, posicion = null) {
+  const { data } = await apiClient.patch(
+    `/tareas/${idTarea}/finalizar`,
+    cuerpoUbicacion(posicion),
+  )
   return data
 }

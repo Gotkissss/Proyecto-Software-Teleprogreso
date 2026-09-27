@@ -25,6 +25,8 @@ from sqlalchemy.orm import selectinload
 from app.core.exceptions import bad_request, forbidden, not_found
 from app.core.geo import punto_wkt
 from app.core.reglas import (
+    EVENTO_FIN_TAREA,
+    EVENTO_INICIO_TAREA,
     ESTADOS_TAREA_ACTIVOS,
     ESTADOS_TAREA_CERRADOS,
     ESTADO_EMPLEADO_ACTIVO,
@@ -40,6 +42,8 @@ from app.core.reglas import (
 from app.core.tiempo import ahora, hoy
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
+from app.schemas.ubicacion import UbicacionCreate
+from app.services.ubicaciones import exigir_jornada_abierta, registrar_evento_tarea
 from app.schemas.tarea import (
     DiaCompletadas,
     EvidenciaResumen,
@@ -761,8 +765,15 @@ async def iniciar_tarea(
     db: AsyncSession,
     id_tarea: int,
     current_user: Empleado,
+    ubicacion: Optional[UbicacionCreate] = None,
 ) -> dict:
-    """Inicia de forma idempotente una tarea asignada."""
+    """
+    Inicia de forma idempotente una tarea asignada.
+
+    HU-5: el técnico necesita la jornada abierta, y si envía su ubicación, el
+    lugar del inicio queda en su recorrido (solo cuando la tarea pasa de
+    verdad a 'en_progreso'; un reintento no duplica el punto).
+    """
     result = await db.execute(select(Tarea).where(Tarea.id_tarea == id_tarea))
     tarea = result.scalar_one_or_none()
 
@@ -783,6 +794,7 @@ async def iniciar_tarea(
                     "Solo el técnico asignado puede iniciarla."
                 )
             )
+        await exigir_jornada_abierta(db, current_user)
 
     if tarea.estado_tarea == "completado":
         raise bad_request(
@@ -798,6 +810,9 @@ async def iniciar_tarea(
         tarea.estado_tarea = "en_progreso"
         if tarea.fecha_inicio is None:
             tarea.fecha_inicio = hoy()
+        await registrar_evento_tarea(
+            db, current_user, EVENTO_INICIO_TAREA, tarea.id_tarea, ubicacion
+        )
 
     await db.flush()
     return {
@@ -817,8 +832,14 @@ async def finalizar_tarea(
     db: AsyncSession,
     id_tarea: int,
     current_user: Empleado,
+    ubicacion: Optional[UbicacionCreate] = None,
 ) -> TareaResponse:
-    """Finaliza una tarea en curso que ya cuenta con evidencia."""
+    """
+    Finaliza una tarea en curso que ya cuenta con evidencia.
+
+    HU-5: el técnico necesita la jornada abierta, y si envía su ubicación, el
+    lugar del cierre queda en su recorrido (una sola vez por tarea).
+    """
     result = await db.execute(select(Tarea).where(Tarea.id_tarea == id_tarea))
     tarea = result.scalar_one_or_none()
 
@@ -839,6 +860,7 @@ async def finalizar_tarea(
                     "Solo el técnico asignado puede cerrarla."
                 )
             )
+        await exigir_jornada_abierta(db, current_user)
 
     validar_cierre_permitido(tarea)
     if await _contar_incidencias(db, id_tarea) == 0:
@@ -850,6 +872,9 @@ async def finalizar_tarea(
         )
 
     marcar_completada(tarea)
+    await registrar_evento_tarea(
+        db, current_user, EVENTO_FIN_TAREA, tarea.id_tarea, ubicacion
+    )
     await db.flush()
     return await _tarea_a_response(db, tarea)
 

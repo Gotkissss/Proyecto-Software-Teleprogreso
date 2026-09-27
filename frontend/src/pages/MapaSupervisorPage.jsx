@@ -40,15 +40,23 @@
  * completo mientras la pestaña está en segundo plano: si el supervisor deja
  * esta pantalla abierta en una pestaña de fondo, no tiene sentido seguir
  * pegándole al backend por datos que nadie está mirando.
+ *
+ * HU-5 — Con un técnico elegido, "Ver recorrido" dibuja por dónde anduvo ese
+ * día (GET /ubicaciones/{id}/recorrido): el trayecto, los tramos sin datos,
+ * la entrada, la salida y el inicio y fin de cada tarea (<CapaRecorrido>), y
+ * al lado la lista en orden con su hora o un estado vacío (<PanelRecorrido>).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getMapaSupervisor, getTecnicosDisponibles } from '../api/tareaService'
-import { getUbicacionesTecnicos } from '../api/ubicacionService'
+import { getRecorrido, getUbicacionesTecnicos } from '../api/ubicacionService'
 import { useRefrescoAutomatico } from '../hooks/useRefrescoAutomatico'
 import MapaBase from '../components/mapa/MapaBase'
 import MarcadorTareaSupervisor from '../components/mapa/MarcadorTareaSupervisor'
 import MarcadorTecnico from '../components/mapa/MarcadorTecnico'
+import CapaRecorrido from '../components/mapa/CapaRecorrido'
+import PanelRecorrido from '../components/mapa/PanelRecorrido'
 import AjustarVistaMarcadores from '../components/mapa/AjustarVistaMarcadores'
+import CentrarMarcadorSeleccionado from '../components/mapa/CentrarMarcadorSeleccionado'
 import FiltroTecnicosMapa from '../components/mapa/FiltroTecnicosMapa'
 import LeyendaMapaSupervisor from '../components/mapa/LeyendaMapaSupervisor'
 import PageState from '../components/ui/PageState'
@@ -63,6 +71,9 @@ import styles from './MapaSupervisorPage.module.css'
  */
 const INTERVALO_REFRESCO_TAREAS_MS = 30000
 const INTERVALO_UBICACIONES_MS = 15000
+// HU-5: el técnico reporta cada 2-5 min; refrescar su recorrido más seguido
+// no mostraría nada nuevo.
+const INTERVALO_RECORRIDO_MS = 60000
 
 const IconMapa = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -194,6 +205,64 @@ export default function MapaSupervisorPage() {
 
   useRefrescoAutomatico(fetchUbicaciones, INTERVALO_UBICACIONES_MS, { activo: esHoy })
 
+  // ── HU-5: recorrido del técnico elegido ──────────────────────────────────
+  const [verRecorrido, setVerRecorrido] = useState(false)
+  const [recorrido, setRecorrido] = useState(null)
+  const [cargandoRecorrido, setCargandoRecorrido] = useState(false)
+  const [errorRecorrido, setErrorRecorrido] = useState(null)
+  // Última ubicación del recorrido en la que se centra el mapa. Solo cambia
+  // al activar el recorrido o al elegir otro técnico o fecha, no en los
+  // refrescos automáticos: recentrar cada minuto movería la vista mientras
+  // el supervisor la está explorando. `n` fuerza el recentrado aunque el
+  // punto coincida con el anterior (volver al mismo técnico).
+  const [centroRecorrido, setCentroRecorrido] = useState(null)
+  const recorridoActivo = verRecorrido && Boolean(idTecnico)
+
+  const fetchRecorrido = useCallback(async ({ silencioso = false } = {}) => {
+    if (!recorridoActivo) return
+    if (!silencioso) setCargandoRecorrido(true)
+    try {
+      setErrorRecorrido(null)
+      const datos = await getRecorrido(idTecnico, fecha)
+      setRecorrido(datos)
+      if (!silencioso) {
+        const ultimo = datos.puntos[datos.puntos.length - 1]
+        setCentroRecorrido((prev) =>
+          ultimo ? { punto: [ultimo.lat, ultimo.lng], n: (prev?.n ?? 0) + 1 } : null
+        )
+      }
+    } catch (err) {
+      setErrorRecorrido(err?.response?.data?.detail || 'No se pudo cargar el recorrido.')
+      // Si falló al cambiar de técnico o de fecha, no se deja dibujado el
+      // recorrido anterior como si fuera el que se pidió.
+      if (!silencioso) {
+        setRecorrido(null)
+        setCentroRecorrido(null)
+      }
+    } finally {
+      setCargandoRecorrido(false)
+    }
+  }, [recorridoActivo, idTecnico, fecha])
+
+  useEffect(() => {
+    if (!recorridoActivo) {
+      setRecorrido(null)
+      setErrorRecorrido(null)
+      setCentroRecorrido(null)
+      return
+    }
+    fetchRecorrido()
+  }, [recorridoActivo, fetchRecorrido])
+
+  // Solo el recorrido de HOY sigue creciendo mientras se mira.
+  useRefrescoAutomatico(
+    () => fetchRecorrido({ silencioso: true }),
+    INTERVALO_RECORRIDO_MS,
+    { activo: recorridoActivo && esHoy },
+  )
+
+  const puntosRecorrido = useMemo(() => recorrido?.puntos ?? [], [recorrido])
+
   // Mismos filtros que ya existen para las tareas: el <select> de técnico y
   // las casillas de FiltroTecnicosMapa (`ocultos`), comparando por
   // `id_empleado` en ambos casos.
@@ -255,6 +324,8 @@ export default function MapaSupervisorPage() {
     [conUbicacion, ocultos]
   )
 
+  const hayQuePintar = conUbicacion.length > 0 || puntosRecorrido.length > 0
+
   if (loading || error) {
     return (
       <PageState
@@ -293,7 +364,11 @@ export default function MapaSupervisorPage() {
           <select
             className={styles.select}
             value={idTecnico}
-            onChange={(e) => setIdTecnico(e.target.value)}
+            onChange={(e) => {
+              setIdTecnico(e.target.value)
+              // Sin técnico no hay recorrido que mostrar.
+              if (!e.target.value) setVerRecorrido(false)
+            }}
           >
             <option value="">Todos</option>
             {tecnicos.map((t) => (
@@ -303,13 +378,53 @@ export default function MapaSupervisorPage() {
             ))}
           </select>
         </label>
+
+        {/* HU-5: el recorrido es de un técnico y un día concretos. */}
+        <button
+          type="button"
+          className={`btn ${recorridoActivo ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setVerRecorrido((v) => !v)}
+          disabled={!idTecnico}
+          aria-pressed={recorridoActivo}
+          title={idTecnico ? undefined : 'Elige un técnico para ver su recorrido'}
+        >
+          {recorridoActivo ? 'Ocultar recorrido' : 'Ver recorrido'}
+        </button>
       </section>
 
-      {conUbicacion.length > 0 ? (
+      {recorridoActivo && (
+        <PanelRecorrido
+          nombre={
+            recorrido?.nombre ??
+            tecnicos.find((t) => String(t.id_empleado) === idTecnico)?.nombre_completo
+          }
+          fecha={fecha}
+          puntos={puntosRecorrido}
+          cargando={cargandoRecorrido}
+          error={errorRecorrido}
+          onReintentar={() => fetchRecorrido()}
+        />
+      )}
+
+      {hayQuePintar ? (
         <div className={styles.mapaLayout}>
           <div className={styles.mapWrap}>
             <MapaBase>
-              <AjustarVistaMarcadores puntos={puntos} />
+              {/* HU-5: con el recorrido activo el mapa se centra en la última
+                  ubicación del técnico; oculto (o sin recorrido ese día),
+                  encuadra las tareas como antes. */}
+              {recorridoActivo && centroRecorrido ? (
+                <CentrarMarcadorSeleccionado
+                  key={centroRecorrido.n}
+                  punto={centroRecorrido.punto}
+                  zoom={16}
+                />
+              ) : (
+                <AjustarVistaMarcadores puntos={puntos} />
+              )}
+
+              {/* HU-5: debajo de los pines, para no tapar tareas ni técnicos. */}
+              {recorridoActivo && <CapaRecorrido puntos={puntosRecorrido} />}
 
               {visibles.map((s) => (
                 <MarcadorTareaSupervisor key={s.id_servicio} servicio={s} />

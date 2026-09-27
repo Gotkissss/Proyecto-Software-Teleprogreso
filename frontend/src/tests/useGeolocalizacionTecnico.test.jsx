@@ -31,7 +31,9 @@ import useGeolocalizacionTecnico from '../hooks/useGeolocalizacionTecnico'
 
 const LAT = 14.6349
 const LNG = -90.5069
-const UN_MINUTO = 60 * 1000
+// HU-5: 2 min entre puntos si el técnico se mueve, 5 min si está quieto.
+const DOS_MINUTOS = 2 * 60 * 1000
+const CINCO_MINUTOS = 5 * 60 * 1000
 const ID_WATCH = 7
 
 let reloj
@@ -142,11 +144,11 @@ describe('useGeolocalizacionTecnico — reporte al backend (SCRUM-219)', () => {
     expect(enviarUbicacionMock).toHaveBeenCalledTimes(1)
   })
 
-  it('vuelve a reportar pasado el minuto', async () => {
+  it('vuelve a reportar pasados 2 minutos si el técnico se movió', async () => {
     renderHook(() => useGeolocalizacionTecnico({ jornadaActiva: true }))
 
     await emitirLectura()
-    avanzar(UN_MINUTO)
+    avanzar(DOS_MINUTOS)
     await emitirLectura(14.64, -90.51)
 
     expect(enviarUbicacionMock).toHaveBeenCalledTimes(2)
@@ -201,7 +203,8 @@ describe('useGeolocalizacionTecnico — reporte al backend (SCRUM-219)', () => {
     await emitirLectura()
     await waitFor(() => expect(result.current.errorEnvio).toBeTruthy())
 
-    avanzar(UN_MINUTO)
+    // Mismo lugar: el siguiente punto es el de control de los 5 minutos.
+    avanzar(CINCO_MINUTOS)
     await emitirLectura()
 
     expect(enviarUbicacionMock).toHaveBeenCalledTimes(2)

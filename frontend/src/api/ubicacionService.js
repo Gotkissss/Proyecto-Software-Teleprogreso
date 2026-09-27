@@ -7,6 +7,9 @@
  *   POST /ubicaciones          → guarda la posición actual del empleado autenticado
  *   GET  /ubicaciones/tecnicos → última posición de cada técnico en jornada
  *                                (solo admin/supervisor/gerente)
+ *   POST /ubicaciones/lote     → puntos tomados sin conexión (HU-5)
+ *   GET  /ubicaciones/{id}/recorrido?fecha= → recorrido de un técnico en un
+ *                                día (HU-5, solo admin/supervisor/gerente)
  *
  * El empleado dueño de la ubicación nunca viaja en el cuerpo: el backend lo
  * saca del JWT que el interceptor de client.js ya adjunta en cada petición.
@@ -82,4 +85,33 @@ export const enviarUbicacion = async ({ lat, lng }) => {
 export async function getUbicacionesTecnicos() {
   const { data } = await apiClient.get('/ubicaciones/tecnicos')
   return Array.isArray(data) ? data : []
+}
+
+/**
+ * HU-5 — Envía los puntos acumulados sin conexión, cada uno con la hora real
+ * en que se tomó. Lo usa utils/colaUbicaciones.js al recuperar la señal.
+ *
+ * @param {Array<{lat:number, lng:number, fecha_hora:string}>} puntos
+ * @returns {Promise<{guardados:number, descartados:number}>}
+ */
+export async function enviarLote(puntos) {
+  const { data } = await apiClient.post('/ubicaciones/lote', { puntos })
+  return data
+}
+
+/**
+ * HU-5 — Recorrido de un técnico en un día, en orden cronológico: puntos
+ * periódicos, inicio y fin de tareas, y la entrada y salida de la jornada.
+ * Cada punto indica si antes hubo un hueco sin datos (`tras_hueco`).
+ *
+ * @param {number|string} idEmpleado
+ * @param {string} fecha - YYYY-MM-DD
+ * @returns {Promise<{id_empleado:number, nombre:string, fecha:string,
+ *   minutos_hueco:number, puntos:Array}>}
+ */
+export async function getRecorrido(idEmpleado, fecha) {
+  const { data } = await apiClient.get(`/ubicaciones/${idEmpleado}/recorrido`, {
+    params: { fecha },
+  })
+  return { ...data, puntos: Array.isArray(data?.puntos) ? data.puntos : [] }
 }

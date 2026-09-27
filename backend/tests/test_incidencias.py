@@ -27,6 +27,19 @@ from app.schemas.incidencia import IncidenciaCreate
 from app.services.uploads import MAX_FILE_SIZE_MB, guardar_imagen
 
 
+@pytest.fixture(autouse=True)
+def _tecnico_con_jornada_abierta(monkeypatch):
+    """
+    HU-5: el técnico solo registra evidencias con la jornada abierta. Estas
+    pruebas son de las evidencias, no de la jornada, así que parten de un
+    técnico que ya marcó entrada. El bloqueo sin jornada se prueba en
+    test_recorrido_tecnico.py.
+    """
+    import app.routers.incidencias as incidencias_router
+
+    monkeypatch.setattr(incidencias_router, "exigir_jornada_abierta", AsyncMock())
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _tarea(estado="en_progreso", fecha_inicio=None):

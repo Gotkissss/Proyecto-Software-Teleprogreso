@@ -133,7 +133,7 @@ export default function PausasPage() {
   const toast = useToast()
   // HU-4: última posición conocida, como respaldo si la lectura nueva del GPS
   // no llega a tiempo al marcar entrada o salida.
-  const { posicion } = useUbicacion()
+  const { posicion, refrescarJornada } = useUbicacion()
 
   // Estado tal como lo reporta el backend. Es la única fuente de verdad.
   const [estado,     setEstado]     = useState(null)
@@ -209,6 +209,9 @@ export default function PausasPage() {
       const lugar = await obtenerPosicionActual({ respaldo: posicion })
       const respuesta = await registrarEntrada(lugar)
       await fetchData({ silencioso: true })
+      // HU-5: la ruta y el envío de ubicación dependen de la jornada; se les
+      // avisa ya en vez de esperar el siguiente ciclo del contexto.
+      refrescarJornada?.()
       toast.success('¡Entrada registrada correctamente!')
       if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
     } catch (err) {
@@ -255,6 +258,7 @@ export default function PausasPage() {
       const lugar = await obtenerPosicionActual({ respaldo: posicion })
       const respuesta = await finalizarJornada(lugar)
       await fetchData({ silencioso: true })
+      refrescarJornada?.()
       toast.success('¡Jornada finalizada! Tu estado se actualizó.')
       if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
     } catch (err) {

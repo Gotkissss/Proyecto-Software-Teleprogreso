@@ -4,12 +4,14 @@ Router de Ubicaciones — Teleprogreso S.A. (SCRUM-215)
 -----------------------------------------------------------------------------
 Registra la posición que reporta el técnico mientras está en jornada.
 
-Endpoint que se tiene:
-  POST /ubicaciones = Guarda la posición actual del empleado autenticado
+Endpoints:
+  POST /ubicaciones                          = Guarda la posición actual del empleado autenticado
+  POST /ubicaciones/lote                     = Guarda puntos tomados sin conexión (HU-5)
+  GET  /ubicaciones/tecnicos                 = Última posición de cada técnico en jornada
+  GET  /ubicaciones/{id_empleado}/recorrido  = Recorrido de un técnico en un día (HU-5)
 
-Este router solo escribe. La lectura del rastro de ubicaciones es un dato
-sensible (dice dónde estuvo una persona y a qué hora), así que no se expone
-aquí: cuando haga falta, irá en un endpoint aparte con control de rol propio.
+El rastro de ubicaciones es un dato sensible (dice dónde estuvo una persona y a
+qué hora): las lecturas solo están abiertas a admin, supervisor y gerente.
 
 El empleado dueño de la ubicación sale siempre del token, nunca del cuerpo de
 la petición. Si se aceptara como parámetro, cualquier técnico podría sembrar
@@ -17,19 +19,27 @@ posiciones a nombre de un compañero y fabricarle una coartada.
 -----------------------------------------------------------------------------
 """
 
+from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.ubicacion import (
+    RecorridoResponse,
     UbicacionCreate,
+    UbicacionLoteCreate,
+    UbicacionLoteResponse,
     UbicacionResponse,
     UbicacionTecnicoResponse,
 )
 from app.services.asistencia import es_del_turno_en_curso
-from app.services.ubicaciones import obtener_ultimas_ubicaciones
+from app.services.ubicaciones import (
+    jornada_en_curso,
+    obtener_recorrido,
+    obtener_ultimas_ubicaciones,
+    registrar_lote,
+)
 
 from app.core.deps import get_current_empleado, require_admin_supervisor_gerente
 from app.core.exceptions import conflict
@@ -53,29 +63,13 @@ async def _jornada_en_curso(db: AsyncSession, id_empleado: int) -> Optional[Asis
     Jornada del turno en marcha (entrada sin salida), o None.
 
     No basta con "cualquier jornada sin salida": un técnico que olvidó marcar
-    salida el lunes seguiría figurando en jornada el jueves, y este endpoint
-    le aceptaría posiciones sin que hubiera abierto turno. Se aplica la misma
-    regla que POST /asistencia/salida (es_del_turno_en_curso): vale la jornada
-    de hoy, o la de ayer si el turno cruzó la medianoche.
-
-    Se piden todas las filas en lugar de usar `scalar_one_or_none()`: ese
-    método lanza MultipleResultsFound en cuanto hay dos jornadas abiertas —un
-    doble clic en "Entrada" ya las crea— y el técnico se quedaría sin poder
-    reportar su ubicación, con un 500 sin explicación.
+    salida el lunes seguiría figurando en jornada el jueves. Se aplica la
+    regla es_del_turno_en_curso, compartida con la salida, las pausas y
+    (desde HU-5) el bloqueo de tareas sin jornada: la consulta vive en
+    services/ubicaciones.jornada_en_curso. La hora se toma aquí para que sea
+    la del reloj de este router.
     """
-    result = await db.execute(
-        select(Asistencia)
-        .where(
-            Asistencia.id_empleado == id_empleado,
-            Asistencia.hora_salida.is_(None),
-        )
-        .order_by(Asistencia.fecha.desc(), Asistencia.hora_entrada.desc())
-    )
-    ahora = ahora_local()
-    return next(
-        (j for j in result.scalars().all() if es_del_turno_en_curso(j, ahora)),
-        None,
-    )
+    return await jornada_en_curso(db, id_empleado, ahora_local())
 
 
 # ─── POST /ubicaciones ───────────────────────────────────────────────────────
@@ -149,3 +143,59 @@ async def listar_ubicaciones_tecnicos(
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     return await obtener_ultimas_ubicaciones(db)
+
+
+# ─── POST /ubicaciones/lote ──────────────────────────────────────────────────
+
+@router.post(
+    "/lote",
+    response_model=UbicacionLoteResponse,
+    summary="Guardar puntos tomados sin conexión",
+    status_code=status.HTTP_200_OK,
+)
+async def registrar_ubicaciones_lote(
+    data: UbicacionLoteCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Guarda los puntos que el técnico acumuló mientras no tenía señal (HU-5).
+
+    Cada punto trae la hora real en que se tomó. Se descartan, sin fallar el
+    envío completo, los que caen fuera de una jornada del técnico, los que
+    tienen hora futura y los que ya estaban guardados (reintentos).
+
+    Como en POST /ubicaciones, el dueño de los puntos sale del token.
+    """
+    guardados, descartados = await registrar_lote(db, current_user, data.puntos)
+    await db.flush()
+    return UbicacionLoteResponse(guardados=guardados, descartados=descartados)
+
+
+# ─── GET /ubicaciones/{id_empleado}/recorrido ────────────────────────────────
+
+@router.get(
+    "/{id_empleado}/recorrido",
+    response_model=RecorridoResponse,
+    summary="Recorrido de un técnico en un día",
+)
+async def get_recorrido(
+    id_empleado: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    fecha: Annotated[
+        Optional[date],
+        Query(description="Día a consultar (YYYY-MM-DD). Por defecto, hoy."),
+    ] = None,
+):
+    """
+    Puntos del técnico en ese día, en orden cronológico y con su hora (HU-5):
+    reportes periódicos, inicio y fin de tareas, y el lugar de la entrada y la
+    salida. Cada punto indica si antes hubo un hueco sin datos.
+
+    Si ese día no hay datos, `puntos` viene vacío (no es un error).
+
+    Roles: admin, supervisor y gerente. 404 si el empleado no existe.
+    """
+    return await obtener_recorrido(db, id_empleado, fecha or ahora_local().date())
+

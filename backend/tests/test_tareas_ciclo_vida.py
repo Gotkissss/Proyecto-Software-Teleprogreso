@@ -36,6 +36,19 @@ from app.schemas.tarea import TareaCreate, TareaReasignar, TareaUpdate
 from app.services.tareas import es_de_hoy, marcar_completada, marcar_reabierta
 
 
+@pytest.fixture(autouse=True)
+def _tecnico_con_jornada_abierta(monkeypatch):
+    """
+    HU-5: el técnico solo trabaja en tareas con la jornada abierta. Estas
+    pruebas son del ciclo de vida de la tarea, no de la jornada, así que
+    parten de un técnico que ya marcó entrada. El bloqueo sin jornada se
+    prueba en test_recorrido_tecnico.py.
+    """
+    import app.services.tareas as tareas_service
+
+    monkeypatch.setattr(tareas_service, "exigir_jornada_abierta", AsyncMock())
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _tarea(estado="pendiente", fecha_inicio=None, fecha_completado=None):

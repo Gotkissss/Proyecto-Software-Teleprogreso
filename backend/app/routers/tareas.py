@@ -42,6 +42,7 @@ from app.schemas.tarea import (
     TareaUpdate,
     TareaUpdateEstado,
 )
+from app.schemas.ubicacion import UbicacionCreate
 from app.services import tareas as tareas_service
 
 router = APIRouter(prefix="/tareas", tags=["Tareas"])
@@ -269,6 +270,7 @@ async def iniciar_tarea(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
+    ubicacion: Optional[UbicacionCreate] = None,
 ):
     """
     Marca el inicio de una tarea por parte del técnico asignado.
@@ -276,8 +278,11 @@ async def iniciar_tarea(
     - Solo el técnico asignado a la tarea puede iniciarla (o admin/supervisor).
     - Verifica que el empleado autenticado esté asignado a la tarea.
     - Registra la fecha de inicio actual.
+    - HU-5: el técnico necesita la jornada abierta (409 si no la tiene).
+    - HU-5: el cuerpo `{lat, lng}` es opcional; si llega, el lugar del inicio
+      queda en el recorrido del técnico.
     """
-    return await tareas_service.iniciar_tarea(db, id, current_user)
+    return await tareas_service.iniciar_tarea(db, id, current_user, ubicacion)
 
 
 @router.patch(
@@ -290,6 +295,7 @@ async def finalizar_tarea(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
+    ubicacion: Optional[UbicacionCreate] = None,
 ):
     """
     Cierra una tarea y deja marcado el momento exacto del cierre.
@@ -305,10 +311,13 @@ async def finalizar_tarea(
     - Requiere al menos una evidencia registrada en la tarea.
     - La tarea debe estar en curso: una 'pendiente' hay que iniciarla primero.
     - Una tarea cancelada no puede completarse.
+    - HU-5: el técnico necesita la jornada abierta (409 si no la tiene).
+    - HU-5: el cuerpo `{lat, lng}` es opcional; si llega, el lugar del cierre
+      queda en el recorrido del técnico (una sola vez por tarea).
 
     Roles: técnico asignado, admin, supervisor.
     """
-    return await tareas_service.finalizar_tarea(db, id, current_user)
+    return await tareas_service.finalizar_tarea(db, id, current_user, ubicacion)
 
 
 @router.get(

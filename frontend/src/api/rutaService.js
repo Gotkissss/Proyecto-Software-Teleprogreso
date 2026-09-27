@@ -94,11 +94,25 @@ export const getMiRuta = async (posicion = null) => {
  * Marca una tarea como iniciada (en_progreso) en el backend.
  * Corresponde a PATCH /tareas/{id}/iniciar — solo el técnico asignado puede llamarla.
  *
+ * HU-5: requiere la jornada abierta (409 si no), y si llega la posición, el
+ * lugar del inicio queda en el recorrido del técnico.
+ *
  * @param {number} idTarea
+ * @param {{lat:number, lng:number}|null} [posicion]
  */
-export const iniciarServicio = async (idTarea) => {
-  const { data } = await apiClient.patch(`/tareas/${idTarea}/iniciar`)
+export const iniciarServicio = async (idTarea, posicion = null) => {
+  const { data } = await apiClient.patch(
+    `/tareas/${idTarea}/iniciar`,
+    cuerpoUbicacion(posicion),
+  )
   return data
+}
+
+/** Cuerpo {lat, lng} solo si hay posición; si no, la petición va sin cuerpo. */
+export function cuerpoUbicacion(posicion) {
+  return Number.isFinite(posicion?.lat) && Number.isFinite(posicion?.lng)
+    ? { lat: posicion.lat, lng: posicion.lng }
+    : undefined
 }
 
 /**

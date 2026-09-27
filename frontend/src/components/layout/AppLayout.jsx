@@ -77,7 +77,7 @@ export default function AppLayout() {
     // HU-215: el reporte de ubicación y su indicador viven a este nivel (y no
     // dentro de MapaPage) para que sigan corriendo sin importar qué pantalla
     // del técnico esté abierta. Ver UbicacionContext.jsx para el porqué.
-    <UbicacionProvider>
+    <UbicacionProvider idEmpleado={user?.id_empleado}>
       <div className={styles.wrapper}>
         <LayoutHeader
           variant="app"
