@@ -277,3 +277,177 @@ async def test_sin_tareas_hoy_devuelve_lista_vacia():
 
     assert ruta == []
 
+
+# ─── HU-3: orden por cercanía y distancia ─────────────────────────────────────
+#
+# La regla está documentada en app/core/reglas.py: abiertas antes que
+# completadas; con posición, urgentes primero y luego la más cercana; sin
+# posición, orden por prioridad. Como la sesión está mockeada, el orden se
+# verifica sobre el ORDER BY generado, igual que el recorte del día.
+
+FRAIJANES = {"lat": 14.4653, "lng": -90.4408}
+
+
+def _orden_de(db):
+    """Solo la cláusula ORDER BY del SQL de la última consulta."""
+    return _sql_de(db).split("ORDER BY", 1)[1]
+
+
+@pytest.mark.asyncio
+async def test_con_posicion_calcula_la_distancia_con_ST_Distance():
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    sql = _sql_de(db)
+    assert "ST_Distance(tarea.coordenada_servicio" in sql
+    assert " AS distancia_m" in sql
+
+
+@pytest.mark.asyncio
+async def test_el_punto_del_tecnico_se_arma_con_longitud_primero():
+    """
+    WKT es POINT(lng lat). Invertirlo no da error: solo mide la distancia a
+    un punto en otro continente y el orden sale al azar.
+    """
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    assert "ST_GeogFromText('SRID=4326;POINT(-90.4408 14.4653)')" in _sql_de(db)
+
+
+@pytest.mark.asyncio
+async def test_con_posicion_ordena_por_cercania():
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    orden = _orden_de(db)
+    assert "ST_Distance(" in orden
+    # Las tareas sin coordenada no tienen distancia: van al final del grupo.
+    assert "ASC NULLS LAST" in orden
+
+
+@pytest.mark.asyncio
+async def test_las_urgentes_van_antes_que_la_cercania():
+    """
+    Una urgente lejana va antes que una baja a la vuelta de la esquina: el
+    criterio de urgente aparece en el ORDER BY antes que la distancia.
+    """
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    orden = _orden_de(db)
+    assert "tarea.prioridad = 'urgente'" in orden
+    assert orden.index("tarea.prioridad = 'urgente'") < orden.index("ST_Distance(")
+
+
+@pytest.mark.asyncio
+async def test_lo_completado_va_al_final_incluso_si_esta_mas_cerca():
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    orden = _orden_de(db)
+    assert orden.index("tarea.estado_tarea = 'completado'") < orden.index(
+        "tarea.prioridad = 'urgente'"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sin_posicion_ordena_solo_por_prioridad():
+    """
+    GPS denegado o sin señal: no se inventa una distancia y la ruta cae al
+    orden por prioridad (urgente, alta, media, baja), como antes de HU-3.
+    """
+    db = _db_con_filas([])
+
+    await get_mi_ruta(db=db, current_user=_empleado())
+
+    sql = _sql_de(db)
+    orden = _orden_de(db)
+    assert "ST_Distance" not in sql
+    assert "NULL AS distancia_m" in sql
+    posiciones = [
+        orden.index(f"tarea.prioridad = '{prioridad}'")
+        for prioridad in ("urgente", "alta", "media", "baja")
+    ]
+    assert posiciones == sorted(posiciones)
+
+
+@pytest.mark.asyncio
+async def test_devuelve_la_distancia_de_cada_parada():
+    db = _db_con_filas([
+        (_tarea(1, "pendiente", prioridad="urgente"), 14.47, -90.44, 2400.5),
+        (_tarea(2, "pendiente"), 14.46, -90.45, 350.0),
+        (_tarea(3, "pendiente"), None, None, None),
+    ])
+
+    ruta = await get_mi_ruta(db=db, current_user=_empleado(), **FRAIJANES)
+
+    # El orden es el que decide la base de datos; el servicio no lo altera.
+    assert [p.id_tarea for p in ruta] == [1, 2, 3]
+    assert ruta[0].distancia_m == 2400.5
+    assert ruta[1].distancia_m == 350.0
+    assert ruta[2].distancia_m is None
+
+
+@pytest.mark.asyncio
+async def test_la_parada_trae_su_fecha_limite():
+    from datetime import date as _date
+
+    db = _db_con_filas([
+        (_tarea(4, "pendiente", fecha_finalizacion=_date(2026, 9, 30)), 14.47, -90.44, None),
+    ])
+
+    ruta = await get_mi_ruta(db=db, current_user=_empleado())
+
+    assert ruta[0].fecha_finalizacion == _date(2026, 9, 30)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("coordenadas", [{"lat": 14.46}, {"lng": -90.44}])
+async def test_una_sola_coordenada_se_rechaza(coordenadas):
+    from app.core.exceptions import APIException
+
+    db = _db_con_filas([])
+
+    with pytest.raises(APIException) as error:
+        await get_mi_ruta(db=db, current_user=_empleado(), **coordenadas)
+
+    assert error.value.status_code == 400
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    ["lat=91&lng=-90.44", "lat=14.46&lng=-181", "lat=abc&lng=-90.44"],
+)
+async def test_coordenadas_fuera_de_rango_devuelven_422(query):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.core.deps import get_current_empleado
+    from app.db.session import get_db
+    from app.routers import tareas
+
+    app = FastAPI()
+    app.include_router(tareas.router)
+
+    async def db_simulada():
+        yield _db_con_filas([])
+
+    async def usuario_simulado():
+        return _empleado()
+
+    app.dependency_overrides[get_db] = db_simulada
+    app.dependency_overrides[get_current_empleado] = usuario_simulado
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        respuesta = await client.get(f"/tareas/mi-ruta?{query}")
+
+    assert respuesta.status_code == 422
