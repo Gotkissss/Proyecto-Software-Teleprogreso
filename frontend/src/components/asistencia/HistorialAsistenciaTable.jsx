@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Badge from '../ui/Badge'
 import PageState from '../ui/PageState'
+import MiniMapaAsistencia from '../mapa/MiniMapaAsistencia'
 import {
   getEmpleadosParaFiltro,
   getHistorialAsistencia,
@@ -103,6 +104,14 @@ function esSinSalida(jornada) {
   return jornada.jornada_activa && jornada.fecha < HOY_ISO
 }
 
+/** HU-4: ¿alguna de las dos marcas tiene lugar registrado? */
+function tieneAlgunaUbicacion(jornada) {
+  return (
+    (jornada.lat_entrada != null && jornada.lng_entrada != null) ||
+    (jornada.lat_salida != null && jornada.lng_salida != null)
+  )
+}
+
 /** Variante de color para el total de horas trabajadas de la jornada. */
 function varianteHoras(minutosTrabajados) {
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA) return 'success'
@@ -111,19 +120,23 @@ function varianteHoras(minutosTrabajados) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Fila de una jornada (expandible para ver el detalle de pausas)
+   Fila de una jornada (expandible para ver el lugar de las marcas
+   y el detalle de pausas)
    ───────────────────────────────────────────────────────────── */
 function FilaJornada({ jornada }) {
   const [abierta, setAbierta] = useState(false)
   const tienePausas = jornada.descansos?.length > 0
+  const tieneUbicacion = tieneAlgunaUbicacion(jornada)
+  // HU-4: la fila también se expande para ver el mini-mapa de las marcas.
+  const expandible = tienePausas || tieneUbicacion
   const llegadaTarde = esLlegadaTarde(jornada)
   const sinSalida = esSinSalida(jornada)
 
   return (
     <>
       <tr
-        className={`${styles.fila} ${tienePausas ? styles.filaClickable : ''}`}
-        onClick={() => tienePausas && setAbierta((v) => !v)}
+        className={`${styles.fila} ${expandible ? styles.filaClickable : ''}`}
+        onClick={() => expandible && setAbierta((v) => !v)}
       >
         <td className={styles.celda}>
           <span className={styles.fecha}>{formatearFecha(jornada.fecha)}</span>
@@ -167,26 +180,36 @@ function FilaJornada({ jornada }) {
           )}
         </td>
         <td className={`${styles.celda} ${styles.numero}`}>
-          {tienePausas && (
+          {expandible && (
             <span className={styles.chevron}>{abierta ? '▾' : '▸'}</span>
           )}
         </td>
       </tr>
 
-      {abierta && tienePausas && (
+      {abierta && expandible && (
         <tr className={styles.filaDetalle}>
           <td className={styles.detalleCelda} colSpan={7}>
-            <span className={styles.detalleTitulo}>Pausas de la jornada</span>
-            <ul className={styles.pausasList}>
-              {jornada.descansos.map((p) => (
-                <li key={p.id_descanso} className={styles.pausaItem}>
-                  <span>
-                    {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
-                  </span>
-                  <span className={styles.pausaMin}>{p.minutos} min</span>
-                </li>
-              ))}
-            </ul>
+            {tieneUbicacion && (
+              <>
+                <span className={styles.detalleTitulo}>Lugar de las marcas</span>
+                <MiniMapaAsistencia jornada={jornada} />
+              </>
+            )}
+            {tienePausas && (
+              <>
+                <span className={styles.detalleTitulo}>Pausas de la jornada</span>
+                <ul className={styles.pausasList}>
+                  {jornada.descansos.map((p) => (
+                    <li key={p.id_descanso} className={styles.pausaItem}>
+                      <span>
+                        {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
+                      </span>
+                      <span className={styles.pausaMin}>{p.minutos} min</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </td>
         </tr>
       )}
