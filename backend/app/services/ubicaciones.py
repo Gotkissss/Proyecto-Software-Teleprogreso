@@ -13,6 +13,7 @@ from app.core.reglas import (
     EVENTO_FIN_TAREA,
     EVENTO_PERIODICO,
     EVENTO_SALIDA,
+    HORAS_UBICACION_RECIENTE,
     MINUTOS_HUECO_RECORRIDO,
     ROL_TECNICO,
     TOLERANCIA_RELOJ_SEGUNDOS,
@@ -414,3 +415,79 @@ async def obtener_ultimas_ubicaciones(
         )
 
     return sorted(respuesta, key=lambda u: u.nombre)
+
+
+async def distancias_a_la_tarea(
+    db: AsyncSession,
+    ids_empleados: List[int],
+    id_tarea: int,
+) -> dict[int, Tuple[float, datetime]]:
+    """
+    Metros que separan a cada técnico de una tarea, según su última posición.
+
+    La usa GET /empleados/tecnicos/disponibles?id_tarea=... para que el
+    supervisor reparta el trabajo mirando quién está más cerca del servicio.
+
+    El cálculo lo hace PostGIS con `ST_Distance` sobre columnas `geography`,
+    que devuelve metros sobre el elipsoide; no se aproxima nada en Python.
+
+    Solo entran posiciones de las últimas HORAS_UBICACION_RECIENTE horas. Los
+    técnicos sin una posición así de fresca no aparecen en el diccionario, y el
+    endpoint los publica con `distancia_m: null` para que la pantalla diga "sin
+    ubicación reciente" en lugar de colocarlos como si estuvieran a 0 metros.
+
+    Devuelve `{id_empleado: (metros, momento_de_esa_posición)}`. Si la tarea no
+    existe se levanta 404; si no tiene coordenada (es opcional al crearla) se
+    devuelve vacío, porque no hay desde dónde medir.
+    """
+    result_tarea = await db.execute(
+        select(Tarea.id_tarea, Tarea.coordenada_servicio).where(
+            Tarea.id_tarea == id_tarea
+        )
+    )
+    fila_tarea = result_tarea.first()
+
+    if fila_tarea is None:
+        raise not_found("Tarea no encontrada.")
+
+    if fila_tarea.coordenada_servicio is None or not ids_empleados:
+        return {}
+
+    # Hora local de la operación, igual que el resto del módulo: la columna
+    # guarda hora de Guatemala y restarle horas a un reloj en UTC dejaría
+    # fuera posiciones recientes.
+    desde = ahora_local() - timedelta(hours=HORAS_UBICACION_RECIENTE)
+
+    punto_tarea = (
+        select(Tarea.coordenada_servicio)
+        .where(Tarea.id_tarea == id_tarea)
+        .scalar_subquery()
+    )
+
+    # Mismo DISTINCT ON que obtener_ultimas_ubicaciones, incluido el desempate
+    # por id_ubicacion: de los varios puntos que reporta un técnico a lo largo
+    # del día PostgreSQL se queda con el más nuevo de cada uno, sin traerse el
+    # histórico entero para filtrarlo en Python.
+    result = await db.execute(
+        select(
+            UbicacionEmpleado.id_empleado,
+            UbicacionEmpleado.fecha_hora_registro,
+            func.ST_Distance(UbicacionEmpleado.coordenada, punto_tarea).label("metros"),
+        )
+        .where(
+            UbicacionEmpleado.id_empleado.in_(ids_empleados),
+            UbicacionEmpleado.fecha_hora_registro >= desde,
+        )
+        .distinct(UbicacionEmpleado.id_empleado)
+        .order_by(
+            UbicacionEmpleado.id_empleado,
+            UbicacionEmpleado.fecha_hora_registro.desc(),
+            UbicacionEmpleado.id_ubicacion.desc(),
+        )
+    )
+
+    return {
+        fila.id_empleado: (float(fila.metros), fila.fecha_hora_registro)
+        for fila in result.all()
+        if fila.metros is not None
+    }

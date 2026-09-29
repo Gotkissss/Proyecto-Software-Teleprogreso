@@ -10,10 +10,10 @@ Control de acceso:
 Requiere token JWT válido en Authorization: Bearer <token>.
 """
 
-from datetime import date
-from typing import Annotated
+from datetime import date, datetime
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ from app.db.session import get_db
 from app.models.asistencia import Asistencia
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Tarea
+from app.services import ubicaciones as ubicaciones_service
 
 router = APIRouter(tags=["Métricas"])
 
@@ -151,18 +152,29 @@ async def get_metricas_supervisor(
 
 
 # ─── GET /empleados/tecnicos/disponibles ─────────────────────────────────────
-# Devuelve técnicos activos con conteo de tareas activas.
+# Devuelve técnicos activos con conteo de tareas activas y, si se pide una
+# tarea concreta, la distancia de cada uno a ella.
 # El frontend lo usa para poblar el selector y deshabilitar técnicos al límite.
 # Acceso: admin, supervisor.
 
 @router.get(
     "/empleados/tecnicos/disponibles",
-    summary="Técnicos activos con conteo de tareas activas",
+    summary="Técnicos activos con conteo de tareas activas y distancia a una tarea",
     status_code=status.HTTP_200_OK,
 )
 async def get_tecnicos_disponibles(
     db: Annotated[AsyncSession, Depends(get_db)],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
+    id_tarea: Annotated[
+        Optional[int],
+        Query(
+            description=(
+                "Tarea de referencia. Si se envía, cada técnico incluye su "
+                "distancia en metros hasta ella."
+            ),
+            ge=1,
+        ),
+    ] = None,
 ):
     """
     Lista de técnicos activos con sus métricas de carga:
@@ -178,7 +190,9 @@ async def get_tecnicos_disponibles(
         "telefono": "5550-0002",
         "tareas_activas": 2,
         "disponible": true,       // false si tareas_activas >= limite_tareas
-        "limite_tareas": 5        // política vigente, para no duplicarla en la UI
+        "limite_tareas": 5,       // política vigente, para no duplicarla en la UI
+        "distancia_m": 1420.5,    // null sin ?id_tarea o sin ubicación reciente
+        "ubicacion_registrada_en": "2026-09-29T08:40:00"
       },
       ...
     ]
@@ -186,6 +200,14 @@ async def get_tecnicos_disponibles(
 
     El campo `disponible` indica si el técnico puede recibir más tareas.
     El frontend puede usar este campo para deshabilitar la opción en el selector.
+
+    Con `?id_tarea=<id>` se añade la distancia hasta esa tarea, calculada por
+    PostGIS desde la última posición GPS del técnico. `distancia_m` viaja en
+    null cuando no se pidió una tarea, cuando la tarea no tiene coordenada o
+    cuando el técnico no ha reportado ubicación en las últimas
+    `HORAS_UBICACION_RECIENTE` horas; `ubicacion_registrada_en` dice de cuándo
+    es la posición usada, para que la pantalla no presente como actual algo que
+    ya tiene horas.
 
     Roles: admin | supervisor.
     """
@@ -245,8 +267,19 @@ async def get_tecnicos_disponibles(
         # Si hay varias jornadas del día, basta con que una siga abierta.
         jornadas[id_empleado] = jornadas.get(id_empleado, False) or hora_salida is None
 
-    return [
-        {
+    # Distancia a la tarea que se está reasignando. Sin `id_tarea` el endpoint
+    # se comporta exactamente como antes y no toca la tabla de ubicaciones.
+    distancias: dict[int, tuple[float, datetime]] = {}
+    if id_tarea is not None:
+        distancias = await ubicaciones_service.distancias_a_la_tarea(
+            db, ids_tecnicos, id_tarea
+        )
+
+    resultado = []
+    for tec in tecnicos:
+        ubicacion = distancias.get(tec.id_empleado)
+
+        resultado.append({
             "id_empleado":    tec.id_empleado,
             "nombre":         tec.nombre,
             "apellido":       tec.apellido,
@@ -260,6 +293,10 @@ async def get_tecnicos_disponibles(
             "marco_entrada":  tec.id_empleado in jornadas,
             # Está trabajando ahora mismo: entrada marcada y sin salida.
             "en_jornada":     jornadas.get(tec.id_empleado, False),
-        }
-        for tec in tecnicos
-    ]
+            # Metros hasta la tarea de `?id_tarea`, o null si no se pidió
+            # ninguna / no hay posición reciente de este técnico.
+            "distancia_m":    round(ubicacion[0], 1) if ubicacion else None,
+            "ubicacion_registrada_en": ubicacion[1] if ubicacion else None,
+        })
+
+    return resultado

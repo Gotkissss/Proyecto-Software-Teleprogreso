@@ -132,3 +132,16 @@ MAX_PUNTOS_LOTE = 500
 # Margen para puntos en lote con hora ligeramente "futura" por diferencias
 # entre el reloj del teléfono y el del servidor.
 TOLERANCIA_RELOJ_SEGUNDOS = 120
+
+# Antigüedad máxima de una posición para seguir tratándola como "donde está
+# ahora" el técnico al repartir trabajo (la distancia de
+# GET /empleados/tecnicos/disponibles?id_tarea=...). Pasado ese rato el técnico
+# pudo haberse movido de municipio, y decir "a 800 m" de una posición de ayer
+# es peor que decir que no se sabe.
+#
+# Es una ventana de tiempo y no la jornada abierta, como en
+# GET /ubicaciones/tecnicos: ahí se pinta un mapa en vivo, mientras que aquí se
+# reparte trabajo entre técnicos que pueden no estar en turno todavía. En la
+# práctica coinciden casi siempre, porque POST /ubicaciones solo acepta puntos
+# con la jornada abierta.
+HORAS_UBICACION_RECIENTE = 8
