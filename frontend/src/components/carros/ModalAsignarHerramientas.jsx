@@ -7,7 +7,7 @@
  *   onAsignar       {fn}       - Callback(idsSeleccionados[]) llamado al confirmar
  *   onCerrar        {fn}       - Callback para cerrar el modal
  *
- * Consume los endpoints reales de carroService.js
+ * Consume los endpoints reales desde api/inventarioService.js
  * (GET /activos/herramientas y POST /activos/carros/{id}/herramientas).
  * ---------------------------------------------------------------------------
  */
@@ -16,7 +16,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import styles from './ModalAsignarHerramientas.module.css'
-import { getHerramientas } from '../../api/carroService'
+import { getHerramientas } from '../../api/inventarioService'
 
 /*  Iconos  */
 const IconX = () => (

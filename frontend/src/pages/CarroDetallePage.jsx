@@ -23,7 +23,7 @@ import {
   getHerramientasDeCarro,
   asignarHerramientaACarro,
   liberarHerramientaDeCarro,
-} from '../api/carroService'
+} from '../api/inventarioService'
 
 /*  Iconos  */
 const IconBack = () => (
