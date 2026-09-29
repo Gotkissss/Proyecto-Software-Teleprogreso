@@ -2,7 +2,7 @@
  * pages/ReasignacionPage.jsx
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
@@ -20,6 +20,8 @@ import {
   reasignarTarea,
 } from '../api/tareaService'
 import { diasRestantes, parsearFechaLocal } from '../utils/vencimiento'
+import { formatearDistancia } from '../utils/navegacion'
+import { soloHora } from '../utils/fecha'
 import styles from './ReasignacionPage.module.css'
 
 
@@ -141,6 +143,49 @@ const ORDEN_PRIORIDAD = ['urgente', 'alta', 'media', 'baja']
 const ORDEN_PROGRESO = ['pendiente', 'en_progreso']
 
 /**
+ * Cómo se lee la cercanía de un técnico en la lista.
+ *
+ * `formatearDistancia` (utils/navegacion, de la ruta diaria) devuelve null
+ * cuando no hay distancia. Aquí ese null significa que el técnico no ha
+ * reportado ubicación reciente, y decirlo importa: no es lo mismo que estar
+ * a 0 metros de la tarea.
+ */
+const cercaniaDe = (tecnico) =>
+  formatearDistancia(tecnico.distancia_m) ?? 'sin ubicación reciente'
+
+// SCRUM-249: criterios del selector de técnicos dentro del modal. "Carga" es
+// el de siempre (quien menos trabajo lleva, primero); "cercanía" usa los
+// metros que calcula el backend desde la última posición GPS de cada técnico.
+const ORDENES_TECNICO = [
+  { value: 'carga',    label: 'Carga actual' },
+  { value: 'cercania', label: 'Cercanía a la tarea' },
+]
+
+/**
+ * Ordena la lista de técnicos del modal.
+ *
+ * Por cercanía, los que no tienen ubicación reciente se van al final en lugar
+ * de colarse arriba: `distancia_m` en null no es "a 0 metros", y ponerlos
+ * primero recomendaría justo a quien no se sabe dónde está.
+ */
+function ordenarTecnicos(tecnicos, criterio) {
+  const porNombre = (a, b) => a.nombre_completo.localeCompare(b.nombre_completo, 'es')
+
+  if (criterio === 'cercania') {
+    return [...tecnicos].sort((a, b) => {
+      if (a.distancia_m == null && b.distancia_m == null) return porNombre(a, b)
+      if (a.distancia_m == null) return 1
+      if (b.distancia_m == null) return -1
+      return a.distancia_m - b.distancia_m
+    })
+  }
+
+  return [...tecnicos].sort(
+    (a, b) => (a.tareas_activas ?? 0) - (b.tareas_activas ?? 0) || porNombre(a, b)
+  )
+}
+
+/**
  * Agrupa las tareas en columnas tipo Planner según el criterio elegido.
  *
  * "Prioridad" y "Progreso" usan un orden fijo (siempre las mismas columnas,
@@ -230,6 +275,15 @@ export default function ReasignacionPage() {
   const [errorReasignacion, setErrorReasignacion] = useState(null)
   // Criterio de agrupación del tablero (SCRUM: vista tipo Planner por buckets).
   const [agrupacion, setAgrupacion] = useState('asignado')
+  // SCRUM-249: criterio del selector de técnicos dentro del modal.
+  const [ordenTecnicos, setOrdenTecnicos] = useState('carga')
+  // Las distancias se piden al abrir el modal, porque dependen de la tarea.
+  const [cargandoDistancias, setCargandoDistancias] = useState(false)
+  // Tarea cuyas distancias se están pidiendo. Si el supervisor cierra el modal
+  // y abre otra tarea antes de que llegue la respuesta, la vieja se descarta:
+  // pintar los metros de una tarea junto al nombre de otra es peor que no
+  // pintarlos.
+  const tareaDistanciasRef = useRef(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -291,7 +345,7 @@ export default function ReasignacionPage() {
           ? `Tarea retirada a ${nombrePrevio}. Queda sin asignar.`
           : 'La tarea queda sin asignar.'
       )
-      setTareaSeleccionada(null)
+      cerrarPanel()
       setTecnicoNuevo('')
     } catch (err) {
       setErrorReasignacion(
@@ -366,7 +420,7 @@ export default function ReasignacionPage() {
       toast.success(
         `Tarea reasignada a ${tecnicoSeleccionado.nombre_completo}.`
       )
-      setTareaSeleccionada(null)
+      cerrarPanel()
       setTecnicoNuevo('')
 
     } catch (err) {
@@ -399,10 +453,44 @@ export default function ReasignacionPage() {
     }
   }
 
-  const abrirPanel = (tarea) => {
+  /**
+   * Abre el panel de reasignación y pide las distancias de cada técnico a
+   * ESTA tarea (SCRUM-247/248). La lista general se carga sin distancias
+   * porque hasta aquí no se sabe desde qué tarea medirlas.
+   */
+  const abrirPanel = async (tarea) => {
+    const idTarea = tarea.id_tarea ?? tarea.id
+
     setTareaSeleccionada(tarea)
     setTecnicoNuevo('')
     setErrorReasignacion(null)
+
+    // Se borran las distancias de la tarea anterior antes de pedir las nuevas:
+    // si la petición falla, la lista se queda sin distancias en vez de mostrar
+    // las de otra tarea como si fueran de esta.
+    setTecnicos((prev) =>
+      prev.map((t) => ({ ...t, distancia_m: null, ubicacion_registrada_en: null }))
+    )
+
+    tareaDistanciasRef.current = idTarea
+    setCargandoDistancias(true)
+
+    try {
+      const conDistancias = await getTecnicosDisponibles(idTarea)
+      if (tareaDistanciasRef.current === idTarea) setTecnicos(conDistancias)
+    } catch (err) {
+      // Sin distancias el modal sigue sirviendo para reasignar por carga, así
+      // que esto no bloquea la pantalla ni pinta un error rojo.
+      console.error(err)
+    } finally {
+      if (tareaDistanciasRef.current === idTarea) setCargandoDistancias(false)
+    }
+  }
+
+  const cerrarPanel = () => {
+    // Deja de esperar la respuesta pendiente: al volver a abrir se pide otra.
+    tareaDistanciasRef.current = null
+    setTareaSeleccionada(null)
   }
 
   // Esta pantalla es para repartir trabajo pendiente. Las tareas ya cerradas
@@ -438,6 +526,35 @@ export default function ReasignacionPage() {
   /** Técnico que ya tiene la tarea abierta en el modal. */
   const idTecnicoActual =
     tareaSeleccionada?.tecnico?.id_empleado ?? null
+
+  // La distancia sale de la coordenada exacta de la tarea. Es opcional al
+  // crearla (SCRUM-170/171), y sin ella el backend no tiene desde dónde medir.
+  const tareaUbicada =
+    tareaSeleccionada?.lat != null && tareaSeleccionada?.lng != null
+
+  // Ordenar por cercanía sin distancias dejaría la lista en un orden
+  // arbitrario, así que en ese caso manda la carga.
+  const ordenEfectivo = tareaUbicada ? ordenTecnicos : 'carga'
+
+  const tecnicosOrdenados = useMemo(
+    () => ordenarTecnicos(tecnicos, ordenEfectivo),
+    [tecnicos, ordenEfectivo]
+  )
+
+  // Nadie ha reportado posición en las últimas horas: conviene decirlo una vez
+  // arriba en lugar de repetir "sin ubicación reciente" en cada opción sin
+  // explicar por qué no hay ni una sola distancia.
+  const sinUbicaciones =
+    tareaUbicada &&
+    !cargandoDistancias &&
+    tecnicos.length > 0 &&
+    tecnicos.every((t) => t.distancia_m == null)
+
+  /** Técnico elegido en el selector, si es uno concreto. */
+  const tecnicoElegido =
+    tecnicoNuevo && tecnicoNuevo !== SIN_ASIGNAR
+      ? tecnicos.find((t) => t.id === Number(tecnicoNuevo))
+      : null
 
   /** Refleja en la lista la tarea que devolvió PATCH /tareas/{id}. */
   const handleTareaEditada = (actualizada) => {
@@ -718,7 +835,7 @@ export default function ReasignacionPage() {
           compartido, igual que la edición de tareas y el inventario. */}
       <Modal
         open={Boolean(tareaSeleccionada)}
-        onClose={() => setTareaSeleccionada(null)}
+        onClose={cerrarPanel}
         title="Reasignar tarea"
         width={520}
       >
@@ -746,6 +863,30 @@ export default function ReasignacionPage() {
           <strong>{tareaSeleccionada?.tecnico?.nombre ?? 'nadie'}</strong>
         </p>
 
+        {/* SCRUM-249: el mismo selector, ordenado por quien lleva menos
+            trabajo o por quien está más cerca del servicio. */}
+        <div className={styles.ordenBar}>
+          <label className={styles.ordenLabel} htmlFor="ordenar-tecnicos">
+            Ordenar por
+          </label>
+          <select
+            id="ordenar-tecnicos"
+            className={styles.ordenSelect}
+            value={ordenEfectivo}
+            disabled={!tareaUbicada}
+            title={
+              tareaUbicada
+                ? undefined
+                : 'Esta tarea no tiene ubicación exacta, no se puede ordenar por cercanía'
+            }
+            onChange={(e) => setOrdenTecnicos(e.target.value)}
+          >
+            {ORDENES_TECNICO.map((op) => (
+              <option key={op.value} value={op.value}>{op.label}</option>
+            ))}
+          </select>
+        </div>
+
         <label className={styles.label} htmlFor="reasignar-tecnico">
           Reasignar a:
         </label>
@@ -761,7 +902,7 @@ export default function ReasignacionPage() {
         >
           <option value="">Selecciona un técnico</option>
 
-          {tecnicos.map((tec) => {
+          {tecnicosOrdenados.map((tec) => {
             const tecAlLimite = alLimite(tec)
             // El técnico que ya la tiene se muestra marcado y bloqueado:
             // reasignar una tarea a quien ya la tiene no hace nada.
@@ -779,6 +920,10 @@ export default function ReasignacionPage() {
                 {tec.tareas_activas !== 1 ? 's' : ''}
                 {' '}activa
                 {tec.tareas_activas !== 1 ? 's' : ''}
+                {/* SCRUM-248: mientras llegan las distancias no se escribe
+                    nada, porque en ese momento todas valen null y todo el
+                    mundo saldría como "sin ubicación reciente". */}
+                {tareaUbicada && !cargandoDistancias ? ` · ${cercaniaDe(tec)}` : ''}
                 {esElActual ? ' (ya tiene esta tarea)' : ''}
                 {!esElActual && tecAlLimite ? ' (límite alcanzado)' : ''}
               </option>
@@ -804,6 +949,26 @@ export default function ReasignacionPage() {
             </p>
           )}
 
+        {/* Por qué no hay distancias que enseñar. Sin esta línea, ver a todo
+            el equipo como "sin ubicación reciente" parece un fallo. */}
+        {cargandoDistancias && (
+          <p className={styles.infoMsg}>Calculando distancias…</p>
+        )}
+
+        {!tareaUbicada && (
+          <p className={styles.infoMsg}>
+            ℹ Esta tarea no tiene ubicación exacta registrada, así que no se
+            puede ordenar por cercanía.
+          </p>
+        )}
+
+        {sinUbicaciones && (
+          <p className={styles.infoMsg}>
+            ℹ Ningún técnico ha reportado ubicación en las últimas horas: la
+            lista va ordenada por carga de trabajo.
+          </p>
+        )}
+
         {tecnicoNuevo === SIN_ASIGNAR && (
           <p className={styles.advertenciaMsg}>
             ℹ La tarea se quedará sin técnico y volverá a la columna “Sin
@@ -811,21 +976,27 @@ export default function ReasignacionPage() {
           </p>
         )}
 
-        {tecnicoNuevo && tecnicoNuevo !== SIN_ASIGNAR && (() => {
-          const tec = tecnicos.find((t) => t.id === Number(tecnicoNuevo))
-          if (!tec) return null
+        {/* De cuándo es la posición con la que se calculó la distancia: una de
+            hace horas se muestra igual, pero diciendo que es de hace horas. */}
+        {tecnicoElegido?.ubicacion_registrada_en && (
+          <p className={styles.infoMsg}>
+            Su última posición reportada es de las{' '}
+            {soloHora(tecnicoElegido.ubicacion_registrada_en)}.
+          </p>
+        )}
 
-          const activas = tec.tareas_activas ?? 0
+        {tecnicoElegido && (() => {
+          const activas = tecnicoElegido.tareas_activas ?? 0
 
-          if (alLimite(tec)) {
+          if (alLimite(tecnicoElegido)) {
             return (
               <p className={styles.limiteMsg}>
-                ⚠ Este técnico ya alcanzó el límite de {limiteDe(tec)} tareas activas.
+                ⚠ Este técnico ya alcanzó el límite de {limiteDe(tecnicoElegido)} tareas activas.
               </p>
             )
           }
 
-          if (activas === limiteDe(tec) - 1) {
+          if (activas === limiteDe(tecnicoElegido) - 1) {
             return (
               <p className={styles.advertenciaMsg}>
                 ℹ Este técnico tendrá {activas + 1} tareas activas tras la reasignación.
@@ -839,7 +1010,7 @@ export default function ReasignacionPage() {
         <ModalActions>
           <button
             className="btn btn-ghost"
-            onClick={() => setTareaSeleccionada(null)}
+            onClick={cerrarPanel}
           >
             Cancelar
           </button>

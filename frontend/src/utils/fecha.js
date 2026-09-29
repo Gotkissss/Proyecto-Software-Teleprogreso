@@ -34,6 +34,19 @@ export function soloFecha(fechaHora) {
 }
 
 /**
+ * "2026-08-21T15:04:00" → "15:04" (null si el valor no trae hora).
+ *
+ * Se recorta el texto en vez de pasar por `Date` por lo mismo que arriba: la
+ * marca ya viene en hora de Guatemala, y dejar que el navegador la reinterprete
+ * con su zona mostraría "09:04" a quien tenga el equipo en otro huso.
+ */
+export function soloHora(fechaHora) {
+  if (!fechaHora) return null
+  const hora = String(fechaHora).slice(11, 16)
+  return hora.length === 5 ? hora : null
+}
+
+/**
  * ¿`fechaHora` cae en el día `fechaISO`?
  *
  * Sin marca de tiempo la respuesta es `false`: no se puede afirmar el día de

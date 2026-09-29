@@ -12,7 +12,7 @@
  * ---------------------------------------------------------------------------
  */
 import { describe, it, expect } from 'vitest'
-import { aISO, esDelDia, hoyISO, soloFecha } from '../utils/fecha'
+import { aISO, esDelDia, hoyISO, soloFecha, soloHora } from '../utils/fecha'
 
 describe('soloFecha', () => {
   it('se queda con el día de una marca de tiempo', () => {
@@ -27,6 +27,25 @@ describe('soloFecha', () => {
     expect(soloFecha(null)).toBeNull()
     expect(soloFecha(undefined)).toBeNull()
     expect(soloFecha('')).toBeNull()
+  })
+})
+
+describe('soloHora', () => {
+  it('se queda con la hora y el minuto de una marca de tiempo', () => {
+    expect(soloHora('2026-08-21T15:04:00')).toBe('15:04')
+  })
+
+  it('no reinterpreta la hora con la zona del navegador', () => {
+    // El backend ya la manda en hora de Guatemala. Pasando por `new Date` esta
+    // misma marca se leería como 09:04 en un equipo configurado en Madrid.
+    expect(soloHora('2026-08-21T15:04:00')).toBe('15:04')
+    expect(soloHora('2026-08-21T23:59:59')).toBe('23:59')
+  })
+
+  it('devuelve null cuando el valor no trae hora', () => {
+    expect(soloHora('2026-08-21')).toBeNull()
+    expect(soloHora(null)).toBeNull()
+    expect(soloHora('')).toBeNull()
   })
 })
 

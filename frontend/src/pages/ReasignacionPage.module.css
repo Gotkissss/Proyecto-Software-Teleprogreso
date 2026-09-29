@@ -463,7 +463,54 @@
   color: var(--color-text);
 }
 
+/* ── Orden de la lista de técnicos (carga / cercanía) ── */
+.ordenBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.ordenLabel {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ordenSelect {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ordenSelect:hover:not(:disabled) {
+  background-color: var(--color-bg-alt);
+}
+
+.ordenSelect:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.ordenSelect:disabled {
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-alt);
+  cursor: not-allowed;
+}
+
 /* ── Mensajes de advertencia / límite ── */
+.infoMsg,
 .limiteMsg,
 .advertenciaMsg {
   font-size: var(--text-base);
@@ -484,6 +531,14 @@
   font-weight: 500;
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-light);
+}
+
+/* Explica de dónde salen (o por qué faltan) las distancias. Es contexto, no
+   una advertencia: va en gris y sin fondo para no competir con las de arriba. */
+.infoMsg {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-1);
 }
 
 /* ── Label y select del modal ── */

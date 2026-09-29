@@ -151,14 +151,28 @@ export const LIMITE_TAREAS_FALLBACK = 5
  *
  * Se usa este endpoint (admin + supervisor) en lugar de GET /empleados?rol=tecnico,
  * que está restringido a rol admin y devolvía 403 a los supervisores.
+ *
+ * SCRUM-247: con `idTarea` el backend añade `distancia_m`, los metros que
+ * separan a cada técnico de esa tarea según su última posición GPS. Viene en
+ * null cuando el técnico no ha reportado ubicación reciente o cuando la tarea
+ * no tiene coordenada; `ubicacion_registrada_en` dice de cuándo es la posición
+ * usada, para no presentar como actual algo que ya tiene horas.
+ *
+ * @param {number|null} idTarea - tarea de referencia para la distancia
  */
-export async function getTecnicosDisponibles() {
-  const { data } = await apiClient.get('/empleados/tecnicos/disponibles')
+export async function getTecnicosDisponibles(idTarea = null) {
+  const { data } = await apiClient.get('/empleados/tecnicos/disponibles', {
+    params: idTarea != null ? { id_tarea: idTarea } : {},
+  })
   return (Array.isArray(data) ? data : []).map((tec) => ({
     ...tec,
     id: tec.id_empleado,
     nombre_completo: tec.nombre_completo ?? `${tec.nombre} ${tec.apellido}`,
     tareas_activas: tec.tareas_activas ?? 0,
     limite_tareas: tec.limite_tareas ?? LIMITE_TAREAS_FALLBACK,
+    // `?? null` y no `?? 0`: cero metros es "está encima de la tarea" y no hay
+    // ubicación es otra cosa muy distinta.
+    distancia_m: tec.distancia_m ?? null,
+    ubicacion_registrada_en: tec.ubicacion_registrada_en ?? null,
   }))
 }
