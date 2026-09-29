@@ -11,6 +11,7 @@
  * ---------------------------------------------------------------------------
  */
 
+import { clasificarStock } from '../../utils/stock'
 import styles from './StockBadge.module.css'
 
 const IconCritico = () => (
@@ -44,11 +45,10 @@ const IconNormal = () => (
  * @param {boolean} [showCount] - Si muestra el número disponible junto al badge
  */
 export default function StockBadge({ disponible, minimo, showCount = false }) {
-  const nivel = disponible === 0
-    ? 'critico'
-    : disponible < minimo
-    ? 'bajo'
-    : 'normal'
+  // Misma regla que usa la tarjeta de stock crítico de Alertas (utils/stock):
+  // tenerla escrita dos veces era pedir que un día dijeran cosas distintas del
+  // mismo material.
+  const nivel = clasificarStock(disponible, minimo)
 
   const config = {
     critico: {

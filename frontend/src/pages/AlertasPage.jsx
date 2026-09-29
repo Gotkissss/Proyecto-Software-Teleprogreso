@@ -6,7 +6,7 @@
  *   1. Alertas persistentes generadas por el backend (GET/PATCH /alertas):
  *      tareas vencidas, técnicos sin marcar entrada, stock crítico.
  *   2. Sección "Stock crítico" con materiales bajo el mínimo definido
- *      (GET /activos/materiales/bajo-stock)
+ *      (GET /activos/materiales/bajo-stock, vía api/inventarioService)
  *
  * Ambas secciones consumen endpoints reales del backend. No hay datos mock
  * ni flags de features pendientes: las alertas se generan y persisten en el
@@ -28,11 +28,8 @@ import {
   describirErrorAlertas,
   getAlertas,
 } from '../api/alertaService'
-import {
-  getMaterialesBajoStock,
-  calcularPorcentajeStock,
-  clasificarStock,
-} from '../api/materialService'
+import { getMaterialesBajoStock } from '../api/inventarioService'
+import { calcularPorcentajeStock, clasificarStock } from '../utils/stock'
 import styles from './AlertasPage.module.css'
 
 /*  Helpers */
