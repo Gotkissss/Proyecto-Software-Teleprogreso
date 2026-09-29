@@ -389,13 +389,20 @@ export default function ReasignacionPage() {
         Number(tecnicoNuevo)
       )
 
-      // Actualizar conteo local del técnico
+      // El conteo local pasa de un técnico al otro. Antes solo se le sumaba
+      // al que recibía la tarea y nadie se la restaba al que la soltaba, así
+      // que tras mover trabajo el que la tenía seguía contando una tarea de
+      // más y podía salir como "límite alcanzado" sin estarlo.
       setTecnicos((prev) =>
-        prev.map((t) =>
-          t.id === Number(tecnicoNuevo)
-            ? { ...t, tareas_activas: (t.tareas_activas ?? 0) + 1 }
-            : t
-        )
+        prev.map((t) => {
+          if (t.id === Number(tecnicoNuevo)) {
+            return { ...t, tareas_activas: (t.tareas_activas ?? 0) + 1 }
+          }
+          if (t.id === idTecnicoActual) {
+            return { ...t, tareas_activas: Math.max(0, (t.tareas_activas ?? 0) - 1) }
+          }
+          return t
+        })
       )
 
       setTareas((prev) =>

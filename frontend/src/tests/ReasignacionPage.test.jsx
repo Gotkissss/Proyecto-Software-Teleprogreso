@@ -132,6 +132,38 @@ describe('ReasignacionPage — cambio de técnico', () => {
     expect(actualizarTareaMock).not.toHaveBeenCalled()
   })
 
+  it('al mover la tarea, el técnico que la soltaba deja de contarla', async () => {
+    // Dos tareas: se mueve la primera de Juan a María y se abre la segunda.
+    getTareasMock.mockResolvedValue([
+      TAREA,
+      { ...TAREA, id_tarea: 2, titulo: 'Revisión de router', tecnico: null },
+    ])
+    // La segunda consulta falla, así que en pantalla queda el conteo que
+    // llevaba la propia pantalla: es justo ahí donde se veía el desajuste.
+    getTecnicosDisponiblesMock.mockImplementation((idTarea) =>
+      idTarea === 2 ? Promise.reject(new Error('sin red')) : Promise.resolve(TECNICOS),
+    )
+
+    const user = userEvent.setup()
+    montar()
+    const botones = await screen.findAllByRole('button', { name: 'Reasignar' })
+
+    await user.click(botones[0])
+    await user.selectOptions(await screen.findByLabelText(/Reasignar a/i), '3')
+    await user.click(screen.getByRole('button', { name: /confirmar/i }))
+    await waitFor(() => expect(reasignarTareaMock).toHaveBeenCalledWith(1, 3))
+
+    await user.click(botones[1])
+
+    const opciones = within(await screen.findByLabelText(/Reasignar a/i))
+      .getAllByRole('option')
+      .map((o) => o.textContent)
+
+    // Juan se queda sin tareas activas y María pasa a tener una.
+    expect(opciones.find((t) => t.includes('Juan Pérez'))).toContain('0 tareas activas')
+    expect(opciones.find((t) => t.includes('María López'))).toContain('1 tarea activa')
+  })
+
   it('avisa cuando no hay ningún otro técnico con hueco', async () => {
     getTecnicosDisponiblesMock.mockResolvedValue([
       TECNICOS[0],
