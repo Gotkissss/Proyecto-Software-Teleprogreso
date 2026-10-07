@@ -15,17 +15,13 @@ export default function AccesoDenegadoPage() {
   const { user } = useAuth()
   const rol = typeof user?.rol === 'string' && user.rol !== '' ? user.rol : null
 
-  const descripcion = rol
-    ? `Tu rol (${rol}) no permite abrir esta pantalla. Si la necesitas, pide acceso al administrador.`
-    : 'Tu cuenta no permite abrir esta pantalla. Si la necesitas, pide acceso al administrador.'
-
   return (
     <div className={styles.pagina} role="alert">
       <EmptyState
         variant="error"
         icon={<IconCandado />}
         title="No tienes acceso a esta pantalla"
-        description={descripcion}
+        description="Si necesitas esta pantalla, pide acceso al administrador."
         action={
           <Link className="btn btn-primary" to={rutaInicialPorRol(rol)}>
             Ir a mi pantalla de inicio
