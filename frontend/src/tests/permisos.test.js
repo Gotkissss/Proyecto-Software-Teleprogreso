@@ -71,6 +71,22 @@ describe('puedeAcceder', () => {
   })
 })
 
+describe('navegador sin Object.hasOwn (Safari < 15.4)', () => {
+  it('las tres funciones siguen respondiendo igual', () => {
+    const original = Object.hasOwn
+    delete Object.hasOwn
+    try {
+      expect(rolesPermitidos('/ruta')).toEqual(PERMISOS_RUTAS['/ruta'])
+      expect(rolesPermitidos('__proto__')).toEqual([])
+      expect(puedeAcceder(ROLES.TECNICO, '/ruta')).toBe(true)
+      expect(rutaInicialPorRol(ROLES.GERENTE)).toBe('/supervisor/mapa')
+      expect(rutaInicialPorRol('constructor')).toBe('/login')
+    } finally {
+      Object.hasOwn = original
+    }
+  })
+})
+
 describe('rutaInicialPorRol', () => {
   it.each(ROLES_VALIDOS)('la pantalla inicial de %s es accesible para ese rol', (rol) => {
     expect(puedeAcceder(rol, rutaInicialPorRol(rol))).toBe(true)

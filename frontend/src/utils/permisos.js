@@ -43,8 +43,12 @@ const RUTA_INICIAL = Object.freeze({
   [ROLES.TECNICO]: '/ruta',
 })
 
+function tieneClave(objeto, clave) {
+  return typeof clave === 'string' && Object.prototype.hasOwnProperty.call(objeto, clave)
+}
+
 export function rolesPermitidos(ruta) {
-  if (typeof ruta !== 'string' || !Object.hasOwn(PERMISOS_RUTAS, ruta)) {
+  if (!tieneClave(PERMISOS_RUTAS, ruta)) {
     return []
   }
   return PERMISOS_RUTAS[ruta]
@@ -56,7 +60,7 @@ export function puedeAcceder(rol, ruta) {
 }
 
 export function rutaInicialPorRol(rol) {
-  if (typeof rol !== 'string' || !Object.hasOwn(RUTA_INICIAL, rol)) {
+  if (!tieneClave(RUTA_INICIAL, rol)) {
     return '/login'
   }
   return RUTA_INICIAL[rol]
