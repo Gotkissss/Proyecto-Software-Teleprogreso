@@ -28,6 +28,12 @@ import NuevaTareaPage from './pages/NuevaTareaPage'
 import InventarioPage from './pages/InventarioPage'
 import CarroDetallePage from './pages/CarroDetallePage'
 
+import { rolesPermitidos, ROLES_RAMA_TECNICO, ROLES_RAMA_SUPERVISOR } from './utils/permisos'
+
+function protegida(ruta, pagina) {
+  return <ProtectedRoute roles={rolesPermitidos(ruta)}>{pagina}</ProtectedRoute>
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -40,39 +46,39 @@ export default function App() {
           {/* ── Rutas del técnico (móvil) ───────────────── */}
           <Route
             element={
-              <ProtectedRoute>
+              <ProtectedRoute roles={ROLES_RAMA_TECNICO}>
                 <AppLayout />
               </ProtectedRoute>
             }
           >
             <Route index element={<Navigate to="/ruta" replace />} />
-            <Route path="/ruta"   element={<RutaDiariaPage />} />
-            <Route path="/mapa"   element={<MapaPage />} />
-            <Route path="/pausas" element={<PausasPage />} />
-            <Route path="/historial" element={<HistorialTareasPage />} />
-            <Route path="/equipo" element={<EquipoPage />} />
-            <Route path="/perfil" element={<PerfilPage />} />
+            <Route path="/ruta"   element={protegida('/ruta', <RutaDiariaPage />)} />
+            <Route path="/mapa"   element={protegida('/mapa', <MapaPage />)} />
+            <Route path="/pausas" element={protegida('/pausas', <PausasPage />)} />
+            <Route path="/historial" element={protegida('/historial', <HistorialTareasPage />)} />
+            <Route path="/equipo" element={protegida('/equipo', <EquipoPage />)} />
+            <Route path="/perfil" element={protegida('/perfil', <PerfilPage />)} />
           </Route>
 
           {/* ── Rutas del supervisor (desktop) ──────────── */}
           <Route
             path="/supervisor"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute roles={ROLES_RAMA_SUPERVISOR}>
                 <SupervisorLayout />
               </ProtectedRoute>
             }
           >
-            <Route path="carros/:id" element={<CarroDetallePage />} />
+            <Route path="carros/:id" element={protegida('/supervisor/carros/:id', <CarroDetallePage />)} />
             <Route index element={<Navigate to="/supervisor/dashboard" replace />} />
-            <Route path="dashboard"    element={<DashboardPage />} />
+            <Route path="dashboard"    element={protegida('/supervisor/dashboard', <DashboardPage />)} />
             {/* HU-165: mapa del equipo, con tareas agrupadas por técnico. */}
-            <Route path="mapa"         element={<MapaSupervisorPage />} />
-            <Route path="alertas"      element={<AlertasPage />} />
-            <Route path="reasignacion" element={<ReasignacionPage />} />
-            <Route path="empleados"    element={<EmpleadosPage />} />
-            <Route path="nueva-tarea" element={<NuevaTareaPage />} />
-            <Route path="inventario"   element={<InventarioPage />} />
+            <Route path="mapa"         element={protegida('/supervisor/mapa', <MapaSupervisorPage />)} />
+            <Route path="alertas"      element={protegida('/supervisor/alertas', <AlertasPage />)} />
+            <Route path="reasignacion" element={protegida('/supervisor/reasignacion', <ReasignacionPage />)} />
+            <Route path="empleados"    element={protegida('/supervisor/empleados', <EmpleadosPage />)} />
+            <Route path="nueva-tarea" element={protegida('/supervisor/nueva-tarea', <NuevaTareaPage />)} />
+            <Route path="inventario"   element={protegida('/supervisor/inventario', <InventarioPage />)} />
             {/* El historial de asistencia vive dentro de Empleados. Se deja
                 la redirección para que los enlaces y marcadores que apuntaban
                 a la pantalla suelta sigan funcionando. */}
@@ -80,8 +86,8 @@ export default function App() {
               path="asistencia"
               element={<Navigate to="/supervisor/empleados?tab=historial" replace />}
             />
-            <Route path="historial-tareas" element={<HistorialTareasPage />} />
-            <Route path="perfil" element={<PerfilPage />} />
+            <Route path="historial-tareas" element={protegida('/supervisor/historial-tareas', <HistorialTareasPage />)} />
+            <Route path="perfil" element={protegida('/supervisor/perfil', <PerfilPage />)} />
             
           </Route>
 
