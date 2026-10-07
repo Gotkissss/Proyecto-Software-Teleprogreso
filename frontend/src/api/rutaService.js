@@ -77,7 +77,7 @@ export const getMiRuta = async (posicion = null) => {
     : null
 
   return {
-    fecha:    new Date().toISOString().split('T')[0],
+    fecha:    hoyISO(),
     tecnico:  {
       // /tareas/mi-ruta no trae el técnico (es el del token): la pantalla
       // toma el nombre del usuario autenticado.

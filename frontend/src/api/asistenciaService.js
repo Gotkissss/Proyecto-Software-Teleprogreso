@@ -14,6 +14,7 @@
  */
 
 import apiClient from './client'
+import { hoyISO } from '../utils/fecha'
 
 /**
  * Normaliza la respuesta de asistencia al formato que espera PausasPage.
@@ -22,7 +23,7 @@ import apiClient from './client'
 function normalizarAsistencia(data) {
   return {
     id_asistencia:            data.id_asistencia ?? null,
-    fecha:                    data.fecha ?? new Date().toISOString().split('T')[0],
+    fecha:                    data.fecha ?? hoyISO(),
     hora_entrada:             data.hora_entrada ?? null,
     hora_salida:              data.hora_salida ?? null,
     tiempo_en_pausa_segundos: data.tiempo_en_pausa_segundos ?? 0,
@@ -106,7 +107,7 @@ export const iniciarPausa = async (tipoPausa) => {
 export const getEstadoPausas = async () => {
   const { data } = await apiClient.get('/descanso/hoy')
   return {
-    fecha:               data.fecha ?? new Date().toISOString().split('T')[0],
+    fecha:               data.fecha ?? hoyISO(),
     id_asistencia:       data.id_asistencia ?? null,
     jornada_activa:      Boolean(data.jornada_activa),
     hora_entrada:        data.hora_entrada ?? null,

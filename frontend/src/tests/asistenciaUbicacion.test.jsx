@@ -49,6 +49,7 @@ import { ToastProvider } from '../components/ui/Toast'
 import { finalizarJornada, registrarEntrada } from '../api/asistenciaService'
 import PausasPage from '../pages/PausasPage'
 import HistorialAsistenciaTable from '../components/asistencia/HistorialAsistenciaTable'
+import { hoyISO } from '../utils/fecha'
 
 const LUGAR = { lat: 14.4653, lng: -90.4408 }
 
@@ -248,7 +249,7 @@ describe('HistorialAsistenciaTable — lugar de las marcas', () => {
   it('una jornada en curso no marca la salida como faltante', async () => {
     simularHistorial([
       jornada(4, {
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: hoyISO(),
         hora_salida: null,
         jornada_activa: true,
         lat_entrada: 14.47,

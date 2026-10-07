@@ -12,7 +12,7 @@
  * ---------------------------------------------------------------------------
  */
 import { describe, it, expect } from 'vitest'
-import { aISO, esDelDia, hoyISO, soloFecha, soloHora } from '../utils/fecha'
+import { aISO, aISOConHora, esDelDia, hoyISO, soloFecha, soloHora } from '../utils/fecha'
 
 describe('soloFecha', () => {
   it('se queda con el día de una marca de tiempo', () => {
@@ -84,5 +84,17 @@ describe('aISO / hoyISO', () => {
   it('hoyISO devuelve el día de hoy con el mismo formato', () => {
     expect(hoyISO()).toBe(aISO(new Date()))
     expect(hoyISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('aISOConHora', () => {
+  it('escribe la hora local sin zona y conserva el día', () => {
+    expect(aISOConHora(new Date(2026, 7, 21, 20, 4, 9))).toBe('2026-08-21T20:04:09')
+  })
+
+  it('el resultado lo leen bien soloFecha y soloHora', () => {
+    const marca = aISOConHora(new Date(2026, 0, 5, 7, 30, 0))
+    expect(soloFecha(marca)).toBe('2026-01-05')
+    expect(soloHora(marca)).toBe('07:30')
   })
 })
