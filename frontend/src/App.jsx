@@ -4,6 +4,7 @@ import { ToastProvider }   from './components/ui/Toast'
 import ProtectedRoute      from './components/layout/ProtectedRoute'
 import AppLayout           from './components/layout/AppLayout'
 import SupervisorLayout    from './components/layout/SupervisorLayout'
+import RedirigirInicio     from './components/layout/RedirigirInicio'
 
 /* Páginas del técnico */
 import LoginPage      from './pages/LoginPage'
@@ -70,7 +71,8 @@ export default function App() {
             }
           >
             <Route path="carros/:id" element={protegida('/supervisor/carros/:id', <CarroDetallePage />)} />
-            <Route index element={<Navigate to="/supervisor/dashboard" replace />} />
+            {/* HU-S9-01: cada rol entra por su pantalla inicial, no todos por el panel. */}
+            <Route index element={<RedirigirInicio />} />
             <Route path="dashboard"    element={protegida('/supervisor/dashboard', <DashboardPage />)} />
             {/* HU-165: mapa del equipo, con tareas agrupadas por técnico. */}
             <Route path="mapa"         element={protegida('/supervisor/mapa', <MapaSupervisorPage />)} />

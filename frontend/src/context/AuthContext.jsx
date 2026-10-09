@@ -5,6 +5,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login, getMe, logout } from '../api/authService'
+import { rutaInicialPorRol } from '../utils/permisos'
 
 const AuthContext = createContext(null)
 
@@ -32,12 +33,9 @@ export function AuthProvider({ children }) {
     checkSession()
   }, [])
 
-  const getRedirectPath = (rol) => {
-    if (rol === 'admin' || rol === 'supervisor' || rol === 'gerente') {
-      return '/supervisor/dashboard'
-    }
-    return '/ruta'
-  }
+  // HU-S9-01: la pantalla inicial sale de la tabla única de utils/permisos.js,
+  // así el gerente no aterriza en un panel que su rol no puede abrir.
+  const getRedirectPath = (rol) => rutaInicialPorRol(rol)
 
   const loginUser = useCallback(async (correo, contrasena) => {
     const loginData = await login(correo, contrasena)
