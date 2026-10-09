@@ -158,6 +158,7 @@ export default function SupervisorLayout() {
         abierto={menuAbierto}
         onCerrar={() => setMenuAbierto(false)}
         groups={grupos}
+        rol={user?.rol ?? ''}
         brand={
           <>
             <img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />

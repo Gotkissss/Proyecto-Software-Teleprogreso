@@ -8,6 +8,8 @@
  * ---------------------------------------------------------------------------
  */
 
+import { hoyISO } from '../../utils/fecha'
+
 export const ROLES = ['admin', 'supervisor', 'tecnico', 'gerente']
 
 export const ROL_LABEL = {
@@ -48,12 +50,7 @@ export function validarFormulario(form) {
   else if (form.contrasena !== form.confirmar_contrasena) errores.confirmar_contrasena = 'Las contraseñas no coinciden.'
 
   if (!form.fecha_contratacion) errores.fecha_contratacion = 'La fecha de contratación es obligatoria.'
-  else {
-    const hoy = new Date()
-    hoy.setHours(0, 0, 0, 0)
-    const fecha = new Date(form.fecha_contratacion + 'T12:00:00')
-    if (fecha > hoy) errores.fecha_contratacion = 'La fecha no puede ser en el futuro.'
-  }
+  else if (form.fecha_contratacion > hoyISO()) errores.fecha_contratacion = 'La fecha no puede ser en el futuro.'
   return errores
 }
 

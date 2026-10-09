@@ -15,6 +15,7 @@ import {
   variantePorPrioridad,
 } from '../components/mapa/estadoColor'
 import { describirVencimiento } from '../utils/vencimiento'
+import { aISOConHora } from '../utils/fecha'
 import { formatearDistancia, urlGoogleMaps, urlWaze } from '../utils/navegacion'
 import { obtenerPosicionActual } from '../utils/posicionActual'
 import styles from './RutaDiariaPage.module.css'
@@ -390,7 +391,7 @@ export default function RutaDiariaPage() {
             ? {
                 ...s,
                 estado: 'completado',
-                fecha_completado: new Date().toISOString(),
+                fecha_completado: aISOConHora(new Date()),
                 total_incidencias: (s.total_incidencias ?? 0) + 1,
               }
             : s

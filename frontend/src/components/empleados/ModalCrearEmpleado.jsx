@@ -3,6 +3,7 @@ import apiClient from '../../api/client'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import { ROLES, ROL_LABEL, validarFormulario, getPasswordStrength } from './empleadoValidacion'
+import { hoyISO } from '../../utils/fecha'
 import styles from './ModalCrearEmpleado.module.css'
 
 const IconAlert = () => (
@@ -224,7 +225,7 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
               onChange={e => handleChange('fecha_contratacion', e.target.value)}
               onBlur={() => handleBlur('fecha_contratacion')}
               disabled={cargando}
-              max={new Date().toISOString().split('T')[0]}
+              max={hoyISO()}
             />
             {campoTieneError('fecha_contratacion') && <p className={styles.fieldError}>{errores.fecha_contratacion}</p>}
           </div>

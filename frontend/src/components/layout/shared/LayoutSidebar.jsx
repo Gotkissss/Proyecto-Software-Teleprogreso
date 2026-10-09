@@ -16,15 +16,34 @@
 
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
+import { puedeAcceder } from '../../../utils/permisos'
 import styles from './LayoutSidebar.module.css'
+
+/* HU-S9-01: lo que el rol no puede llamar no se enseña. Se filtra con la
+   misma tabla que usa ProtectedRoute (utils/permisos.js), así el menú y las
+   rutas no se desincronizan. Un grupo que se queda sin enlaces desaparece
+   entero para no dejar un título huérfano. */
+function filtrarGruposPorRol(groups, rol) {
+  return groups
+    .map((grupo) => ({
+      ...grupo,
+      items: grupo.items.filter((item) => puedeAcceder(rol, item.to)),
+    }))
+    .filter((grupo) => grupo.items.length > 0)
+}
 
 export default function LayoutSidebar({
   brand,
   groups,
+  rol,
   footer,
   abierto = false,
   onCerrar,
 }) {
+  // Sin `rol` no se filtra (compatibilidad con quien no lo pase); si llega,
+  // incluso vacío, manda la tabla de permisos y no se enseña nada ajeno.
+  const gruposVisibles = rol === undefined ? groups : filtrarGruposPorRol(groups, rol)
+
   // Cerrar el cajón con Escape: el backdrop solo cubre el clic.
   useEffect(() => {
     if (!abierto) return
@@ -47,7 +66,7 @@ export default function LayoutSidebar({
         <div className={styles.brand}>{brand}</div>
 
         <nav className={styles.nav} aria-label="Navegación principal">
-          {groups.map(({ label, items }) => (
+          {gruposVisibles.map(({ label, items }) => (
             <div className={styles.group} key={label}>
               <span className={styles.groupLabel}>{label}</span>
 

@@ -43,6 +43,7 @@ vi.mock('../context/UbicacionContext', () => ({
 
 import { ToastProvider } from '../components/ui/Toast'
 import { getMiRuta } from '../api/rutaService'
+import { hoyISO } from '../utils/fecha'
 import RutaDiariaPage from '../pages/RutaDiariaPage'
 
 const POSICION = { lat: 14.4653, lng: -90.4408, accuracy: 12 }
@@ -205,7 +206,8 @@ describe('RutaDiariaPage — con ubicación', () => {
       data: [
         tarea(1, {
           estado_tarea: 'completado',
-          fecha_completado: new Date().toISOString(),
+          // Como la manda el backend: hora de Guatemala y sin zona.
+          fecha_completado: `${hoyISO()}T10:00:00`,
           distancia_m: 20,
         }),
       ],

@@ -98,7 +98,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
 
-        <LayoutBottomNav items={NAV_ITEMS} />
+        <LayoutBottomNav items={NAV_ITEMS} rol={user?.rol ?? ''} />
       </div>
     </UbicacionProvider>
   )

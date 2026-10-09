@@ -28,6 +28,14 @@ export function hoyISO() {
   return aISO(new Date())
 }
 
+/** Date → "YYYY-MM-DDTHH:MM:SS" en hora local y sin zona, como lo manda el backend. */
+export function aISOConHora(fecha) {
+  const hora = [fecha.getHours(), fecha.getMinutes(), fecha.getSeconds()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':')
+  return `${aISO(fecha)}T${hora}`
+}
+
 /** "2026-08-21T15:04:00" → "2026-08-21" (null si no hay valor). */
 export function soloFecha(fechaHora) {
   return fechaHora ? String(fechaHora).slice(0, 10) : null

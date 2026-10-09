@@ -26,6 +26,7 @@ import {
   getEmpleadosParaFiltro,
   getHistorialAsistencia,
 } from '../../api/asistenciaService'
+import { aISO, hoyISO } from '../../utils/fecha'
 import styles from './HistorialAsistenciaTable.module.css'
 
 const IconCalendario = () => (
@@ -43,13 +44,13 @@ const PAGE_SIZE = 15
 function haceDias(dias) {
   const d = new Date()
   d.setDate(d.getDate() - dias)
-  return d.toISOString().split('T')[0]
+  return aISO(d)
 }
 
 const FILTROS_INICIALES = {
   empleado: '',
   fecha_inicio: haceDias(30),
-  fecha_fin: new Date().toISOString().split('T')[0],
+  fecha_fin: hoyISO(),
 }
 
 /** "2026-07-25" → "25 jul 2026" */
@@ -87,8 +88,6 @@ const HORA_ENTRADA_LIMITE = '08:00'
 /** Jornada completa de referencia para el indicador de horas trabajadas. */
 const MINUTOS_JORNADA_COMPLETA = 8 * 60 // 8 horas
 
-const HOY_ISO = new Date().toISOString().split('T')[0]
-
 /** true si la hora de entrada es posterior a HORA_ENTRADA_LIMITE. */
 function esLlegadaTarde(jornada) {
   if (!jornada.hora_entrada) return false
@@ -101,7 +100,7 @@ function esLlegadaTarde(jornada) {
  * la jornada de hoy, que naturalmente puede seguir en curso.
  */
 function esSinSalida(jornada) {
-  return jornada.jornada_activa && jornada.fecha < HOY_ISO
+  return jornada.jornada_activa && jornada.fecha < hoyISO()
 }
 
 /**

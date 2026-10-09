@@ -11,12 +11,19 @@
  */
 
 import { NavLink } from 'react-router-dom'
+import { puedeAcceder } from '../../../utils/permisos'
 import styles from './LayoutBottomNav.module.css'
 
-export default function LayoutBottomNav({ items }) {
+export default function LayoutBottomNav({ items, rol }) {
+  // HU-S9-01: lo que el rol no puede abrir no se enseña. Sin `rol` no se
+  // filtra; si llega, incluso vacío, manda la tabla de utils/permisos.js.
+  const itemsVisibles = rol === undefined
+    ? items
+    : items.filter((item) => puedeAcceder(rol, item.to))
+
   return (
     <nav className={styles.bottomNav} aria-label="Navegación principal">
-      {items.map(({ to, label, Icon }) => (
+      {itemsVisibles.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
           to={to}
