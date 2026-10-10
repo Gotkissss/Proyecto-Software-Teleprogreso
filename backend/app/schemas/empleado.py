@@ -20,6 +20,7 @@ from typing import Optional
 from enum import Enum
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from app.core.reglas import es_contrasena_comun
 
 
 # ── Enums de dominio ───────────────────────────────────────────────────────
@@ -149,6 +150,8 @@ class EmpleadoPasswordUpdate(BaseModel):
             raise ValueError("La contrasena no puede empezar ni terminar con espacios.")
         if not v.strip():
             raise ValueError("La contrasena no puede estar vacia.")
+        if es_contrasena_comun(v):
+            raise ValueError("La contrasena es demasiado comun. Elige otra.")
         return v
 
     @model_validator(mode="after")

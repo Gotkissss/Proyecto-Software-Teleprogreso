@@ -29,6 +29,8 @@ from sqlalchemy.dialects import postgresql
 from app.core.exceptions import APIException
 from app.core.reglas import HORAS_UBICACION_RECIENTE
 from app.routers.metricas import get_tecnicos_disponibles
+from app.core.reglas import HORAS_UBICACION_RECIENTE
+from app.core.tiempo import ahora
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -175,7 +177,10 @@ async def test_descarta_las_posiciones_viejas():
     # El corte es la ventana de frescura de reglas.py, no un valor suelto.
     marca = sql.split("fecha_hora_registro >= ")[1].strip()[1:20]
     corte = datetime.fromisoformat(marca)
-    horas = (datetime.now() - corte).total_seconds() / 3600
+    # El router calcula el corte con la hora local de la operación (core/tiempo),
+    # no con la del contenedor: comparar contra datetime.now() falla en CI (UTC)
+    # por el desfase de 6 h de Guatemala.
+    horas = (ahora() - corte).total_seconds() / 3600
     assert HORAS_UBICACION_RECIENTE - 1 < horas < HORAS_UBICACION_RECIENTE + 1
 
 

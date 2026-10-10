@@ -28,12 +28,13 @@ from datetime import time
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import bad_request, conflict, not_found
+from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
     ESTADOS_TAREA_ACTIVOS,
     ROL_ADMIN,
+    puede_administrar,
 )
 from app.core.security import hash_password
 from app.core.tiempo import ahora as ahora_local
@@ -331,6 +332,32 @@ async def restablecer_contrasena(
     if not empleado:
         raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
+
+        # HU-S9-02: esta puerta es para restablecerle la clave a OTRA persona. El
+    # dueño de la cuenta pasa por POST /auth/cambiar-contrasena, que sí exige
+    # la contraseña actual; si no, quien tuviera una sesión robada podría
+    # fijar una clave nueva sin conocer la vieja. Va antes de la jerarquía
+    # porque un admin sí "puede" sobre sí mismo y habría que frenarlo igual.
+    if current_user.id_empleado == empleado.id_empleado:
+        raise forbidden(
+            "No puedes restablecer tu propia contraseña por aquí. "
+            "Usa «Cambiar contraseña» desde tu perfil."
+        )
+
+        # HU-S9-02: nadie toma una cuenta de más privilegio que la suya. Va ANTES
+    # de tocar el hash y el mensaje es el mismo cuando el objetivo iguala y
+    # cuando supera al actor, para no revelar qué rol tiene la otra cuenta.
+    if not puede_administrar(current_user.rol, empleado.rol):
+        raise forbidden("No tienes permiso para restablecer la contraseña de esta cuenta.")
+
+        # "Distinta del correo": el schema no ve la cuenta de destino (solo viaja
+    # el id en la ruta), así que esta parte de la política se comprueba aquí.
+    # Va después de la autorización para no confirmar el correo a quien no
+    # puede tocar la cuenta. Se compara también con la parte antes de la @.
+    correo = empleado.correo.lower()
+    if data.contrasena.lower() in (correo, correo.split("@")[0]):
+        raise bad_request("La contraseña no puede ser igual al correo de la cuenta.")
+    
     empleado.hash_contrasena = hash_password(data.contrasena)
     # Las sesiones que el empleado tuviera abiertas dejan de valer aquí mismo.
     # Sin esto, restablecer la contraseña de una cuenta que se cree
