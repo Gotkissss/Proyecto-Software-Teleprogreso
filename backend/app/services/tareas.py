@@ -295,8 +295,8 @@ async def listar_tareas(
 ) -> List[TareaResponse]:
     """Lista las tareas visibles para el empleado autenticado."""
     coord = cast(Tarea.coordenada_servicio, Geometry)
-    lat_col = func.ST_X(coord).label("lat")
-    lng_col = func.ST_Y(coord).label("lng")
+    lat_col = func.ST_Y(coord).label("lat")
+    lng_col = func.ST_X(coord).label("lng")
 
     query = (
         select(Tarea, lat_col, lng_col)
