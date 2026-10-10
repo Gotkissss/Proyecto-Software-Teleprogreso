@@ -88,6 +88,23 @@ ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
 
+# Política de contraseñas (HU-S9-02). Las 20 contraseñas comunes de 8 o más
+# caracteres que más se repiten en filtraciones y diccionarios, en minúscula
+# (se compara sin distinguir mayúsculas). Se dejaron fuera las de menos de 8
+# porque el mínimo de longitud ya las rechaza. Es una lista corta a propósito:
+# frena lo más obvio, no sustituye un diccionario completo.
+CONTRASENAS_COMUNES = frozenset({
+    "12345678", "123456789", "1234567890", "11111111", "00000000",
+    "87654321", "123123123", "password", "password1", "password123",
+    "passw0rd", "qwerty123", "qwertyui", "qwertyuiop", "iloveyou",
+    "admin123", "welcome1", "abc12345", "contrasena", "contrasena1",
+})
+
+
+def es_contrasena_comun(contrasena: str) -> bool:
+    """True si la contraseña está en la lista de las más comunes."""
+    return contrasena.lower() in CONTRASENAS_COMUNES
+
 # Jerarquía de cuentas (HU-S9-02). Decide quién puede actuar sobre la cuenta de
 # quién. Gerente y supervisor comparten nivel a propósito: ninguno manda sobre
 # el otro. Un rol que no esté aquí vale 0, o sea que no manda sobre nadie.

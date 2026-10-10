@@ -150,3 +150,38 @@ async def test_nadie_se_restablece_a_si_mismo_por_esta_puerta(rol, monkeypatch):
     assert "cambiar contraseña" in error.value.detail.lower()
     assert yo.hash_contrasena == "hash-anterior"
     assert yo.version_token == 0
+
+
+# --- Política de contraseña en EmpleadoPasswordUpdate -----------------------
+
+from pydantic import ValidationError
+
+from app.core.reglas import CONTRASENAS_COMUNES
+
+
+def test_la_lista_de_comunes_tiene_20_y_todas_pasan_el_minimo():
+    assert len(CONTRASENAS_COMUNES) == 20
+    assert all(len(c) >= 8 for c in CONTRASENAS_COMUNES)
+
+
+@pytest.mark.parametrize("comun", sorted(CONTRASENAS_COMUNES) + ["PASSWORD", "Qwerty123"])
+def test_contrasenas_comunes_se_rechazan(comun):
+    with pytest.raises(ValidationError):
+        EmpleadoPasswordUpdate(contrasena=comun, contrasena_confirmacion=comun)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "clave", ["anamaria123@teleprogreso.com", "ANAMARIA123@teleprogreso.com", "anamaria123"]
+)
+async def test_contrasena_igual_al_correo_se_rechaza(clave, monkeypatch):
+    objetivo = _persona(20, "tecnico", correo="anamaria123@teleprogreso.com")
+    monkeypatch.setattr(empleados_service, "hash_password", lambda _: "hash-nuevo")
+
+    with pytest.raises(HTTPException) as error:
+        await empleados_service.restablecer_contrasena(
+            _db_con(objetivo), 20, _payload(clave), current_user=_persona(10, "supervisor")
+        )
+
+    assert error.value.status_code == 400
+    assert objetivo.hash_contrasena == "hash-anterior"

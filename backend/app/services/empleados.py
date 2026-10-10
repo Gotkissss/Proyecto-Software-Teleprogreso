@@ -349,6 +349,14 @@ async def restablecer_contrasena(
     # cuando supera al actor, para no revelar qué rol tiene la otra cuenta.
     if not puede_administrar(current_user.rol, empleado.rol):
         raise forbidden("No tienes permiso para restablecer la contraseña de esta cuenta.")
+
+        # "Distinta del correo": el schema no ve la cuenta de destino (solo viaja
+    # el id en la ruta), así que esta parte de la política se comprueba aquí.
+    # Va después de la autorización para no confirmar el correo a quien no
+    # puede tocar la cuenta. Se compara también con la parte antes de la @.
+    correo = empleado.correo.lower()
+    if data.contrasena.lower() in (correo, correo.split("@")[0]):
+        raise bad_request("La contraseña no puede ser igual al correo de la cuenta.")
     
     empleado.hash_contrasena = hash_password(data.contrasena)
     # Las sesiones que el empleado tuviera abiertas dejan de valer aquí mismo.
