@@ -88,6 +88,34 @@ ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
 
+# Jerarquía de cuentas (HU-S9-02). Decide quién puede actuar sobre la cuenta de
+# quién. Gerente y supervisor comparten nivel a propósito: ninguno manda sobre
+# el otro. Un rol que no esté aquí vale 0, o sea que no manda sobre nadie.
+NIVEL_ROL = {
+    ROL_ADMIN: 3,
+    ROL_GERENTE: 2,
+    ROL_SUPERVISOR: 2,
+    ROL_TECNICO: 1,
+}
+
+
+def puede_administrar(actor: str, objetivo: str) -> bool:
+    """
+    ¿Puede un empleado con rol `actor` administrar la cuenta de uno con rol
+    `objetivo`?
+
+    - `admin` puede sobre cualquiera, incluido otro admin.
+    - Los demás solo mandan sobre objetivos de nivel ESTRICTAMENTE menor: un
+      supervisor sobre un técnico sí; sobre otro supervisor, un gerente o un
+      admin, no.
+
+    Recibe los roles (str), no los empleados, para poder usarse sin tocar la BD.
+    """
+    if actor == ROL_ADMIN:
+        return True
+    return NIVEL_ROL.get(actor, 0) > NIVEL_ROL.get(objetivo, 0)
+
+
 # Tope de horas para que una jornada de ayer siga contando como "turno en
 # curso" (ver es_del_turno_en_curso). Sin este tope, un técnico diurno que
 # olvida marcar salida y llega al día siguiente también calificaría como
