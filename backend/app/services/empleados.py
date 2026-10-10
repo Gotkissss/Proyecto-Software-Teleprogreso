@@ -332,6 +332,18 @@ async def restablecer_contrasena(
     if not empleado:
         raise not_found(f"No se encontró ningún empleado con id={id_empleado}.")
 
+
+        # HU-S9-02: esta puerta es para restablecerle la clave a OTRA persona. El
+    # dueño de la cuenta pasa por POST /auth/cambiar-contrasena, que sí exige
+    # la contraseña actual; si no, quien tuviera una sesión robada podría
+    # fijar una clave nueva sin conocer la vieja. Va antes de la jerarquía
+    # porque un admin sí "puede" sobre sí mismo y habría que frenarlo igual.
+    if current_user.id_empleado == empleado.id_empleado:
+        raise forbidden(
+            "No puedes restablecer tu propia contraseña por aquí. "
+            "Usa «Cambiar contraseña» desde tu perfil."
+        )
+
         # HU-S9-02: nadie toma una cuenta de más privilegio que la suya. Va ANTES
     # de tocar el hash y el mensaje es el mismo cuando el objetivo iguala y
     # cuando supera al actor, para no revelar qué rol tiene la otra cuenta.

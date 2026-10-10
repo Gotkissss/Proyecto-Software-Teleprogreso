@@ -19,9 +19,9 @@ from app.routers import auth
 from app.schemas.auth import CambiarContrasenaRequest, LoginRequest
 
 
-def _empleado(rol="tecnico", version_token=0):
+def _empleado(rol="tecnico", version_token=0, id_empleado=7):
     return SimpleNamespace(
-        id_empleado=7,
+        id_empleado=id_empleado,
         nombre="Ana",
         apellido="López",
         correo="ana@teleprogreso.com",
@@ -338,7 +338,7 @@ async def test_restablecer_contrasena_tambien_invalida_las_sesiones_abiertas(
             contrasena="ClaveNueva1",
             contrasena_confirmacion="ClaveNueva1",
         ),
-        current_user=_empleado(rol="supervisor"),
+        current_user=_empleado(rol="supervisor", id_empleado=8),
     )
 
     assert devuelto.hash_contrasena == "hash-nuevo"

@@ -133,3 +133,20 @@ async def test_admin_restablece_a_otro_admin(monkeypatch):
     devuelto = await _restablecer(_persona(10, "admin"), objetivo, monkeypatch)
 
     assert devuelto.hash_contrasena == "hash-nuevo"
+
+
+
+
+# --- Auto-restablecimiento prohibido ----------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rol", ["admin", "supervisor", "tecnico"])
+async def test_nadie_se_restablece_a_si_mismo_por_esta_puerta(rol, monkeypatch):
+    yo = _persona(10, rol)
+    with pytest.raises(HTTPException) as error:
+        await _restablecer(yo, yo, monkeypatch)
+
+    assert error.value.status_code == 403
+    assert "cambiar contraseña" in error.value.detail.lower()
+    assert yo.hash_contrasena == "hash-anterior"
+    assert yo.version_token == 0
