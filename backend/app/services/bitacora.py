@@ -3,10 +3,12 @@ Bitácora de auditoría (tabla bitacora_auditoria, migración 0009).
 
 Dos caminos de escritura y una sola cadena de hashes:
 
-1. Hook `after_flush`: todo INSERT/UPDATE/DELETE hecho con el ORM durante una
-   petición deja su fila en la MISMA transacción. Así cubre los endpoints
-   mutantes sin tocarlos, y si la petición hace rollback su rastro también se
-   va: la bitácora no cuenta cambios que no ocurrieron.
+1. Hook del ORM: todo INSERT/UPDATE/DELETE hecho durante una petición deja su
+   fila en la MISMA transacción, con el antes/después armado solo, así que
+   ningún endpoint lo escribe a mano. `before_flush` captura el diff (con
+   get_history por columna, mientras el estado previo sigue intacto) y
+   `after_flush` lo escribe, cuando los INSERT ya asignaron sus ids. Si la
+   petición hace rollback, su rastro también se va.
 2. `anotar_evento()`: lo que no cambia filas pero importa (login fallido,
    bloqueos, logout, 403, lecturas sensibles). Se acumula en el contexto de la
    petición y ContextoPeticionMiddleware lo guarda con `guardar_eventos()`
@@ -24,6 +26,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import event, inspect, text
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import PASSIVE_NO_INITIALIZE, get_history
 
 from app.core.contexto import contexto_actual
 from app.db.session import AsyncSessionLocal
@@ -91,33 +94,44 @@ def _id_entidad(estado):
 
 
 def describir_cambios(obj, accion: str) -> dict:
-    # Solo lee lo que ya está en memoria (estado.dict / history): cargar un
-    # atributo aquí sería IO síncrono dentro de una sesión async.
-    estado = inspect(obj)
+    """
+    Diff de una fila a partir de get_history() columna por columna:
+    - crear / eliminar: el valor de cada columna conocida.
+    - actualizar: {"antes", "despues"} solo de las columnas que cambiaron.
+
+    PASSIVE_NO_INITIALIZE: lee solo lo que ya está en memoria. Una columna sin
+    cargar no se trae de la BD a mitad de un flush; simplemente no aparece.
+    """
     cambios = {}
-    for attr in estado.mapper.column_attrs:
+    for attr in inspect(obj).mapper.column_attrs:
         clave = attr.key
+        historia = get_history(obj, clave, passive=PASSIVE_NO_INITIALIZE)
         if accion == "actualizar":
-            historia = estado.attrs[clave].history
             if not historia.has_changes():
                 continue
             valor = {
                 "antes": historia.deleted[0] if historia.deleted else None,
                 "despues": historia.added[0] if historia.added else None,
             }
-        elif clave in estado.dict:
-            valor = estado.dict[clave]
         else:
-            continue
+            actuales = list(historia.added or ()) + list(historia.unchanged or ())
+            if not actuales:
+                continue
+            valor = actuales[0]
         cambios[clave] = "***" if clave in _OCULTOS else valor
     return cambios
 
 
-@event.listens_for(Session, "after_flush")
-def _auditar_flush(session, _contexto_flush):
+_PENDIENTE = "bitacora_pendiente"
+
+
+@event.listens_for(Session, "before_flush")
+def _capturar_diff(session, _contexto_flush, _instancias):
+    # Se reemplaza (no se acumula): si un flush anterior falló a medias, su
+    # captura no debe colarse en este.
+    session.info[_PENDIENTE] = []
     if contexto_actual() is None:
         return
-    filas = []
     for accion, objetos in (
         ("crear", session.new),
         ("actualizar", session.dirty),
@@ -127,13 +141,24 @@ def _auditar_flush(session, _contexto_flush):
             if isinstance(obj, _NO_AUDITADOS):
                 continue
             cambios = describir_cambios(obj, accion)
+            # `dirty` incluye objetos que solo se tocaron sin cambiar nada.
             if accion == "actualizar" and not cambios:
                 continue
-            filas.append(_registro(accion, obj.__tablename__, _id_entidad(inspect(obj)), cambios))
-    if filas:
-        conexion = session.connection()
-        for fila in filas:
-            insertar(conexion, fila)
+            session.info[_PENDIENTE].append((accion, obj, cambios))
+
+
+@event.listens_for(Session, "after_flush")
+def _escribir_diff(session, _contexto_flush):
+    pendientes = session.info.pop(_PENDIENTE, [])
+    if not pendientes:
+        return
+    conexion = session.connection()
+    for accion, obj, cambios in pendientes:
+        # El id se lee ahora: en before_flush una fila nueva aún no lo tenía.
+        insertar(
+            conexion,
+            _registro(accion, obj.__tablename__, _id_entidad(inspect(obj)), cambios),
+        )
 
 
 # --- 2. Eventos que no cambian filas -----------------------------------------

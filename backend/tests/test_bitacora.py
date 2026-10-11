@@ -97,6 +97,81 @@ def test_actualizar_guarda_solo_lo_que_cambio_con_antes_y_despues():
     }
 
 
+def test_eliminar_guarda_la_foto_de_lo_que_habia():
+    emp = Empleado()
+    set_committed_value(emp, "nombre", "Ana")
+
+    assert bitacora.describir_cambios(emp, "eliminar")["nombre"] == "Ana"
+
+
+@pytest.fixture
+def en_peticion():
+    from app.core.contexto import ContextoPeticion, _contexto
+
+    token = _contexto.set(ContextoPeticion(id_actor=2, rol_actor="supervisor", request_id="r1"))
+    yield
+    _contexto.reset(token)
+
+
+def _sesion(new=(), dirty=(), deleted=()):
+    return SimpleNamespace(
+        new=list(new), dirty=list(dirty), deleted=list(deleted), info={}, connection=MagicMock
+    )
+
+
+def test_before_flush_captura_y_after_flush_escribe_con_el_id_ya_asignado(en_peticion, monkeypatch):
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    nuevo = Empleado(nombre="Ana", hash_contrasena="secreto")
+    sesion = _sesion(new=[nuevo])
+
+    bitacora._capturar_diff(sesion, None, None)
+    nuevo.id_empleado = 42  # lo que hace el INSERT entre los dos eventos
+    bitacora._escribir_diff(sesion, None)
+
+    [fila] = escritos
+    assert (fila["accion"], fila["entidad"], fila["id_entidad"]) == ("crear", "empleado", 42)
+    assert (fila["id_actor"], fila["request_id"]) == (2, "r1")
+    assert fila["cambios"]["nombre"] == "Ana"
+    assert fila["cambios"]["hash_contrasena"] == "***"
+
+
+def test_el_diff_es_el_de_antes_del_flush(en_peticion, monkeypatch):
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    emp = Empleado()
+    set_committed_value(emp, "id_empleado", 7)
+    set_committed_value(emp, "telefono", "5550-0001")
+    emp.telefono = "5550-0002"
+    sesion = _sesion(dirty=[emp])
+
+    bitacora._capturar_diff(sesion, None, None)
+    set_committed_value(emp, "telefono", "5550-0002")  # el flush consolida el valor
+    bitacora._escribir_diff(sesion, None)
+
+    [fila] = escritos
+    assert fila["cambios"] == {"telefono": {"antes": "5550-0001", "despues": "5550-0002"}}
+
+
+def test_tocar_sin_cambiar_no_deja_fila(en_peticion, monkeypatch):
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    emp = Empleado()
+    set_committed_value(emp, "nombre", "Ana")
+    sesion = _sesion(dirty=[emp])
+
+    bitacora._capturar_diff(sesion, None, None)
+    bitacora._escribir_diff(sesion, None)
+
+    assert escritos == []
+
+
+def test_fuera_de_una_peticion_el_hook_no_captura():
+    sesion = _sesion(new=[Empleado(nombre="Seed")])
+    bitacora._capturar_diff(sesion, None, None)
+    assert sesion.info[bitacora._PENDIENTE] == []
+
+
 def test_fuera_de_una_peticion_no_se_anota_nada():
     bitacora.anotar_evento("leer", "empleado")  # sin contexto: no revienta ni guarda
 
