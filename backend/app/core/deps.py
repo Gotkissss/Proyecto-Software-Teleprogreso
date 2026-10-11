@@ -89,6 +89,7 @@ async def get_current_empleado(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta de usuario inactiva",
         )
+
     registrar_actor(empleado)
     return empleado
 
