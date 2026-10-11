@@ -161,6 +161,46 @@ def _escribir_diff(session, _contexto_flush):
         )
 
 
+def _condicion(sentencia) -> str | None:
+    if sentencia.whereclause is None:
+        return None
+    try:
+        return str(sentencia.whereclause.compile(compile_kwargs={"literal_binds": True}))
+    except Exception:
+        return str(sentencia.whereclause)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _auditar_masivo(estado_ejecucion):
+    """
+    update()/delete() masivos (p. ej. quitar los técnicos de una tarea al
+    reasignarla en services/tareas.py) no pasan por el flush: sin esto no
+    dejarían rastro. No hay objetos de los que sacar un diff, así que se
+    guarda la condición y cuántas filas tocó.
+    """
+    if not (estado_ejecucion.is_update or estado_ejecucion.is_delete):
+        return None
+    tabla = estado_ejecucion.statement.table.name
+    if contexto_actual() is None or tabla in {"bitacora_auditoria", "token_revocado"}:
+        return None
+    resultado = estado_ejecucion.invoke_statement()
+    if resultado.rowcount:
+        insertar(
+            estado_ejecucion.session.connection(),
+            _registro(
+                "eliminar" if estado_ejecucion.is_delete else "actualizar",
+                tabla,
+                None,
+                {
+                    "masivo": True,
+                    "condicion": _condicion(estado_ejecucion.statement),
+                    "filas": resultado.rowcount,
+                },
+            ),
+        )
+    return resultado
+
+
 # --- 2. Eventos que no cambian filas -----------------------------------------
 
 def anotar_evento(accion: str, entidad: str, id_entidad=None, cambios=None) -> None:

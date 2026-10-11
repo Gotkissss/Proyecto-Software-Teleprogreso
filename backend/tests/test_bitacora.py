@@ -166,6 +166,29 @@ def test_tocar_sin_cambiar_no_deja_fila(en_peticion, monkeypatch):
     assert escritos == []
 
 
+def test_un_delete_masivo_deja_condicion_y_filas(en_peticion, monkeypatch):
+    from sqlalchemy import delete
+
+    from app.models.empleado import EmpleadoTarea
+
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    resultado = SimpleNamespace(rowcount=2)
+    estado = SimpleNamespace(
+        is_update=False,
+        is_delete=True,
+        statement=delete(EmpleadoTarea).where(EmpleadoTarea.id_tarea == 260),
+        invoke_statement=lambda: resultado,
+        session=SimpleNamespace(connection=MagicMock),
+    )
+
+    assert bitacora._auditar_masivo(estado) is resultado
+    [fila] = escritos
+    assert (fila["accion"], fila["entidad"]) == ("eliminar", "empleado_tarea")
+    assert fila["cambios"]["filas"] == 2
+    assert "260" in fila["cambios"]["condicion"]
+
+
 def test_fuera_de_una_peticion_el_hook_no_captura():
     sesion = _sesion(new=[Empleado(nombre="Seed")])
     bitacora._capturar_diff(sesion, None, None)
