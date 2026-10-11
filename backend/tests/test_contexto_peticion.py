@@ -119,3 +119,29 @@ def test_ip_solo_si_es_una_ip_valida():
     assert _ip(peticion("2001:db8::1")) == "2001:db8::1"
     assert _ip(peticion("testclient")) is None
     assert _ip(peticion(None)) is None
+
+def test_en_la_app_real_el_contexto_trae_actor_rol_y_request_id():
+    from app.main import app as app_real
+
+    @app_real.get("/_prueba_contexto")
+    async def _prueba(_=Depends(get_current_empleado)):
+        return await _servicio_profundo()
+
+    app_real.dependency_overrides[get_db] = _db_falsa
+    try:
+        res = TestClient(app_real).get(
+            "/_prueba_contexto",
+            headers={**TOKEN, CABECERA_REQUEST_ID: "real-123"},
+        )
+    finally:
+        app_real.dependency_overrides.pop(get_db, None)
+        app_real.router.routes.pop()
+
+    assert res.status_code == 200, res.text
+    assert res.json() == {
+        "ip": None,  # TestClient no manda una IP real
+        "request_id": "real-123",
+        "id_actor": 7,
+        "rol_actor": "supervisor",
+    }
+    assert res.headers[CABECERA_REQUEST_ID] == "real-123"
