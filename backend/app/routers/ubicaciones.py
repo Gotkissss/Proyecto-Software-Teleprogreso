@@ -41,7 +41,7 @@ from app.services.ubicaciones import (
     registrar_lote,
 )
 
-from app.core.deps import get_current_empleado, require_admin_supervisor_gerente
+from app.core.deps import auditar_lectura, get_current_empleado, require_admin_supervisor_gerente
 from app.core.exceptions import conflict
 from app.core.geo import punto_wkt
 
@@ -135,6 +135,7 @@ async def registrar_ubicacion(
 
 @router.get(
     "/tecnicos",
+    dependencies=[Depends(auditar_lectura("ubicacion"))],
     response_model=list[UbicacionTecnicoResponse],
     summary="Última posición conocida de cada técnico en jornada",
 )
@@ -176,6 +177,7 @@ async def registrar_ubicaciones_lote(
 
 @router.get(
     "/{id_empleado}/recorrido",
+    dependencies=[Depends(auditar_lectura("ubicacion"))],
     response_model=RecorridoResponse,
     summary="Recorrido de un técnico en un día",
 )

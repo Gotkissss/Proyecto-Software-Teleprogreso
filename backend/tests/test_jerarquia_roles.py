@@ -65,6 +65,7 @@ def _persona(id_empleado, rol, correo=None):
         apellido="Apellido",
         correo=correo or f"{rol}{id_empleado}@teleprogreso.com",
         rol=rol,
+        estado="activo",
         hash_contrasena="hash-anterior",
         version_token=0,
     )
@@ -185,3 +186,87 @@ async def test_contrasena_igual_al_correo_se_rechaza(clave, monkeypatch):
 
     assert error.value.status_code == 400
     assert objetivo.hash_contrasena == "hash-anterior"
+
+
+# --- Por HTTP: PATCH /empleados/{id}/contrasena -----------------------------
+#
+# Lo de arriba llama al servicio directamente. Esto pasa por la app entera
+# (JWT, require_supervisor, router) para fijar el código que ve el frontend.
+
+from fastapi.testclient import TestClient
+
+from app.core.security import create_access_token
+from app.db.session import get_db
+from app.main import app
+
+http = TestClient(app, raise_server_exceptions=False)
+
+
+def _db_por_id(*personas):
+    """get_db falso: cada SELECT de empleado devuelve a quien tenga ese id."""
+    por_id = {p.id_empleado: p for p in personas}
+
+    async def _fake():
+        async def _execute(statement, *args, **kwargs):
+            resultado = MagicMock()
+            if "token_revocado" in str(statement):
+                resultado.scalar_one_or_none.return_value = None
+            else:
+                ids = statement.compile().params.values()
+                resultado.scalar_one_or_none.return_value = next(
+                    (por_id[i] for i in ids if i in por_id), None
+                )
+            return resultado
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=_execute)
+        yield db
+
+    return _fake
+
+
+def _patch_contrasena(actor, objetivo, monkeypatch):
+    monkeypatch.setattr(empleados_service, "hash_password", lambda _: "hash-nuevo")
+    app.dependency_overrides[get_db] = _db_por_id(actor, objetivo)
+    token = create_access_token(subject=actor.id_empleado, rol=actor.rol)
+    try:
+        return http.patch(
+            f"/empleados/{objetivo.id_empleado}/contrasena",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"contrasena": CLAVE_NUEVA, "contrasena_confirmacion": CLAVE_NUEVA},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.parametrize(
+    "rol_actor, rol_objetivo, esperado",
+    [
+        ("supervisor", "admin", 403),
+        ("supervisor", "gerente", 403),
+        ("supervisor", "tecnico", 200),
+        ("admin", "admin", 200),
+    ],
+)
+def test_http_restablecer_respeta_la_jerarquia(
+    rol_actor, rol_objetivo, esperado, monkeypatch
+):
+    objetivo = _persona(20, rol_objetivo)
+    res = _patch_contrasena(_persona(10, rol_actor), objetivo, monkeypatch)
+
+    assert res.status_code == esperado, res.text
+    if esperado == 200:
+        assert objetivo.hash_contrasena == "hash-nuevo"
+        assert objetivo.version_token == 1
+    else:
+        assert objetivo.hash_contrasena == "hash-anterior"
+        assert objetivo.version_token == 0
+
+
+def test_http_supervisor_no_se_restablece_a_si_mismo(monkeypatch):
+    yo = _persona(10, "supervisor")
+    res = _patch_contrasena(yo, yo, monkeypatch)
+
+    assert res.status_code == 403, res.text
+    assert "cambiar contraseña" in res.json()["detail"].lower()
+    assert yo.hash_contrasena == "hash-anterior"

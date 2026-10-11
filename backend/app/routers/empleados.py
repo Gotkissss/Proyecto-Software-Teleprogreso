@@ -12,7 +12,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_empleado, require_admin, require_supervisor
+from app.core.deps import auditar_lectura, get_current_empleado, require_admin, require_supervisor
 from app.core.exceptions import bad_request
 from app.core.reglas import ROLES_VALIDOS
 from app.db.session import get_db
@@ -51,6 +51,7 @@ def _serializar_empleado(empleado, placa=None) -> EmpleadoResponse:
 
 @router.get(
     "",
+    dependencies=[Depends(auditar_lectura("empleado"))],
     response_model=EmpleadoListResponse,
     summary="Listar todos los empleados",
     status_code=status.HTTP_200_OK,

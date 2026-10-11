@@ -16,6 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.contexto import registrar_actor
 from app.core.deps import get_current_empleado
 from app.core.exceptions import bad_request
 from app.core.rate_limit import (
@@ -36,6 +37,7 @@ from app.core.security import (
 from app.core.tiempo import ahora
 from app.db.session import get_db
 from app.models.empleado import Empleado
+from app.services.bitacora import anotar_evento, primera_vez
 from app.schemas.auth import (
     CambiarContrasenaRequest,
     LoginRequest,
@@ -89,6 +91,12 @@ async def login(
     )
     if espera:
         logger.warning("Login bloqueado por exceso de intentos: %s desde %s", body.correo, ip)
+        if primera_vez(f"login:{ip}:{correo_normalizado}"):
+            anotar_evento(
+                "login_bloqueado",
+                "empleado",
+                cambios={"correo": correo_normalizado, "espera_s": espera},
+            )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
@@ -129,6 +137,14 @@ async def login(
             body.correo, ip,
             f" — bloqueado {bloqueo}s" if bloqueo else "",
         )
+        # El id solo si la cuenta existe; la respuesta al cliente sigue siendo
+        # la misma en los dos casos.
+        anotar_evento(
+            "login_fallido",
+            "empleado",
+            empleado.id_empleado if empleado else None,
+            {"correo": correo_normalizado, "bloqueado_s": bloqueo or 0},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
@@ -155,6 +171,9 @@ async def login(
     # distinguir una cuenta sin usar de una que se usa a diario. Se toma la
     # hora de la operación (tiempo.ahora), no la del contenedor, que corre en
     # UTC.
+    # Aún no hay JWT en esta petición: se fija el actor a mano para que la
+    # fila que deja el hook por `ultimo_acceso` diga quién entró.
+    registrar_actor(empleado)
     empleado.ultimo_acceso = ahora()
 
     # Login correcto: se borra el historial de fallos de esta combinación para
@@ -198,6 +217,7 @@ async def logout(
     # esto la tabla solo crecería.
     await purgar_tokens_expirados(db)
 
+    anotar_evento("logout", "empleado", _empleado.id_empleado)
     return {"detail": "Sesion cerrada correctamente"}
 
 

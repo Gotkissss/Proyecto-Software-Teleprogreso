@@ -6,3 +6,4 @@ from app.models.ubicacion import UbicacionEmpleado
 from app.models.alerta import Alerta
 from app.models.pausa import TipoPausa
 from app.models.token import TokenRevocado
+from app.models.bitacora import BitacoraAuditoria

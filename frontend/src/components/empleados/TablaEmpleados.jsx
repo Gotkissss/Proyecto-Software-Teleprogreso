@@ -38,6 +38,14 @@ const IconToggleOn = () => (
   </svg>
 )
 
+const IconKey = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7.5" cy="15.5" r="4.5"/>
+    <path d="M10.7 12.3 21 2"/>
+    <path d="m16.5 6.5 3 3"/>
+  </svg>
+)
+
 const IconSearch = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/>
@@ -100,10 +108,18 @@ export default function TablaEmpleados({
   onSort,
   onEditar,
   onToggle,
+  onRestablecer,
   esAdmin = false,
+  // (emp) => bool. Decide por fila porque depende del rol de cada empleado,
+  // no solo del de quien mira (ver puedeRestablecerContrasena).
+  puedeRestablecer = () => false,
   totalFiltrados = 0,
   totalGeneral = 0,
 }) {
+  // Un supervisor no edita ni desactiva, pero sí restablece la clave de los
+  // técnicos: la columna aparece en cuanto haya alguna acción que mostrar.
+  const conAcciones = esAdmin || empleados.some(puedeRestablecer)
+
   const getSortIcon = (col) => {
     if (sortCol !== col) return <IconChevronsUpDown />
     return sortDir === 'asc' ? <IconChevronUp /> : <IconChevronDown />
@@ -213,7 +229,7 @@ export default function TablaEmpleados({
                       Contratación {getSortIcon('fecha_contratacion')}
                     </div>
                   </th>
-                  {esAdmin && <th className={`${styles.th} ${styles.thActions}`}>Acciones</th>}
+                  {conAcciones && <th className={`${styles.th} ${styles.thActions}`}>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -287,33 +303,49 @@ export default function TablaEmpleados({
                         </span>
                       </td>
 
-                      {esAdmin && (
+                      {conAcciones && (
                         <td className={`${styles.td} ${styles.tdActions}`}>
                           <div className={styles.actionBtns}>
-                            <button
-                              type="button"
-                              className="btn btn-soft-primary btn-sm"
-                              onClick={() => onEditar(emp)}
-                              title="Editar datos del empleado"
-                              aria-label={`Editar a ${emp.nombre} ${emp.apellido}`}
-                            >
-                              <IconEdit />
-                              <span className={styles.btnTexto}>Editar</span>
-                            </button>
-                            <button
-                              type="button"
-                              className={`btn btn-sm ${esActivo ? "btn-soft-danger" : "btn-soft-success"}`}
-                              onClick={() => onToggle(emp)}
-                              title={esActivo ? 'Desactivar acceso' : 'Activar acceso'}
-                              aria-label={
-                                `${esActivo ? 'Desactivar' : 'Activar'} a ${emp.nombre} ${emp.apellido}`
-                              }
-                            >
-                              {esActivo ? <IconToggleOff /> : <IconToggleOn />}
-                              <span className={styles.btnTexto}>
-                                {esActivo ? 'Desactivar' : 'Activar'}
-                              </span>
-                            </button>
+                            {esAdmin && (
+                              <button
+                                type="button"
+                                className="btn btn-soft-primary btn-sm"
+                                onClick={() => onEditar(emp)}
+                                title="Editar datos del empleado"
+                                aria-label={`Editar a ${emp.nombre} ${emp.apellido}`}
+                              >
+                                <IconEdit />
+                                <span className={styles.btnTexto}>Editar</span>
+                              </button>
+                            )}
+                            {puedeRestablecer(emp) && (
+                              <button
+                                type="button"
+                                className="btn btn-soft-primary btn-sm"
+                                onClick={() => onRestablecer(emp)}
+                                title="Restablecer contraseña"
+                                aria-label={`Restablecer contraseña de ${emp.nombre} ${emp.apellido}`}
+                              >
+                                <IconKey />
+                                <span className={styles.btnTexto}>Contraseña</span>
+                              </button>
+                            )}
+                            {esAdmin && (
+                              <button
+                                type="button"
+                                className={`btn btn-sm ${esActivo ? "btn-soft-danger" : "btn-soft-success"}`}
+                                onClick={() => onToggle(emp)}
+                                title={esActivo ? 'Desactivar acceso' : 'Activar acceso'}
+                                aria-label={
+                                  `${esActivo ? 'Desactivar' : 'Activar'} a ${emp.nombre} ${emp.apellido}`
+                                }
+                              >
+                                {esActivo ? <IconToggleOff /> : <IconToggleOn />}
+                                <span className={styles.btnTexto}>
+                                  {esActivo ? 'Desactivar' : 'Activar'}
+                                </span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}

@@ -21,7 +21,9 @@ import TablaEmpleados from '../components/empleados/TablaEmpleados'
 import ModalCrearEmpleado from '../components/empleados/ModalCrearEmpleado'
 import ModalEditarEmpleado from '../components/empleados/ModalEditarEmpleado'
 import ModalConfirmarToggle from '../components/empleados/ModalConfirmarToggle'
+import ModalRestablecerContrasena from '../components/empleados/ModalRestablecerContrasena'
 import HistorialAsistenciaTable from '../components/asistencia/HistorialAsistenciaTable'
+import { puedeRestablecerContrasena } from '../utils/permisos'
 import styles from './EmpleadosPage.module.css'
 
 const IconUserPlus = () => (
@@ -44,6 +46,10 @@ export default function EmpleadosPage() {
   }
 
   const esAdmin = user?.rol === 'admin'
+  const puedeRestablecer = useCallback(
+    (emp) => puedeRestablecerContrasena(user, emp),
+    [user],
+  )
 
   const [empleados,        setEmpleados]        = useState([])
   const [cargando,         setCargando]         = useState(true)
@@ -60,6 +66,7 @@ export default function EmpleadosPage() {
   const [mostrarCrear,     setMostrarCrear]     = useState(false)
   const [empleadoEditar,   setEmpleadoEditar]   = useState(null)
   const [empleadoToggle,   setEmpleadoToggle]   = useState(null)
+  const [empleadoClave,    setEmpleadoClave]    = useState(null)
   const [cargandoAccion,   setCargandoAccion]   = useState(false)
   const [errorModal,       setErrorModal]       = useState(null)
 
@@ -237,7 +244,9 @@ export default function EmpleadosPage() {
               onSort={handleSort}
               onEditar={emp => { setErrorModal(null); setEmpleadoEditar(emp) }}
               onToggle={emp => setEmpleadoToggle(emp)}
+              onRestablecer={emp => setEmpleadoClave(emp)}
               esAdmin={esAdmin}
+              puedeRestablecer={puedeRestablecer}
               totalFiltrados={empleadosFiltrados.length}
               totalGeneral={empleados.length}
             />
@@ -263,6 +272,14 @@ export default function EmpleadosPage() {
           onCerrar={() => setEmpleadoEditar(null)}
           cargando={cargandoAccion}
           errorMsg={errorModal}
+          puedeRestablecer={puedeRestablecer(empleadoEditar)}
+        />
+      )}
+
+      {empleadoClave && (
+        <ModalRestablecerContrasena
+          empleado={empleadoClave}
+          onCerrar={() => setEmpleadoClave(null)}
         />
       )}
 

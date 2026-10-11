@@ -26,7 +26,7 @@ from sqlalchemy.orm import selectinload
 # Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
 # usar datetime.now() aquí desplazaba las fechas 6 horas.
 from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy as hoy_local
-from app.core.deps import get_current_empleado
+from app.core.deps import auditar_lectura, get_current_empleado
 from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
 from app.models.asistencia import Asistencia, Descanso
@@ -377,6 +377,7 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
 
 @router.get(
     "/historial",
+    dependencies=[Depends(auditar_lectura("asistencia"))],
     response_model=HistorialAsistenciaResponse,
     summary="Historial de jornadas con horas trabajadas y pausas",
     status_code=status.HTTP_200_OK,

@@ -59,6 +59,29 @@ export function puedeAcceder(rol, ruta) {
   return rolesPermitidos(ruta).includes(rol)
 }
 
+// Refleja NIVEL_ROL y puede_administrar de backend/app/core/reglas.py.
+const NIVEL_ROL = Object.freeze({
+  [ROLES.ADMIN]: 3,
+  [ROLES.GERENTE]: 2,
+  [ROLES.SUPERVISOR]: 2,
+  [ROLES.TECNICO]: 1,
+})
+
+export function puedeAdministrar(actor, objetivo) {
+  if (actor === ROLES.ADMIN) return true
+  const nivel = (rol) => (tieneClave(NIVEL_ROL, rol) ? NIVEL_ROL[rol] : 0)
+  return nivel(actor) > nivel(objetivo)
+}
+
+// PATCH /empleados/{id}/contrasena: require_supervisor, nunca sobre uno mismo
+// (para eso está «Cambiar contraseña» en el perfil) y respetando la jerarquía.
+export function puedeRestablecerContrasena(usuario, empleado) {
+  if (!usuario || !empleado) return false
+  if (!REQUIRE_SUPERVISOR.includes(usuario.rol)) return false
+  if (usuario.id_empleado === empleado.id_empleado) return false
+  return puedeAdministrar(usuario.rol, empleado.rol)
+}
+
 export function rutaInicialPorRol(rol) {
   if (!tieneClave(RUTA_INICIAL, rol)) {
     return '/login'

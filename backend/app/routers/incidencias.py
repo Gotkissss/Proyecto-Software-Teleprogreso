@@ -36,7 +36,7 @@ from fastapi import (
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_empleado, require_supervisor
+from app.core.deps import auditar_lectura, get_current_empleado, require_supervisor
 from app.core.reglas import ROLES_GESTION, ROL_GERENTE
 from app.services.ubicaciones import exigir_jornada_abierta
 from app.db.session import get_db
@@ -230,6 +230,7 @@ async def crear_incidencia(
 
 @router.get(
     "/{id}/incidencias",
+    dependencies=[Depends(auditar_lectura("evidencia"))],
     response_model=List[IncidenciaResponse],
     summary="Listar las evidencias de una tarea",
     status_code=status.HTTP_200_OK,

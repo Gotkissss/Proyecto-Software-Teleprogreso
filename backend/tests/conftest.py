@@ -16,6 +16,22 @@ from app.core.security import create_access_token
 
 
 
+# Bitácora: los eventos sin fila (login fallido, 403, lecturas...) se guardan
+# en su propia conexión al terminar cada petición. En los tests se recogen en
+# esta lista en vez de ir a la BD; pedir el fixture permite revisarlos.
+
+@pytest.fixture(autouse=True)
+def eventos_bitacora(monkeypatch):
+    guardados = []
+
+    async def _guardar(eventos):
+        guardados.extend(eventos)
+
+    monkeypatch.setattr("app.services.bitacora.guardar_eventos", _guardar)
+    return guardados
+
+
+
 # Cliente HTTP de prueba
 
 @pytest.fixture(scope="session")

@@ -20,6 +20,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
+from app.core.contexto import ContextoPeticionMiddleware
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware_seguridad import (
@@ -108,6 +109,11 @@ app.add_middleware(LimiteFrecuencia)
 # 5. Corte por tamaño de cuerpo (el mas externo: se decide sin leer nada).
 app.add_middleware(LimiteTamanoBody)
 
+# 6. Contexto de la petición (IP, request_id y, tras el JWT, actor y rol) para
+#    la bitácora. Es el más externo: así hasta un 413 o un 429 lleva su
+#    X-Request-ID en la respuesta.
+app.add_middleware(ContextoPeticionMiddleware)
+
 # ── Archivos estaticos: fotos de evidencia e imagenes de activos ──────
 # La carpeta la resuelve services/uploads.py a partir de STATIC_DIR, y se
 # reutiliza aqui a proposito: si el que escribe las fotos y el que las sirve
@@ -155,3 +161,4 @@ async def root():
 async def health():
     """Health check para Docker y load balancers."""
     return {"status": "ok"}
+

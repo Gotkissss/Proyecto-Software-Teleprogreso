@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import apiClient from '../../api/client'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
-import { useToast } from '../ui/Toast'
-import { ROLES, ROL_LABEL, validarFormularioEdicion, getPasswordStrength } from './empleadoValidacion'
+import { ROLES, ROL_LABEL, validarFormularioEdicion } from './empleadoValidacion'
+import { SeccionContrasena } from './ModalRestablecerContrasena'
 import styles from './ModalEditarEmpleado.module.css'
 
 const IconAlert = () => (
@@ -14,30 +13,9 @@ const IconAlert = () => (
   </svg>
 )
 
-const IconKey = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="7.5" cy="15.5" r="4.5"/>
-    <path d="M10.7 12.3 21 2"/>
-    <path d="m16.5 6.5 3 3"/>
-  </svg>
-)
-
-const IconEye = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-)
-
-const IconEyeOff = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-    <line x1="1" y1="1" x2="23" y2="23"/>
-  </svg>
-)
-
-export default function ModalEditarEmpleado({ empleado, onGuardar, onCerrar, cargando, errorMsg }) {
+export default function ModalEditarEmpleado({
+  empleado, onGuardar, onCerrar, cargando, errorMsg, puedeRestablecer = false,
+}) {
   const [form, setForm] = useState({
     nombre:   empleado?.nombre   ?? '',
     apellido: empleado?.apellido ?? '',
@@ -163,147 +141,9 @@ export default function ModalEditarEmpleado({ empleado, onGuardar, onCerrar, car
         </ModalActions>
       </form>
 
-      <SeccionContrasena empleado={empleado} bloqueado={cargando} />
+      {/* Un admin editándose a sí mismo no pasa: el backend responde 403 y
+          lo manda a «Cambiar contraseña» del perfil. */}
+      {puedeRestablecer && <SeccionContrasena empleado={empleado} bloqueado={cargando} />}
     </Modal>
-  )
-}
-
-function SeccionContrasena({ empleado, bloqueado }) {
-  const toast = useToast()
-  const [abierto,     setAbierto]     = useState(false)
-  const [clave,       setClave]       = useState('')
-  const [confirmar,   setConfirmar]   = useState('')
-  const [visible,     setVisible]     = useState(false)
-  const [guardando,   setGuardando]   = useState(false)
-  const [error,       setError]       = useState(null)
-
-  const limpiar = () => { setClave(''); setConfirmar(''); setError(null); setVisible(false) }
-  const cerrar = () => { setAbierto(false); limpiar() }
-
-  const problema = () => {
-    if (clave.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
-    if (clave !== clave.trim()) return 'No puede empezar ni terminar con espacios.'
-    if (clave !== confirmar) return 'Las contraseñas no coinciden.'
-    return null
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const fallo = problema()
-    if (fallo) { setError(fallo); return }
-
-    setGuardando(true)
-    setError(null)
-    try {
-      const { data } = await apiClient.patch(
-        `/empleados/${empleado.id_empleado}/contrasena`,
-        { contrasena: clave, contrasena_confirmacion: confirmar },
-      )
-      toast.success(data?.detail || 'Contraseña actualizada correctamente.')
-      cerrar()
-    } catch (err) {
-      const detail = err?.response?.data?.detail
-      setError(
-        Array.isArray(detail)
-          ? detail.map(d => d.message || d.msg).join(', ')
-          : detail || 'No se pudo actualizar la contraseña.'
-      )
-    } finally {
-      setGuardando(false)
-    }
-  }
-
-  const fuerza = getPasswordStrength(clave)
-
-  return (
-    <div className={styles.passSection}>
-      {!abierto ? (
-        <button
-          type="button"
-          className={`btn btn-secondary btn-sm ${styles.togglePassBtn}`}
-          onClick={() => setAbierto(true)}
-          disabled={bloqueado}
-        >
-          <IconKey />
-          Restablecer contraseña de acceso
-        </button>
-      ) : (
-        <form className={styles.passForm} onSubmit={handleSubmit} noValidate>
-          <div className={styles.passHeader}>
-            <span className={styles.passTitle}>Restablecer contraseña</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={cerrar} disabled={guardando}>
-              Cerrar
-            </button>
-          </div>
-
-          {error && (
-            <div className={styles.errorBanner}>
-              <IconAlert />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className={styles.grid}>
-            <div className={styles.field}>
-              <label className={styles.label}>Nueva contraseña</label>
-              <div className={styles.passWrap}>
-                <input
-                  type={visible ? 'text' : 'password'}
-                  className={`${styles.input} ${styles.inputPass}`}
-                  value={clave}
-                  onChange={e => setClave(e.target.value)}
-                  disabled={guardando}
-                  placeholder="Mínimo 8 caracteres"
-                />
-                <button
-                  type="button"
-                  className={styles.eyeBtn}
-                  onClick={() => setVisible(v => !v)}
-                  tabIndex={-1}
-                  aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {visible ? <IconEyeOff /> : <IconEye />}
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Confirmar contraseña</label>
-              <div className={styles.passWrap}>
-                <input
-                  type={visible ? 'text' : 'password'}
-                  className={`${styles.input} ${styles.inputPass}`}
-                  value={confirmar}
-                  onChange={e => setConfirmar(e.target.value)}
-                  disabled={guardando}
-                  placeholder="Repite la contraseña"
-                />
-              </div>
-            </div>
-          </div>
-
-          {clave && (
-            <div className={styles.strengthBar}>
-              <div className={styles.strengthSegments}>
-                {[1, 2, 3].map(lvl => (
-                  <div
-                    key={lvl}
-                    className={styles.strengthSegment}
-                    style={{ background: fuerza.level >= lvl ? fuerza.color : 'var(--color-border)' }}
-                  />
-                ))}
-              </div>
-              <span className={styles.strengthLabel} style={{ color: fuerza.color }}>{fuerza.label}</span>
-            </div>
-          )}
-
-          <div className={styles.passActions}>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={guardando || !clave}>
-              {guardando ? <><Spinner size="sm" color="white" /> Actualizando...</> : 'Actualizar contraseña'}
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
   )
 }
