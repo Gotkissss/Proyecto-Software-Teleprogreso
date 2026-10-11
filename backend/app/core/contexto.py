@@ -14,7 +14,7 @@ import ipaddress
 import re
 import uuid
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -33,6 +33,8 @@ class ContextoPeticion:
     request_id: str | None = None
     id_actor: int | None = None
     rol_actor: str | None = None
+    # Eventos de auditoría que no cambian filas (services/bitacora.anotar_evento).
+    eventos: list[dict] = field(default_factory=list)
 
 
 _contexto: ContextVar[ContextoPeticion | None] = ContextVar("contexto_peticion", default=None)
@@ -54,10 +56,11 @@ def _ip(request: Request) -> str | None:
     # La columna `ip` es INET: "desconocido" o "testclient" la harían fallar.
     ip = ip_cliente(request)
     try:
-        ipaddress.ip_address(ip)
+        # Forma canónica: es la misma que devuelve la columna INET al leerla,
+        # y el hash de la bitácora se recalcula sobre lo leído.
+        return str(ipaddress.ip_address(ip))
     except ValueError:
         return None
-    return ip
 
 
 def _request_id(request: Request) -> str:
@@ -73,5 +76,11 @@ class ContextoPeticionMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         finally:
             _contexto.reset(token)
+            # La transacción de la petición ya cerró (commit o rollback): los
+            # eventos van en la suya propia. Import diferido para no crear un
+            # ciclo (services.bitacora importa este módulo).
+            from app.services.bitacora import guardar_eventos
+
+            await guardar_eventos(ctx.eventos)
         response.headers[CABECERA_REQUEST_ID] = ctx.request_id
         return response

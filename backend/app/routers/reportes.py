@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_admin_supervisor_gerente, require_gerente
+from app.core.deps import auditar_lectura, require_admin_supervisor_gerente, require_gerente
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.reporte import (
@@ -34,7 +34,12 @@ from app.services.reportes import (
     obtener_reporte_tareas_completadas,
 )
 
-router = APIRouter(prefix="/reportes", tags=["Reportes"])
+# Todo reporte expone datos del personal: cada lectura queda en la bitácora.
+router = APIRouter(
+    prefix="/reportes",
+    tags=["Reportes"],
+    dependencies=[Depends(auditar_lectura("reporte"))],
+)
 
 # Reportes que miran a la persona (asistencia, pausas): se filtran con
 # `empleado`. El resto mira el trabajo cerrado y se filtra con `tecnico`.

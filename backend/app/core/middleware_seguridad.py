@@ -20,6 +20,7 @@ from starlette.responses import JSONResponse, Response
 
 from app.core.config import settings
 from app.core.rate_limit import ip_cliente, limite_general
+from app.services.bitacora import anotar_evento, primera_vez
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,12 @@ class LimiteFrecuencia(BaseHTTPMiddleware):
             logger.warning(
                 "Límite de frecuencia alcanzado por %s en %s", ip, request.url.path
             )
+            if primera_vez(f"rate:{ip}"):
+                anotar_evento(
+                    "bloqueo_rate_limit",
+                    "peticion",
+                    cambios={"metodo": request.method, "ruta": request.url.path, "espera_s": espera},
+                )
             return JSONResponse(
                 status_code=429,
                 headers={"Retry-After": str(espera)},

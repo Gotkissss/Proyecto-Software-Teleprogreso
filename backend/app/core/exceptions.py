@@ -112,6 +112,17 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     - 403: Sin permisos para este recurso
     - 404: Recurso no encontrado
     """
+    if exc.status_code == status.HTTP_403_FORBIDDEN:
+        # Todo 403 pasa por aquí: falta de rol (require_roles), jerarquía
+        # (puede_administrar), cuenta inactiva... Import diferido: la bitácora
+        # arrastra modelos y sesión de BD.
+        from app.services.bitacora import anotar_evento
+
+        anotar_evento(
+            "acceso_denegado",
+            "ruta",
+            cambios={"metodo": request.method, "ruta": request.url.path, "detalle": exc.detail},
+        )
     # Mensajes por defecto para errores de autenticacion
     default_messages = {
         status.HTTP_401_UNAUTHORIZED: (
