@@ -18,6 +18,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
+from app.core.contexto import ContextoPeticionMiddleware
+
 import os
 
 from app.core.config import settings
@@ -45,6 +47,7 @@ from app.routers.carros     import router as carros_router
 from app.routers.activos    import router as activos_router
 from app.routers.alertas    import router as alertas_router
 from app.routers.reportes   import router as reportes_router
+
 
 # Carpeta de las imagenes subidas (STATIC_DIR). Vive en el servicio de uploads
 # para que escritura y publicacion no puedan apuntar a sitios distintos.
@@ -155,3 +158,9 @@ async def root():
 async def health():
     """Health check para Docker y load balancers."""
     return {"status": "ok"}
+
+# 6. Contexto de la petición (IP, request_id y, tras el JWT, actor y rol) para
+#    la bitácora. Es el más externo: así hasta un 413 o un 429 lleva su
+#    X-Request-ID en la respuesta.
+app.add_middleware(ContextoPeticionMiddleware)
+

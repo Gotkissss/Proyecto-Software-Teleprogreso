@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decode_access_token, token_esta_revocado
 from app.db.session import get_db
 from app.models.empleado import Empleado
+from app.core.contexto import registrar_actor
 
 # Extrae el Bearer token del header Authorization
 # auto_error=False para poder responder 401 (no 403) cuando falta el token
@@ -88,7 +89,7 @@ async def get_current_empleado(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta de usuario inactiva",
         )
-
+    registrar_actor(empleado)
     return empleado
 
 
