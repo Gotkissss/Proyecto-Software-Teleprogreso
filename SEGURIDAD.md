@@ -146,6 +146,13 @@ cualquier cuerpo de petición mayor de 10 MB antes siquiera de leerlo.
 **CORS y Host.** `*` está prohibido por configuración. En producción se exige
 https en los orígenes y una lista de `ALLOWED_HOSTS`.
 
+**Reportes: misma cerradura para ver y para descargar.** Todos los reportes
+(`/reportes/*`, incluida la serie temporal) son de admin y gerente, y su
+descarga en Excel exige exactamente el mismo rol. Hasta la HU-S9-04 la
+exportación admitía además al supervisor, que bajaba en un archivo datos que
+no podía consultar. `tests/test_reportes_permisos.py` recorre cada par
+reporte/exportación y falla si alguno vuelve a tener roles distintos.
+
 **Subidas de imágenes.** Además de la extensión y el tamaño (5 MB), se lee la
 firma de los primeros bytes: solo entran JPEG, PNG, WEBP y GIF reales. Un HTML,
 un SVG o un ejecutable renombrado a `.jpg` se rechaza con 400 antes de tocar
@@ -279,6 +286,3 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   confiar en el proxy de Railway. Si el backend se expusiera directamente, sin
   proxy delante, un cliente podría falsear su IP con `X-Forwarded-For`; en ese
   caso hay que limitar esa opción a la IP del proxy.
-- **Exportación de reportes.** `GET /reportes/{tipo}/exportar` todavía admite
-  al supervisor mientras el JSON del mismo reporte es solo de gerencia
-  (agujero L, tarea 1 de la HU-S9-04).
