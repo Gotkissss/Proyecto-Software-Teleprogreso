@@ -94,16 +94,21 @@ El seed crea además tres técnicos más (`maria.lopez@`, `diego.morales@`,
 
 ## 🗄️ Repoblar la base de datos
 
-`seed.py` corre en cada arranque del backend, pero es **idempotente**: si ya
-hay empleados no toca nada, para no pisar datos de trabajo.
+`seed.py` corre en cada arranque (en docker-compose, dentro del servicio
+`migraciones`, que aplica las migraciones, siembra, purga y termina antes de
+que arranque el backend), pero es **idempotente**: si ya hay empleados no toca
+nada, para no pisar datos de trabajo.
 
 Para borrar todo y volver a sembrar el escenario completo (empleados, tareas
 con coordenadas, vehículos, herramientas, inventario, asistencia de 14 días,
 pausas, ubicaciones GPS y evidencias):
 
 ```bash
-docker compose exec backend python seed.py --reset
+docker compose run --rm migraciones python seed.py --reset
 ```
+
+(Con el servicio `migraciones` y no con `backend`: el reset necesita al
+propietario del esquema, y el backend se conecta con el rol de la app.)
 
 En local también sirve tirar el volumen:
 
@@ -112,8 +117,8 @@ docker compose down -v
 ```
 
 El reset hace `TRUNCATE ... RESTART IDENTITY CASCADE` sobre todas las tablas
-de datos y **no toca `alembic_version`**: el esquema lo siguen gobernando las
-migraciones.
+de datos y **no toca `alembic_version`** (el esquema lo siguen gobernando las
+migraciones) **ni la bitácora de auditoría**, que es de solo inserción.
 
 ### En Railway
 
@@ -134,6 +139,35 @@ porque es una ejecución puntual y deliberada, no algo que se repita solo.
 Fuera de producción (local, `ENVIRONMENT=development`) la variable se sigue
 respetando, y en local además está `docker compose down -v`.
  
+
+## 🛡️ Bitácora de auditoría y mantenimiento
+
+Todo cambio de datos, login fallido, 403 y consulta de datos sensibles queda
+en la bitácora de auditoría (HU-S9-03). El admin la consulta en **Bitácora**
+(`/supervisor/bitacora`): filtros, detalle del antes/después de cada campo,
+exportación a Excel y un aviso si la cadena de hashes está rota. Detalles de
+cómo se protege en `SEGURIDAD.md`.
+
+Comandos (desde `backend/`, o con `docker compose run --rm migraciones ...`):
+
+```bash
+python mantenimiento.py purgar               # retención: tokens, GPS y bitácora
+python mantenimiento.py verificar-bitacora   # código 1 si la cadena está rota
+```
+
+`purgar` corre en cada arranque. Para que la retención no dependa de los
+despliegues, prográmalo una vez al día:
+
+- **Local / servidor propio** (cron del host):
+  `0 3 * * * cd /ruta/al/proyecto && docker compose run --rm migraciones python mantenimiento.py purgar`
+- **Railway:** un servicio con la misma imagen del backend, *Cron Schedule*
+  `0 9 * * *` (03:00 en Guatemala) y *Start Command*
+  `python mantenimiento.py purgar`.
+
+Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
+defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
+define `DATABASE_URL_MIGRACIONES` con el propietario del esquema: con ella
+migran Alembic, el seed y la purga (la bitácora solo la puede purgar su dueño).
 
 ## 📷 Fotos de evidencia: dónde se guardan
 
