@@ -1,24 +1,28 @@
 """
 Router de Reportes — Teleprogreso S.A.
 
-Expone datos agregados por rango de fechas para gerencia. La descarga Excel
-tambien admite al supervisor para el acceso rapido desde su dashboard.
+Expone datos agregados por rango de fechas para gerencia (admin y gerente).
+Cada reporte en JSON y su descarga en Excel exigen el mismo rol: antes la
+exportación admitía también al supervisor, que así descargaba en un archivo
+los datos que no podía consultar (agujero L del Sprint 9).
 """
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import auditar_lectura, require_admin_supervisor_gerente, require_gerente
+from app.core.deps import auditar_lectura, require_gerente
+from app.core.reglas import MAX_DIAS_SERIE
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.reporte import (
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
     ReporteResumenResponse,
+    ReporteSerieResponse,
     ReporteTareasCompletadasResponse,
 )
 from app.services.exportacion_reportes import (
@@ -32,6 +36,7 @@ from app.services.reportes import (
     obtener_reporte_productividad,
     obtener_reporte_resumen,
     obtener_reporte_tareas_completadas,
+    obtener_serie,
 )
 
 # Todo reporte expone datos del personal: cada lectura queda en la bitácora.
@@ -175,16 +180,63 @@ async def get_reporte_productividad(
 
 
 @router.get(
+    "/serie",
+    response_model=ReporteSerieResponse,
+    summary="Evolución de una métrica por día o semana",
+)
+async def get_reporte_serie(
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    _current_user: Annotated[Empleado, Depends(require_gerente)],
+    metrica: Annotated[
+        Literal["horas", "tareas", "pausas"],
+        Query(description="horas trabajadas, tareas cerradas o minutos en pausa."),
+    ],
+    fecha_inicio: FechaInicio,
+    fecha_fin: FechaFin,
+    agrupar: Annotated[
+        Literal["dia", "semana"],
+        Query(description="Un punto por día o por semana (lunes a domingo)."),
+    ] = "dia",
+    empleado: Annotated[
+        int | None,
+        Query(ge=1, description="ID del empleado; sin él, toda la plantilla."),
+    ] = None,
+):
+    """
+    Un punto por periodo del rango, también los que no tienen datos (en 0),
+    para dibujar la tendencia sin pedir un reporte por día. La suma de los
+    puntos coincide con el total del reporte agregado equivalente.
+    """
+    _validar_rango(fecha_inicio, fecha_fin)
+    dias = (fecha_fin - fecha_inicio).days + 1
+    if dias > MAX_DIAS_SERIE[agrupar]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"El rango es de {dias} días y la serie por {agrupar} admite "
+                f"hasta {MAX_DIAS_SERIE[agrupar]}. Acota el rango"
+                + (" o agrupa por semana." if agrupar == "dia" else ".")
+            ),
+        )
+    return await obtener_serie(
+        db,
+        fecha_inicio,
+        fecha_fin,
+        metrica,
+        agrupar,
+        id_empleado=empleado,
+    )
+
+
+@router.get(
     "/{tipo}/exportar",
     response_class=Response,
     summary="Exportar un reporte a Excel",
 )
 async def exportar_reporte(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _current_user: Annotated[
-        Empleado,
-        Depends(require_admin_supervisor_gerente),
-    ],
+    # El mismo rol que el reporte en JSON: nadie descarga lo que no puede ver.
+    _current_user: Annotated[Empleado, Depends(require_gerente)],
     tipo: str,
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,

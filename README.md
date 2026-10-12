@@ -62,6 +62,7 @@ Este proyecto consiste en el desarrollo de una aplicación web/móvil para la su
  
 - **Técnicos (móvil/PWA):** ruta diaria con prioridades, control de asistencia (entrada/salida), pausas operativas con countdown, mapa de ruta
 - **Supervisores (desktop):** dashboard con métricas en tiempo real, gestión de alertas operativas, reasignación de tareas entre técnicos
+- **Gerencia (admin y gerente):** pantalla de Reportes con indicadores y su variación contra el periodo anterior, tendencia de horas, tareas y pausas por día o semana, productividad por técnico, resumen por empleado con detalle de cada persona y exportación a Excel con los mismos filtros. El gerente entra directo a esta pantalla
 - **Autenticación:** JWT con control de acceso por rol (admin, supervisor, técnico, gerente)
 ## 🛠️ Levantar el proyecto
  

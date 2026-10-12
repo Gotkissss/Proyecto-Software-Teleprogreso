@@ -204,3 +204,14 @@ SEGUNDOS_LECTURA_REPETIDA = 300
 # el archivo deja de ser manejable y se pide acotar el filtro (400), en vez de
 # entregar un archivo recortado que parezca completo.
 MAX_FILAS_EXPORTAR_BITACORA = 50_000
+
+
+# ── Serie temporal de reportes (HU-S9-04) ────────────────────────────────────
+#
+# GET /reportes/serie devuelve un punto por día o por semana, incluidos los
+# periodos sin datos (en 0), para que la línea de tendencia no salte huecos.
+# Topes de rango para que una consulta no devuelva miles de puntos que ningún
+# gráfico puede dibujar: un año por día, dos años por semana.
+METRICAS_SERIE = ("horas", "tareas", "pausas")
+AGRUPACIONES_SERIE = ("dia", "semana")
+MAX_DIAS_SERIE = {"dia": 366, "semana": 731}

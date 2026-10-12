@@ -83,7 +83,7 @@ describe('navegador sin Object.hasOwn (Safari < 15.4)', () => {
       expect(rolesPermitidos('/ruta')).toEqual(PERMISOS_RUTAS['/ruta'])
       expect(rolesPermitidos('__proto__')).toEqual([])
       expect(puedeAcceder(ROLES.TECNICO, '/ruta')).toBe(true)
-      expect(rutaInicialPorRol(ROLES.GERENTE)).toBe('/supervisor/mapa')
+      expect(rutaInicialPorRol(ROLES.GERENTE)).toBe('/supervisor/reportes')
       expect(rutaInicialPorRol('constructor')).toBe('/login')
     } finally {
       Object.hasOwn = original

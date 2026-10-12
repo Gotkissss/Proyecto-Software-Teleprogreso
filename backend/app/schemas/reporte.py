@@ -3,6 +3,7 @@ Schemas de respuesta del modulo de Reportes — Teleprogreso S.A.
 """
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -120,3 +121,32 @@ class ReporteResumenResponse(RangoReporte):
     total_tareas_completadas: int = 0
     tareas_por_hora: float = 0.0
     items: list[ResumenEmpleado] = Field(default_factory=list)
+
+
+# ─── Serie temporal (HU-S9-04) ───────────────────────────────────────────────
+# Los cuatro reportes anteriores agregan sobre todo el rango: dicen cuánto,
+# no cómo evolucionó. La serie reparte una métrica por día o por semana.
+
+class PuntoSerie(BaseModel):
+    """Un periodo de la serie: sus días (inclusivos) y el valor de la métrica."""
+
+    inicio: date
+    fin: date
+    valor: float = 0.0
+
+
+class ReporteSerieResponse(RangoReporte):
+    """
+    Evolución de una métrica en el rango.
+
+    - `horas`: horas efectivamente trabajadas (sin pausas), por fecha de jornada.
+    - `tareas`: tareas cerradas, por día de cierre (cada tarea cuenta una vez).
+    - `pausas`: minutos en pausa, por fecha de jornada.
+    """
+
+    metrica: Literal["horas", "tareas", "pausas"]
+    agrupar: Literal["dia", "semana"]
+    unidad: Literal["horas", "tareas", "minutos"]
+    id_empleado: int | None = None
+    total: float = 0.0
+    puntos: list[PuntoSerie] = Field(default_factory=list)

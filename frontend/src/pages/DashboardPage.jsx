@@ -13,10 +13,8 @@ import { getTareas } from '../api/tareaService'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
-import { useToast } from '../components/ui/Toast'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
-import ModalExportarReporte from '../components/reportes/ModalExportarReporte'
 import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
 
@@ -25,15 +23,6 @@ const IconFoto = () => (
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
     <polyline points="21 15 16 10 5 21" />
-  </svg>
-)
-
-// Ícono del botón "Exportar reporte" (flecha hacia una bandeja de descarga).
-const IconDescarga = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 )
 
@@ -77,7 +66,6 @@ function estadoJornada(tec) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const toast = useToast()
 
   const [metricas,      setMetricas]      = useState(null)
   const [tecnicosList,  setTecnicosList]  = useState([])
@@ -88,8 +76,6 @@ export default function DashboardPage() {
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
   // Tarea abierta en la ficha de detalle (clic en la tarjeta)
   const [tareaDetalle, setTareaDetalle] = useState(null)
-  // Diálogo de exportación (reporte + rango de fechas + persona)
-  const [exportarAbierto, setExportarAbierto] = useState(false)
 
 
   const fetchData = useCallback(async () => {
@@ -168,16 +154,9 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Abre el diálogo de exportación: reporte, rango de fechas y, si
-            se quiere, una sola persona. Antes este botón descargaba siempre
-            lo mismo (asistencia del mes en curso) sin preguntar nada. */}
-        <button
-          className={`btn btn-primary ${styles.exportarBtn}`}
-          onClick={() => setExportarAbierto(true)}
-          title="Elegir reporte y rango de fechas para descargar en Excel"
-        >
-          <IconDescarga /> Exportar reporte
-        </button>
+        {/* La exportación de reportes se mudó a la pantalla de Reportes
+            (HU-S9-04), que es de admin y gerente: el Excel exige el mismo
+            rol que el reporte que contiene. */}
       </div>
 
       {/* ── Métricas ── */}
@@ -339,16 +318,6 @@ export default function DashboardPage() {
         onClose={() => setTareaEvidencias(null)}
         puedeEliminar
         onCambio={fetchData}
-      />
-
-      {/* Los técnicos ya cargados alimentan el filtro por persona, para no
-          pedir la plantilla otra vez solo para llenar un desplegable. */}
-      <ModalExportarReporte
-        open={exportarAbierto}
-        onClose={() => setExportarAbierto(false)}
-        empleados={tecnicosList}
-        onExportado={(archivo) => toast.success(`Reporte descargado: ${archivo}.`)}
-        onError={(mensaje) => toast.error(mensaje)}
       />
     </div>
   )

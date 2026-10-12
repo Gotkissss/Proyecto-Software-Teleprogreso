@@ -6,7 +6,7 @@ jornada que el historial de asistencia, incluida la resta de pausas y el
 manejo de turnos nocturnos.
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,9 @@ from app.schemas.reporte import (
     ProductividadEmpleado,
     ReporteAsistenciaResponse,
     ReporteProductividadResponse,
+    PuntoSerie,
     ReporteResumenResponse,
+    ReporteSerieResponse,
     ReporteTareasCompletadasResponse,
     ResumenEmpleado,
     TareasCompletadasEmpleado,
@@ -78,6 +80,7 @@ def consulta_tareas_completadas_por_rango(
     return (
         select(
             Tarea.id_tarea,
+            Tarea.fecha_completado,
             Empleado.id_empleado,
             Empleado.nombre,
             Empleado.apellido,
@@ -407,4 +410,119 @@ async def obtener_reporte_productividad(
         total_tareas_completadas=total_tareas,
         tareas_por_hora=_tareas_por_hora(total_tareas, total_minutos),
         items=items,
+    )
+
+
+# ─── Serie temporal (HU-S9-04) ───────────────────────────────────────────────
+
+UNIDAD_SERIE = {"horas": "horas", "tareas": "tareas", "pausas": "minutos"}
+
+
+def periodos_serie(fecha_inicio: date, fecha_fin: date, agrupar: str) -> list[tuple[date, date]]:
+    """
+    Cortes de la serie, en orden y sin huecos.
+
+    - "dia": un periodo por día del rango.
+    - "semana": semanas ISO (lunes a domingo), recortadas al rango: si el
+      rango empieza un miércoles, la primera semana va de ese miércoles al
+      domingo, para no sumar días que nadie pidió.
+    """
+    periodos = []
+    if agrupar == "dia":
+        actual = fecha_inicio
+        while actual <= fecha_fin:
+            periodos.append((actual, actual))
+            actual += timedelta(days=1)
+        return periodos
+
+    lunes = fecha_inicio - timedelta(days=fecha_inicio.weekday())
+    while lunes <= fecha_fin:
+        domingo = lunes + timedelta(days=6)
+        periodos.append((max(lunes, fecha_inicio), min(domingo, fecha_fin)))
+        lunes += timedelta(days=7)
+    return periodos
+
+
+def _indice_por_dia(periodos: list[tuple[date, date]]) -> dict[date, int]:
+    """Cada día del rango apunta a la posición de su periodo."""
+    indices = {}
+    for indice, (inicio, fin) in enumerate(periodos):
+        dia = inicio
+        while dia <= fin:
+            indices[dia] = indice
+            dia += timedelta(days=1)
+    return indices
+
+
+async def obtener_serie(
+    db: AsyncSession,
+    fecha_inicio: date,
+    fecha_fin: date,
+    metrica: str,
+    agrupar: str,
+    id_empleado: int | None = None,
+) -> ReporteSerieResponse:
+    """
+    Evolución de una métrica por día o semana, con 0 en los periodos sin datos.
+
+    Usa los mismos cálculos que los reportes agregados, así que sumar los
+    puntos da el total del reporte equivalente: las horas y las pausas salen
+    de `calcular_jornada` (con turnos nocturnos y pausas restadas) y las
+    tareas de la misma consulta que el reporte de tareas completadas. Sin
+    `id_empleado` la asistencia es de toda la plantilla, como en el resumen.
+    """
+    periodos = periodos_serie(fecha_inicio, fecha_fin, agrupar)
+    indice_de = _indice_por_dia(periodos)
+    valores = [0.0] * len(periodos)
+
+    if metrica == "tareas":
+        result = await db.execute(
+            consulta_tareas_completadas_por_rango(
+                fecha_inicio, fecha_fin, id_tecnico=id_empleado
+            )
+        )
+        # Una tarea con dos técnicos asignados trae dos filas: cuenta una vez.
+        vistas: set[int] = set()
+        for fila in result.all():
+            if fila.id_tarea in vistas or fila.fecha_completado is None:
+                continue
+            vistas.add(fila.id_tarea)
+            indice = indice_de.get(fila.fecha_completado.date())
+            if indice is not None:
+                valores[indice] += 1
+        total = float(len(vistas))
+    else:
+        result = await db.execute(
+            consulta_asistencias_por_rango(fecha_inicio, fecha_fin, id_empleado=id_empleado)
+        )
+        hoy_local = hoy()
+        minutos = [0] * len(periodos)
+        for jornada in result.scalars().all():
+            indice = indice_de.get(jornada.fecha)
+            if indice is None:
+                continue
+            referencia = hora_actual() if jornada.fecha == hoy_local else None
+            resumen = calcular_jornada(jornada, jornada.descansos, referencia=referencia)
+            minutos[indice] += (
+                resumen.minutos_trabajados if metrica == "horas" else resumen.minutos_pausa
+            )
+        if metrica == "horas":
+            valores = [round(m / 60, 2) for m in minutos]
+            total = round(sum(minutos) / 60, 2)
+        else:
+            valores = [float(m) for m in minutos]
+            total = float(sum(minutos))
+
+    return ReporteSerieResponse(
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        metrica=metrica,
+        agrupar=agrupar,
+        unidad=UNIDAD_SERIE[metrica],
+        id_empleado=id_empleado,
+        total=total,
+        puntos=[
+            PuntoSerie(inicio=inicio, fin=fin, valor=valor)
+            for (inicio, fin), valor in zip(periodos, valores)
+        ],
     )

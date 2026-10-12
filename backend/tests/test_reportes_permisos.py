@@ -1,57 +1,84 @@
 # backend/tests/test_reportes_permisos.py
 """
-Pruebas de control de acceso del router de Reportes — SCRUM-184.
+Pruebas de control de acceso del router de Reportes — SCRUM-184 y HU-S9-04.
 
-El módulo tiene una asimetría deliberada que conviene dejar fijada, porque a
-simple vista parece un error:
+Todos los reportes son de GERENCIA (`require_gerente` → admin y gerente):
+traen el desempeño individual de cada empleado y no son datos de operación
+diaria.
 
-  - Los reportes en JSON son de GERENCIA (`require_gerente` → admin y
-    gerente). Traen el desempeño individual de cada empleado y no son datos
-    de operación diaria.
-  - La descarga en Excel sí admite al SUPERVISOR, porque su dashboard tiene
-    el botón de "Exportar reporte" (SCRUM-178).
-
-Sin estas pruebas, alguien que "arregle" la inconsistencia abriendo los tres
-endpoints a supervisión no rompería ningún test.
+Hasta el Sprint 9 la descarga en Excel admitía además al supervisor, que así
+bajaba en un archivo los datos que no podía consultar en JSON (agujero L).
+Ahora cada reporte y su exportación exigen el mismo rol, y estas pruebas
+fallan si alguien vuelve a abrir una de las dos puertas sin la otra.
 """
 
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from fastapi.routing import APIRoute
 
 from app.core.deps import require_admin_supervisor_gerente, require_gerente
 from app.routers.reportes import router
+from app.services.exportacion_reportes import TIPOS_REPORTES_EXPORTABLES
+
+ROLES = ("admin", "gerente", "supervisor", "tecnico")
 
 
-RUTAS_SOLO_GERENCIA = [
-    "/reportes/resumen",
-    "/reportes/asistencia",
-    "/reportes/tareas-completadas",
-    "/reportes/productividad",
-]
+def _ruta(path: str) -> APIRoute:
+    return next(r for r in router.routes if r.path == path)
 
 
 def _dependencias_de(path: str):
-    ruta = next(r for r in router.routes if r.path == path)
-    return {dependencia.call for dependencia in ruta.dependant.dependencies}
+    return {dependencia.call for dependencia in _ruta(path).dependant.dependencies}
 
 
 def _usuario(rol: str):
     return SimpleNamespace(rol=rol, id_empleado=1)
 
 
-# ─── Los tres reportes JSON son de gerencia ───────────────────────────────────
+async def _roles_admitidos(path: str) -> set[str]:
+    """Qué roles pasan TODAS las dependencias de rol de la ruta."""
+    chequeos = [
+        dependencia.call
+        for dependencia in _ruta(path).dependant.dependencies
+        if getattr(dependencia.call, "__name__", "") == "_check"
+    ]
+    assert chequeos, f"{path} no tiene dependencia de rol"
+    admitidos = set()
+    for rol in ROLES:
+        try:
+            for chequeo in chequeos:
+                await chequeo(_usuario(rol))
+        except HTTPException:
+            continue
+        admitidos.add(rol)
+    return admitidos
 
-@pytest.mark.parametrize("path", RUTAS_SOLO_GERENCIA)
-def test_los_reportes_json_exigen_rol_de_gerencia(path):
-    assert require_gerente in _dependencias_de(path)
+
+# ─── Todo el módulo es de gerencia ───────────────────────────────────────────
+
+def test_todas_las_rutas_de_reportes_exigen_rol_de_gerencia():
+    rutas = [r.path for r in router.routes if isinstance(r, APIRoute)]
+    assert len(rutas) == 6  # 4 reportes + serie + exportación
+    for path in rutas:
+        assert require_gerente in _dependencias_de(path), path
+        # Si alguien cambia la dependencia por la amplia, esto lo señala.
+        assert require_admin_supervisor_gerente not in _dependencias_de(path), path
 
 
-@pytest.mark.parametrize("path", RUTAS_SOLO_GERENCIA)
-def test_los_reportes_json_no_se_abren_a_supervision(path):
-    # Si alguien cambia la dependencia por la amplia, este test lo señala.
-    assert require_admin_supervisor_gerente not in _dependencias_de(path)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tipo", TIPOS_REPORTES_EXPORTABLES)
+async def test_el_reporte_y_su_exportacion_admiten_exactamente_los_mismos_roles(tipo):
+    # DoD del Sprint 9: ningún par JSON/export con roles distintos.
+    json = await _roles_admitidos(f"/reportes/{tipo}")
+    exportacion = await _roles_admitidos("/reportes/{tipo}/exportar")
+    assert json == exportacion == {"admin", "gerente"}
+
+
+@pytest.mark.asyncio
+async def test_la_serie_temporal_es_de_gerencia():
+    assert await _roles_admitidos("/reportes/serie") == {"admin", "gerente"}
 
 
 @pytest.mark.asyncio
@@ -68,26 +95,3 @@ async def test_require_gerente_rechaza_al_resto(rol):
         await require_gerente(_usuario(rol))
 
     assert error.value.status_code == 403
-
-
-# ─── La exportación sí llega al supervisor ────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_el_supervisor_no_lee_el_json_pero_si_descarga_el_excel():
-    """
-    La asimetría completa, en una sola prueba.
-
-    Es la que sostiene el botón "Exportar reporte" del dashboard del
-    supervisor: si `/reportes/{tipo}/exportar` se cerrara a gerencia, ese
-    botón devolvería 403 y la pantalla quedaría con un error sin explicación.
-    """
-    supervisor = _usuario("supervisor")
-
-    with pytest.raises(HTTPException) as error:
-        await require_gerente(supervisor)
-    assert error.value.status_code == 403
-
-    assert await require_admin_supervisor_gerente(supervisor) is supervisor
-    assert require_admin_supervisor_gerente in _dependencias_de(
-        "/reportes/{tipo}/exportar"
-    )

@@ -1,5 +1,5 @@
 /* ============================================================
-   ModalExportarReporte — qué reporte, de qué fechas y de quién
+   ModalExportarReporte — qué reporte bajar, con los filtros de la pantalla
    ============================================================ */
 
 .bloque {
@@ -65,85 +65,28 @@
   color: var(--color-text-secondary);
 }
 
-/* ── Periodo ───────────────────────────────────────────── */
+/* ── Filtros heredados de la pantalla ──────────────────── */
 
-.atajos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.atajo {
-  padding: 7px 14px;
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.atajo:hover {
-  border-color: var(--color-border-hover);
-  color: var(--color-text);
-}
-
-.atajoActivo {
-  background: var(--gradient-primary);
-  border-color: transparent;
-  color: #fff;
-}
-
-.fechas {
+.filtros {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
-
-@media (max-width: 480px) {
-  .fechas { grid-template-columns: 1fr; }
-}
-
-.campo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.campo input,
-.select {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px var(--space-4);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
-  color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  font-weight: 400;
-  transition: var(--transition);
+  font-size: 0.875rem;
 }
 
-.campo input:focus,
-.select:focus {
-  outline: none;
-  border-color: var(--color-primary, #1e88e5);
-  box-shadow: var(--shadow-primary-sm);
-}
-
-.error {
-  margin: var(--space-3) 0 0;
-  font-size: 0.8125rem;
+.filtros dt {
   font-weight: 600;
-  color: var(--color-danger);
+  color: var(--color-text-secondary);
+}
+
+.filtros dd {
+  margin: 0;
+  color: var(--color-text);
 }
 
 .nota {

@@ -209,6 +209,69 @@ vi.mock('../api/client', () => ({
           },
         }
       }
+      // Pantalla de reportes (HU-S9-04).
+      if (url.startsWith('/reportes/resumen')) {
+        return {
+          data: {
+            fecha_inicio: '2026-07-01',
+            fecha_fin: '2026-07-28',
+            total_empleados: 1,
+            total_jornadas: 18,
+            total_jornadas_abiertas: 0,
+            total_minutos_trabajados: 8640,
+            total_horas_trabajadas: '144:00',
+            total_descansos: 20,
+            total_minutos_descanso: 900,
+            total_horas_descanso: '15:00',
+            total_tareas_completadas: 36,
+            tareas_por_hora: 0.25,
+            items: [
+              {
+                id_empleado: 2,
+                nombre_empleado: 'Juan Pérez',
+                jornadas: 18,
+                jornadas_abiertas: 0,
+                minutos_trabajados: 8640,
+                horas_trabajadas: '144:00',
+                descansos: 20,
+                minutos_descanso: 900,
+                horas_descanso: '15:00',
+                tareas_completadas: 36,
+                tareas_por_hora: 0.25,
+              },
+            ],
+          },
+        }
+      }
+      if (url.startsWith('/reportes/productividad')) {
+        return {
+          data: {
+            items: [
+              {
+                id_empleado: 2,
+                nombre_empleado: 'Juan Pérez',
+                tareas_por_hora: 0.25,
+                tareas_completadas: 36,
+                horas_trabajadas: '144:00',
+              },
+            ],
+          },
+        }
+      }
+      if (url.startsWith('/reportes/serie')) {
+        return {
+          data: {
+            metrica: 'horas',
+            agrupar: 'dia',
+            unidad: 'horas',
+            total: 16,
+            puntos: [
+              { inicio: '2026-07-27', fin: '2026-07-27', valor: 8 },
+              { inicio: '2026-07-28', fin: '2026-07-28', valor: 8 },
+            ],
+          },
+        }
+      }
       if (url.startsWith('/empleados/tecnicos/disponibles')) {
         return {
           data: [
@@ -306,9 +369,17 @@ describe('Pantallas del supervisor', () => {
     const { container } = renderizar(DashboardPage)
     await esperarContenido(container)
     expect(await screen.findByText('Panel de control')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /Exportar reporte/i })
-    ).toBeInTheDocument()
+    // La exportación se mudó a Reportes (HU-S9-04): el supervisor ya no la ve.
+    expect(screen.queryByRole('button', { name: /Exportar reporte/i })).not.toBeInTheDocument()
+  })
+
+  it('ReportesPage muestra indicadores, tendencia y el resumen por empleado', async () => {
+    const { default: ReportesPage } = await import('../pages/ReportesPage')
+    const { container } = renderizar(ReportesPage)
+    await esperarContenido(container)
+    expect(await screen.findByText('Juan Pérez', { selector: 'td' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Reportes' })).toBeInTheDocument()
+    expect(screen.getByText('Tareas completadas', { selector: 'span' })).toBeInTheDocument()
   })
 
   it('ReasignacionPage muestra la lista de tareas', async () => {
