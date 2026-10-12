@@ -11,7 +11,7 @@ import pytest
 from fastapi import HTTPException
 from openpyxl import load_workbook
 
-from app.core.deps import require_admin_supervisor_gerente
+from app.core.deps import require_gerente
 from app.routers.reportes import exportar_reporte, router
 from app.schemas.reporte import (
     AsistenciaEmpleado,
@@ -33,7 +33,8 @@ FECHA_INICIO = date(2026, 8, 1)
 FECHA_FIN = date(2026, 8, 15)
 
 
-def test_ruta_exportacion_permite_roles_de_supervision():
+def test_ruta_exportacion_exige_el_mismo_rol_que_los_reportes():
+    # HU-S9-04 (agujero L): la descarga ya no es más permisiva que la consulta.
     ruta = next(
         ruta
         for ruta in router.routes
@@ -41,18 +42,14 @@ def test_ruta_exportacion_permite_roles_de_supervision():
     )
     dependencias = {dependencia.call for dependencia in ruta.dependant.dependencies}
 
-    assert require_admin_supervisor_gerente in dependencias
+    assert require_gerente in dependencias
 
 
 @pytest.mark.asyncio
-async def test_permiso_de_exportacion_acepta_supervisor_y_rechaza_tecnico():
-    supervisor = SimpleNamespace(rol="supervisor")
-    tecnico = SimpleNamespace(rol="tecnico")
-
-    assert await require_admin_supervisor_gerente(supervisor) is supervisor
-
+@pytest.mark.parametrize("rol", ["supervisor", "tecnico"])
+async def test_permiso_de_exportacion_rechaza_a_supervision_y_tecnicos(rol):
     with pytest.raises(HTTPException) as error:
-        await require_admin_supervisor_gerente(tecnico)
+        await require_gerente(SimpleNamespace(rol=rol))
 
     assert error.value.status_code == 403
 

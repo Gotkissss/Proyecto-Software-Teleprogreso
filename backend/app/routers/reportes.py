@@ -1,8 +1,10 @@
 """
 Router de Reportes — Teleprogreso S.A.
 
-Expone datos agregados por rango de fechas para gerencia. La descarga Excel
-tambien admite al supervisor para el acceso rapido desde su dashboard.
+Expone datos agregados por rango de fechas para gerencia (admin y gerente).
+Cada reporte en JSON y su descarga en Excel exigen el mismo rol: antes la
+exportación admitía también al supervisor, que así descargaba en un archivo
+los datos que no podía consultar (agujero L del Sprint 9).
 """
 
 from datetime import date
@@ -12,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import auditar_lectura, require_admin_supervisor_gerente, require_gerente
+from app.core.deps import auditar_lectura, require_gerente
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.reporte import (
@@ -181,10 +183,8 @@ async def get_reporte_productividad(
 )
 async def exportar_reporte(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _current_user: Annotated[
-        Empleado,
-        Depends(require_admin_supervisor_gerente),
-    ],
+    # El mismo rol que el reporte en JSON: nadie descarga lo que no puede ver.
+    _current_user: Annotated[Empleado, Depends(require_gerente)],
     tipo: str,
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,

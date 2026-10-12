@@ -20,7 +20,9 @@ async def test_rg03_reporte_asistencia_json_por_rol(cliente, siembra, rol, esper
 
 @pytest.mark.regresion
 @pytest.mark.asyncio
-@pytest.mark.parametrize("rol, esperado", [("tecnico", 403), ("supervisor", 200), ("gerente", 200)])
+# HU-S9-04 (agujero L): el Excel exige el mismo rol que el JSON; el supervisor
+# ya no descarga lo que no puede consultar.
+@pytest.mark.parametrize("rol, esperado", [("tecnico", 403), ("supervisor", 403), ("gerente", 200)])
 async def test_rg03_reporte_asistencia_excel_por_rol(cliente, siembra, rol, esperado):
     empleado = await siembra.empleado(rol)
 
