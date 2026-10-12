@@ -80,6 +80,14 @@ def _upload(nombre: str, contenido: bytes) -> UploadFile:
     return UploadFile(filename=nombre, file=io.BytesIO(contenido))
 
 
+# Primeros bytes reales de cada formato: la subida valida la firma del
+# archivo, no solo la extensión (T3 del Sprint 9).
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+WEBP = b"RIFF\x00\x00\x00\x00WEBPVP8 " + b"\x00" * 8
+GIF = b"GIF89a" + b"\x00" * 16
+
+
 # ─── Schema ──────────────────────────────────────────────────────────────────
 
 def test_descripcion_en_blanco_es_rechazada():
@@ -248,7 +256,7 @@ async def test_upload_foto_actualiza_la_incidencia(tmp_path, monkeypatch):
         5,
         db,
         _empleado(rol="supervisor", id_empleado=9),
-        file=_upload("evidencia.jpg", b"contenido-de-prueba"),
+        file=_upload("evidencia.jpg", JPEG),
     )
 
     assert respuesta.foto_evidencia.startswith("/static/incidencias/incidencia_5_")
@@ -274,7 +282,7 @@ async def test_subir_foto_con_finalizar_cierra_la_tarea(tmp_path, monkeypatch):
         5,
         db,
         _empleado(),  # el técnico asignado
-        file=_upload("evidencia.jpg", b"contenido"),
+        file=_upload("evidencia.jpg", JPEG),
         finalizar_tarea=True,
     )
 
@@ -296,7 +304,7 @@ async def test_subir_foto_sin_finalizar_no_toca_el_estado(tmp_path, monkeypatch)
 
     await upload_foto_evidencia(
         1, 5, db, _empleado(rol="supervisor", id_empleado=9),
-        file=_upload("evidencia.jpg", b"contenido"),
+        file=_upload("evidencia.jpg", JPEG),
     )
 
     assert tarea.estado_tarea == "en_progreso"
@@ -315,7 +323,7 @@ async def test_no_se_puede_finalizar_una_tarea_cancelada_al_subir_la_foto(
     with pytest.raises(HTTPException) as error:
         await upload_foto_evidencia(
             1, 5, db, _empleado(rol="admin"),
-            file=_upload("evidencia.jpg", b"contenido"),
+            file=_upload("evidencia.jpg", JPEG),
             finalizar_tarea=True,
         )
 
@@ -348,6 +356,54 @@ async def test_extension_no_permitida(tmp_path, monkeypatch):
 
     assert error.value.status_code == 400
     assert "no permitida" in error.value.detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "nombre, contenido",
+    [
+        ("pagina.jpg", b"<html><script>alert(1)</script></html>"),
+        ("foto.png", b"MZ\x90\x00 ejecutable renombrado"),
+        ("dibujo.gif", b"<svg xmlns='http://www.w3.org/2000/svg'/>"),
+    ],
+)
+async def test_un_archivo_que_no_es_imagen_se_rechaza_aunque_su_extension_lo_sea(
+    tmp_path, monkeypatch, nombre, contenido
+):
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    with pytest.raises(HTTPException) as error:
+        await guardar_imagen(_upload(nombre, contenido), subcarpeta="incidencias", prefijo="x")
+
+    assert error.value.status_code == 400
+    assert "no es una imagen" in error.value.detail
+    assert list(tmp_path.iterdir()) == []  # no se escribió nada
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "nombre, contenido, extension",
+    [("a.jpg", JPEG, ".jpg"), ("a.jpeg", JPEG, ".jpeg"), ("a.png", PNG, ".png"),
+     ("a.webp", WEBP, ".webp"), ("a.gif", GIF, ".gif")],
+)
+async def test_cada_formato_admitido_se_guarda_con_su_extension(
+    tmp_path, monkeypatch, nombre, contenido, extension
+):
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    url = await guardar_imagen(_upload(nombre, contenido), subcarpeta="incidencias", prefijo="x")
+    assert url.endswith(extension)
+
+
+@pytest.mark.asyncio
+async def test_si_la_extension_miente_se_guarda_con_la_del_contenido(tmp_path, monkeypatch):
+    import app.services.uploads as uploads
+    monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
+
+    url = await guardar_imagen(_upload("captura.jpg", PNG), subcarpeta="incidencias", prefijo="x")
+    assert url.endswith(".png")
 
 
 @pytest.mark.asyncio
@@ -388,13 +444,13 @@ async def test_la_imagen_anterior_se_elimina(tmp_path, monkeypatch):
     monkeypatch.setattr(uploads, "STATIC_ROOT", str(tmp_path))
 
     primera = await guardar_imagen(
-        _upload("a.jpg", b"primera"), subcarpeta="incidencias", prefijo="incidencia_1"
+        _upload("a.jpg", JPEG), subcarpeta="incidencias", prefijo="incidencia_1"
     )
     ruta_primera = os.path.join(str(tmp_path), primera.replace("/static/", "", 1))
     assert os.path.isfile(ruta_primera)
 
     segunda = await guardar_imagen(
-        _upload("b.png", b"segunda"),
+        _upload("b.png", PNG),
         subcarpeta="incidencias",
         prefijo="incidencia_1",
         url_anterior=primera,
