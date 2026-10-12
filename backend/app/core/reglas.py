@@ -190,3 +190,17 @@ TOLERANCIA_RELOJ_SEGUNDOS = 120
 # práctica coinciden casi siempre, porque POST /ubicaciones solo acepta puntos
 # con la jornada abierta.
 HORAS_UBICACION_RECIENTE = 8
+
+
+# ── Bitácora de auditoría (HU-S9-03) ─────────────────────────────────────────
+#
+# Una lectura sensible idéntica (mismo actor, misma ruta, mismos filtros) se
+# registra una vez por ventana. El mapa del supervisor repite
+# GET /ubicaciones/tecnicos cada 15 s: sin esto dejaría cuatro filas iguales
+# por minuto y la consulta de "quién miró qué" quedaría enterrada en ruido.
+SEGUNDOS_LECTURA_REPETIDA = 300
+
+# Tope de filas de una exportación a Excel de la bitácora. Por encima de esto
+# el archivo deja de ser manejable y se pide acotar el filtro (400), en vez de
+# entregar un archivo recortado que parezca completo.
+MAX_FILAS_EXPORTAR_BITACORA = 50_000

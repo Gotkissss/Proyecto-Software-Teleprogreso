@@ -28,6 +28,9 @@ def eventos_bitacora(monkeypatch):
         guardados.extend(eventos)
 
     monkeypatch.setattr("app.services.bitacora.guardar_eventos", _guardar)
+    # Las ventanas de "una vez por minuto" (bloqueos, lecturas repetidas) no
+    # deben arrastrarse de una prueba a otra.
+    monkeypatch.setattr("app.services.bitacora._ULTIMO_AVISO", {})
     return guardados
 
 
