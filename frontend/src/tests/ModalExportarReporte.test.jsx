@@ -1,3 +1,10 @@
+/**
+ * tests/ModalExportarReporte.test.jsx
+ * ---------------------------------------------------------------------------
+ * HU-S9-04: el Excel sale con los filtros de la pantalla de reportes (rango
+ * y persona seleccionada); en el diálogo solo se elige qué reporte bajar.
+ * ---------------------------------------------------------------------------
+ */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -13,118 +20,66 @@ vi.mock('../utils/exportarReportes', async (importOriginal) => {
 
 import ModalExportarReporte from '../components/reportes/ModalExportarReporte'
 
-// El componente calcula "hoy" con new Date(); se fija para que los rangos
-// sean comprobables.
-const HOY = new Date(2026, 7, 12)
+const FILTROS = { fecha_inicio: '2026-09-01', fecha_fin: '2026-09-30' }
 
 function montar(props = {}) {
-  return render(
-    <ModalExportarReporte
-      open
-      onClose={vi.fn()}
-      onExportado={vi.fn()}
-      onError={vi.fn()}
-      {...props}
-    />
-  )
+  const handlers = { onClose: vi.fn(), onExportado: vi.fn(), onError: vi.fn() }
+  render(<ModalExportarReporte open filtros={FILTROS} {...handlers} {...props} />)
+  return handlers
 }
 
 describe('ModalExportarReporte', () => {
   beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    vi.setSystemTime(HOY)
     exportarReporteMock.mockReset()
     exportarReporteMock.mockResolvedValue({ archivo: 'reporte.xlsx' })
   })
 
-  it('abre con el resumen operativo y el mes en curso', () => {
+  it('enseña los filtros que hereda de la pantalla y abre con el resumen', () => {
     montar()
-
-    expect(screen.getByLabelText(/Desde/i)).toHaveValue('2026-08-01')
-    expect(screen.getByLabelText(/Hasta/i)).toHaveValue('2026-08-12')
-    expect(screen.getByRole('radio', { name: /Resumen operativo/i })).toBeChecked()
+    expect(screen.getByText(/1 sept\.? – 30 sept\.? 2026/)).toBeInTheDocument()
+    expect(screen.getByText('Toda la plantilla')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Resumen operativo/ })).toBeChecked()
+    // Ya no pide fechas ni persona: eso lo decide la pantalla.
+    expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument()
   })
 
-  it('un atajo de periodo rellena las dos fechas', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    montar()
+  it('descarga el reporte elegido con el rango de la pantalla', async () => {
+    const usuario = userEvent.setup()
+    const { onExportado, onClose } = montar()
 
-    await user.click(screen.getByRole('button', { name: 'Hoy' }))
+    await usuario.click(screen.getByRole('radio', { name: /Productividad/ }))
+    await usuario.click(screen.getByRole('button', { name: 'Descargar Excel' }))
 
-    expect(screen.getByLabelText(/Desde/i)).toHaveValue('2026-08-12')
-    expect(screen.getByLabelText(/Hasta/i)).toHaveValue('2026-08-12')
-  })
-
-  it('descarga el reporte y el rango elegidos', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const onExportado = vi.fn()
-    const onClose = vi.fn()
-    montar({ onExportado, onClose })
-
-    await user.click(screen.getByRole('button', { name: 'Últimos 7 días' }))
-    await user.click(screen.getByRole('radio', { name: /Tareas completadas/i }))
-    await user.click(screen.getByRole('button', { name: /Descargar Excel/i }))
-
-    await waitFor(() =>
-      expect(exportarReporteMock).toHaveBeenCalledWith({
-        tipo: 'tareas-completadas',
-        fecha_inicio: '2026-08-06',
-        fecha_fin: '2026-08-12',
-        empleado: undefined,
-      })
-    )
-    expect(onExportado).toHaveBeenCalledWith('reporte.xlsx')
+    await waitFor(() => expect(onExportado).toHaveBeenCalledWith('reporte.xlsx'))
+    expect(exportarReporteMock).toHaveBeenCalledWith({
+      tipo: 'productividad',
+      fecha_inicio: '2026-09-01',
+      fecha_fin: '2026-09-30',
+      empleado: undefined,
+    })
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('no deja descargar con el rango invertido', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    montar()
+  it('si hay una persona seleccionada en la pantalla, el Excel sale solo de ella', async () => {
+    const usuario = userEvent.setup()
+    montar({ empleado: { id: 7, nombre: 'Ana López' } })
 
-    // El input tiene max/min, pero escribir a mano puede saltárselo.
-    await user.clear(screen.getByLabelText(/Hasta/i))
-    await user.type(screen.getByLabelText(/Hasta/i), '2026-07-01')
-
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      /no puede ser posterior/i
-    )
-    expect(screen.getByRole('button', { name: /Descargar Excel/i })).toBeDisabled()
-    expect(exportarReporteMock).not.toHaveBeenCalled()
-  })
-
-  it('manda el id de la persona seleccionada', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    montar({
-      empleados: [
-        { id: 7, nombre_completo: 'Ana Lopez' },
-        { id: 9, nombre_completo: 'Luis Perez' },
-      ],
-    })
-
-    await user.selectOptions(screen.getByRole('combobox'), '9')
-    await user.click(screen.getByRole('button', { name: /Descargar Excel/i }))
+    expect(screen.getByText('Ana López')).toBeInTheDocument()
+    await usuario.click(screen.getByRole('button', { name: 'Descargar Excel' }))
 
     await waitFor(() =>
-      expect(exportarReporteMock).toHaveBeenCalledWith(
-        expect.objectContaining({ empleado: '9' })
-      )
+      expect(exportarReporteMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'resumen', empleado: 7 }))
     )
   })
 
   it('avisa sin cerrarse cuando la descarga falla', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const onError = vi.fn()
-    const onClose = vi.fn()
-    exportarReporteMock.mockRejectedValue({
-      response: { data: { detail: 'Rango demasiado grande.' } },
-    })
-    montar({ onError, onClose })
+    const usuario = userEvent.setup()
+    exportarReporteMock.mockRejectedValue({ response: { data: { detail: 'Sin permiso' } } })
+    const { onError, onClose } = montar()
 
-    await user.click(screen.getByRole('button', { name: /Descargar Excel/i }))
+    await usuario.click(screen.getByRole('button', { name: 'Descargar Excel' }))
 
-    await waitFor(() =>
-      expect(onError).toHaveBeenCalledWith('Rango demasiado grande.')
-    )
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Sin permiso'))
     expect(onClose).not.toHaveBeenCalled()
   })
 })

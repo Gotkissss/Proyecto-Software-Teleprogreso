@@ -11,7 +11,6 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 const auth = vi.hoisted(() => ({ estado: {} }))
 
@@ -47,20 +46,18 @@ vi.mock('../pages/NuevaTareaPage', () => ({ default: () => <p>PANTALLA_REAL</p> 
 vi.mock('../pages/InventarioPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 vi.mock('../pages/CarroDetallePage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 vi.mock('../pages/BitacoraPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
+vi.mock('../pages/ReportesPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 
 import App from '../App'
-import ProtectedRoute from '../components/layout/ProtectedRoute'
 import {
   PERMISOS_RUTAS,
   ROLES,
   puedeAcceder,
-  rolesPermitidos,
 } from '../utils/permisos'
 
-/* Rutas de la tabla que todavía no están montadas en App.jsx.
-   /supervisor/reportes llega con la HU-S9-04 (ReportesPage). Cuando se monte,
-   quitarla de aquí para que el cableado real también la recorra. */
-const RUTAS_SIN_MONTAR = ['/supervisor/reportes']
+/* Rutas de la tabla que todavía no están montadas en App.jsx (hoy, ninguna:
+   /supervisor/reportes se montó con la HU-S9-04). */
+const RUTAS_SIN_MONTAR = []
 
 const TODOS_LOS_ROLES = Object.values(ROLES)
 const RUTAS_EN_APP = Object.keys(PERMISOS_RUTAS).filter((ruta) => !RUTAS_SIN_MONTAR.includes(ruta))
@@ -108,23 +105,8 @@ describe('permisos por ruta (casos de la HU-S9-01)', () => {
   })
 
   it('gerente → /supervisor/reportes entra', () => {
-    // La ruta se monta en la HU-S9-04; mientras tanto se prueba con la misma
-    // tabla y el mismo ProtectedRoute que usará App.jsx.
     conRol(ROLES.GERENTE)
-    render(
-      <MemoryRouter initialEntries={['/supervisor/reportes']}>
-        <Routes>
-          <Route
-            path="/supervisor/reportes"
-            element={
-              <ProtectedRoute roles={rolesPermitidos('/supervisor/reportes')}>
-                <p>PANTALLA_REAL</p>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
-    )
+    irA('/supervisor/reportes')
     esperarPantalla()
   })
 
@@ -153,20 +135,7 @@ describe('permisos por ruta (casos de la HU-S9-01)', () => {
 
 describe('reportes: solo admin y gerente', () => {
   function montarReportes() {
-    return render(
-      <MemoryRouter initialEntries={['/supervisor/reportes']}>
-        <Routes>
-          <Route
-            path="/supervisor/reportes"
-            element={
-              <ProtectedRoute roles={rolesPermitidos('/supervisor/reportes')}>
-                <p>PANTALLA_REAL</p>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
-    )
+    return irA('/supervisor/reportes')
   }
 
   it.each([ROLES.ADMIN, ROLES.GERENTE])('%s entra', (rol) => {

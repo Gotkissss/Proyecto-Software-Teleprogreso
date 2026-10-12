@@ -42,7 +42,8 @@ export const PERMISOS_RUTAS = Object.freeze({
 const RUTA_INICIAL = Object.freeze({
   [ROLES.ADMIN]: '/supervisor/dashboard',
   [ROLES.SUPERVISOR]: '/supervisor/dashboard',
-  [ROLES.GERENTE]: '/supervisor/mapa',
+  // HU-S9-04: el gerente entra directo a sus reportes.
+  [ROLES.GERENTE]: '/supervisor/reportes',
   [ROLES.TECNICO]: '/ruta',
 })
 

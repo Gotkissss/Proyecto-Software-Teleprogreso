@@ -1,90 +1,55 @@
 /**
  * components/reportes/ModalExportarReporte.jsx
  * ---------------------------------------------------------------------------
- * Diálogo de descarga de reportes: qué reporte, de qué fechas y de quién.
+ * Diálogo de descarga de reportes en Excel, abierto desde la pantalla de
+ * reportes (HU-S9-04).
  *
- * El botón "Exportar reporte" del dashboard bajaba siempre lo mismo — la
- * asistencia del mes en curso — porque el rango se calculaba dentro de la
- * función de descarga y el tipo estaba fijo. El backend ya aceptaba rango y
- * tres reportes más; lo que faltaba era pedirle al usuario esos datos.
- *
- * Reglas de la pantalla:
- *   - Un atajo de fecha ("Hoy", "Este mes"...) rellena las dos fechas; tocar
- *     una fecha a mano cambia el periodo a "Personalizado".
- *   - No se permite descargar con el rango invertido. El backend también lo
- *     rechaza con 400, pero avisar aquí evita la ida y vuelta.
- *   - El filtro por persona solo se ofrece si el padre pasó la lista; sin
- *     ella, el reporte sale de toda la plantilla.
+ * Antes vivía en el panel del supervisor y volvía a pedir fechas y persona.
+ * Ahora el archivo sale con los MISMOS filtros que la pantalla está
+ * mostrando (rango y, si hay una seleccionada, la persona): lo único que se
+ * elige aquí es qué reporte bajar. Así lo que se descarga es lo que se ve.
  * ---------------------------------------------------------------------------
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
 import Spinner from '../ui/Spinner'
-import {
-  RANGOS_RAPIDOS,
-  REPORTES,
-  exportarReporte,
-  rangoRapido,
-} from '../../utils/exportarReportes'
+import { REPORTES, exportarReporte } from '../../utils/exportarReportes'
+import { textoRango } from '../../utils/reportes'
 import styles from './ModalExportarReporte.module.css'
 
-const RANGO_POR_DEFECTO = 'mes'
-
+/**
+ * @param {Object} props
+ * @param {boolean} props.open
+ * @param {Function} props.onClose
+ * @param {{fecha_inicio:string, fecha_fin:string}} props.filtros - rango de la pantalla
+ * @param {{id:number, nombre:string}|null} [props.empleado] - persona seleccionada, si hay
+ * @param {Function} [props.onExportado] - recibe el nombre del archivo
+ * @param {Function} [props.onError] - recibe el mensaje
+ */
 export default function ModalExportarReporte({
   open,
   onClose,
-  empleados = [],
+  filtros,
+  empleado = null,
   onExportado,
   onError,
 }) {
   const [tipo, setTipo] = useState(REPORTES[0].tipo)
-  const [periodo, setPeriodo] = useState(RANGO_POR_DEFECTO)
-  const [fechas, setFechas] = useState(() => rangoRapido(RANGO_POR_DEFECTO))
-  const [empleado, setEmpleado] = useState('')
   const [descargando, setDescargando] = useState(false)
 
-  // Al reabrir, el diálogo vuelve a su estado inicial: si alguien descargó
-  // "el mes pasado de Ana", lo natural al volver a abrir no es repetir eso.
+  // Al reabrir vuelve al resumen: es el reporte que más se pide.
   useEffect(() => {
-    if (!open) return
-    setTipo(REPORTES[0].tipo)
-    setPeriodo(RANGO_POR_DEFECTO)
-    setFechas(rangoRapido(RANGO_POR_DEFECTO))
-    setEmpleado('')
+    if (open) setTipo(REPORTES[0].tipo)
   }, [open])
 
-  const reporte = useMemo(
-    () => REPORTES.find((item) => item.tipo === tipo) ?? REPORTES[0],
-    [tipo]
-  )
-
-  const rangoInvertido = Boolean(
-    fechas.fecha_inicio &&
-    fechas.fecha_fin &&
-    fechas.fecha_inicio > fechas.fecha_fin
-  )
-  const faltanFechas = !fechas.fecha_inicio || !fechas.fecha_fin
-
-  const aplicarRangoRapido = (clave) => {
-    setPeriodo(clave)
-    setFechas(rangoRapido(clave))
-  }
-
-  const cambiarFecha = (campo, valor) => {
-    setPeriodo('personalizado')
-    setFechas((previas) => ({ ...previas, [campo]: valor }))
-  }
-
   const handleDescargar = async () => {
-    if (rangoInvertido || faltanFechas) return
-
     setDescargando(true)
     try {
       const { archivo } = await exportarReporte({
         tipo,
-        fecha_inicio: fechas.fecha_inicio,
-        fecha_fin: fechas.fecha_fin,
-        empleado: empleado || undefined,
+        fecha_inicio: filtros.fecha_inicio,
+        fecha_fin: filtros.fecha_fin,
+        empleado: empleado?.id,
       })
       onExportado?.(archivo)
       onClose?.()
@@ -101,6 +66,13 @@ export default function ModalExportarReporte({
 
   return (
     <Modal open={open} onClose={onClose} title="Exportar reporte" width={560}>
+      <dl className={styles.filtros}>
+        <dt>Periodo</dt>
+        <dd>{textoRango(filtros)}</dd>
+        <dt>Persona</dt>
+        <dd>{empleado ? empleado.nombre : 'Toda la plantilla'}</dd>
+      </dl>
+
       <fieldset className={styles.bloque}>
         <legend className={styles.legend}>Reporte</legend>
         <div className={styles.opciones}>
@@ -125,72 +97,10 @@ export default function ModalExportarReporte({
         </div>
       </fieldset>
 
-      <fieldset className={styles.bloque}>
-        <legend className={styles.legend}>Periodo</legend>
-        <div className={styles.atajos}>
-          {RANGOS_RAPIDOS.map((rango) => (
-            <button
-              key={rango.clave}
-              type="button"
-              className={`${styles.atajo} ${periodo === rango.clave ? styles.atajoActivo : ''}`}
-              onClick={() => aplicarRangoRapido(rango.clave)}
-            >
-              {rango.etiqueta}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.fechas}>
-          <label className={styles.campo}>
-            <span>Desde</span>
-            <input
-              type="date"
-              value={fechas.fecha_inicio ?? ''}
-              max={fechas.fecha_fin || undefined}
-              onChange={(e) => cambiarFecha('fecha_inicio', e.target.value)}
-            />
-          </label>
-          <label className={styles.campo}>
-            <span>Hasta</span>
-            <input
-              type="date"
-              value={fechas.fecha_fin ?? ''}
-              min={fechas.fecha_inicio || undefined}
-              onChange={(e) => cambiarFecha('fecha_fin', e.target.value)}
-            />
-          </label>
-        </div>
-
-        {rangoInvertido && (
-          <p className={styles.error} role="alert">
-            La fecha inicial no puede ser posterior a la final.
-          </p>
-        )}
-      </fieldset>
-
-      {empleados.length > 0 && (
-        <fieldset className={styles.bloque}>
-          <legend className={styles.legend}>
-            {reporte.filtro === 'tecnico' ? 'Técnico' : 'Empleado'}
-          </legend>
-          <select
-            className={styles.select}
-            value={empleado}
-            onChange={(e) => setEmpleado(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {empleados.map((persona) => (
-              <option key={persona.id} value={persona.id}>
-                {persona.nombre_completo}
-              </option>
-            ))}
-          </select>
-        </fieldset>
-      )}
-
       <p className={styles.nota}>
-        Se descarga un archivo Excel (.xlsx) con una fila por persona y una
-        fila de totales al final.
+        Se descarga un archivo Excel (.xlsx) con los filtros que tienes en la
+        pantalla: una fila por persona y una fila de totales al final. Para
+        otro periodo, cámbialo en la pantalla antes de exportar.
       </p>
 
       <ModalActions>
@@ -206,7 +116,7 @@ export default function ModalExportarReporte({
           type="button"
           className={styles.btnPrimario}
           onClick={handleDescargar}
-          disabled={descargando || rangoInvertido || faltanFechas}
+          disabled={descargando}
         >
           {descargando
             ? <><Spinner size="sm" color="white" /> Generando...</>

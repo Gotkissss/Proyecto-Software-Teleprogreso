@@ -77,6 +77,14 @@ const IconHistorialTareas = () => (
   </svg>
 )
 
+const IconReportes = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+)
+
 const IconBitacora = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -115,6 +123,8 @@ const NAV_GROUPS = [
       // HU-165: mapa del equipo, con tareas agrupadas por técnico.
       { to: '/supervisor/mapa',      label: 'Mapa',    Icon: IconMapa },
       { to: '/supervisor/alertas',   label: 'Alertas', Icon: IconAlertas, badgeKey: 'alertas' },
+      // HU-S9-04: solo admin y gerente (la tabla de utils/permisos.js filtra).
+      { to: '/supervisor/reportes',  label: 'Reportes', Icon: IconReportes },
     ],
   },
   {

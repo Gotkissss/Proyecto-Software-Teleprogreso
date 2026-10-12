@@ -1,0 +1,204 @@
+/* ============================================================
+   Graficos.module.css — tendencia y productividad (HU-S9-04)
+   Marcas finas, ejes y rejilla discretos: el dato es lo único
+   que llama la atención. Una sola serie, color primario.
+   ============================================================ */
+
+.grafico {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.herramientas {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.enlace {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.enlace:hover {
+  text-decoration: underline;
+}
+
+.lienzo {
+  position: relative;
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  overflow: visible;
+}
+
+.svg:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.rejilla {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.ejeTexto {
+  fill: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Línea de tendencia ─────────────────────────────────── */
+.area {
+  fill: var(--color-primary);
+  opacity: 0.1;
+}
+
+.linea {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Punto con anillo del color de la superficie, legible sobre la línea. */
+.punto {
+  fill: var(--color-primary);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.valorFinal {
+  fill: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cursor {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+}
+
+/* ── Barras ─────────────────────────────────────────────── */
+.barraGrupo {
+  cursor: pointer;
+  outline: none;
+}
+
+.barra {
+  fill: var(--color-primary);
+  transition: opacity 150ms ease;
+}
+
+.barraGrupo:hover .barra,
+.barraGrupo:focus-visible .barra {
+  opacity: 0.8;
+}
+
+.barraGrupo:focus-visible .ejeTexto {
+  fill: var(--color-text);
+  font-weight: 700;
+}
+
+.atenuada .barra {
+  opacity: 0.3;
+}
+
+.valorBarra {
+  fill: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Recuadro al pasar el puntero ───────────────────────── */
+.tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tooltipValor {
+  font-size: 0.9375rem;
+  color: var(--color-text);
+}
+
+.tooltipEtiqueta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Estados y vista en tabla ───────────────────────────── */
+.vacio {
+  margin: 0;
+  padding: var(--space-6) 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.tablaWrap {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tablaDatos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.tablaDatos th,
+.tablaDatos td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tablaDatos th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.numero {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

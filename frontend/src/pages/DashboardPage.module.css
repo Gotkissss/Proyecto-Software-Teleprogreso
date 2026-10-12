@@ -72,19 +72,8 @@
   padding-left: var(--space-4);
 }
 
-.exportarBtn {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.exportarBtn svg {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
 @media (max-width: 560px) {
   .pageHeader { flex-direction: column; align-items: stretch; }
-  .exportarBtn { width: 100%; justify-content: center; }
 }
 
 /* ── Centro / loading ─────────────────────────────────────── */
