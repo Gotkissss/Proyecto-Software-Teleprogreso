@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     # Base de datos
     DATABASE_URL: str
     DATABASE_URL_SYNC: str
+    # Conexión (síncrona, psycopg2) con la que se migra y se purga. Debe ser
+    # la del propietario del esquema (POSTGRES_USER), no la del rol de la app:
+    # así la bitácora queda de un dueño distinto al que la escribe y el rol de
+    # la app no puede desactivar sus triggers ni vaciarla. Vacía = se usa
+    # DATABASE_URL_SYNC, como antes (despliegues con un solo usuario).
+    DATABASE_URL_MIGRACIONES: str = ""
+
+    # ── Retención de datos (mantenimiento.py purgar) ─────────────────────────
+    # Días que se conservan la bitácora de auditoría y los puntos GPS de los
+    # técnicos. La purga de la bitácora deja un ancla para no romper la cadena.
+    RETENCION_BITACORA_DIAS: int = 90
+    RETENCION_UBICACIONES_DIAS: int = 90
 
     # ── Pool y límites de la conexión a Postgres ─────────────────────────────
     # Un pool acotado evita que una avalancha de peticiones abra cientos de
@@ -108,12 +120,40 @@ class Settings(BaseSettings):
     # restricción; en producción se exige que esté definido.
     ALLOWED_HOSTS: Union[List[str], str] = []
 
-    @field_validator("DATABASE_URL", "DATABASE_URL_SYNC", "SECRET_KEY", "ALGORITHM", mode="before")
+    @field_validator(
+        "DATABASE_URL", "DATABASE_URL_SYNC", "DATABASE_URL_MIGRACIONES", "SECRET_KEY", "ALGORITHM",
+        mode="before",
+    )
     @classmethod
     def strip_str(cls, v):
         # Los .env editados en Windows pueden dejar \r al final de cada
         # valor (CRLF); python-jose rechaza un SECRET_KEY con \r.
         return v.strip() if isinstance(v, str) else v
+
+    @field_validator("RETENCION_BITACORA_DIAS", "RETENCION_UBICACIONES_DIAS")
+    @classmethod
+    def retencion_minima(cls, v: int) -> int:
+        # Con 0 la purga se llevaría todo lo de hoy, incluida la evidencia de
+        # un incidente que se está investigando.
+        if v < 1:
+            raise ValueError("La retención debe ser de al menos 1 día.")
+        return v
+
+    @property
+    def url_migraciones(self) -> str:
+        """URL síncrona del propietario del esquema (o la de la app si no hay)."""
+        return self.DATABASE_URL_MIGRACIONES or self.DATABASE_URL_SYNC
+
+    @property
+    def url_migraciones_async(self) -> str:
+        """La misma conexión del propietario, con el driver asíncrono (la usa seed.py)."""
+        if not self.DATABASE_URL_MIGRACIONES:
+            return self.DATABASE_URL
+        from sqlalchemy.engine import make_url
+
+        return make_url(self.DATABASE_URL_MIGRACIONES).set(
+            drivername="postgresql+asyncpg"
+        ).render_as_string(hide_password=False)
 
     @field_validator("ALGORITHM")
     @classmethod

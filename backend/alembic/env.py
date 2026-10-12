@@ -16,8 +16,10 @@ from app.db.base import Base  # noqa: F401
 
 config = context.config
 
-# Sobreescribir la URL con la variable de entorno
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+# Sobreescribir la URL con la variable de entorno. Se migra con el propietario
+# del esquema (DATABASE_URL_MIGRACIONES) cuando está definido: el rol de la app
+# no crea tablas ni es dueño de la bitácora (ver migración 0010).
+config.set_main_option("sqlalchemy.url", settings.url_migraciones.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

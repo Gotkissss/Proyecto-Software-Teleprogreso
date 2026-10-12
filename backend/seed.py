@@ -79,8 +79,11 @@ from app.models.ubicacion import UbicacionEmpleado
 # lo que hace reproducibles las capturas y las pruebas manuales.
 random.seed(2026)
 
-# Motor de base de datos
-engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
+# Motor de base de datos. Sembrar es parte del aprovisionamiento, como migrar:
+# se hace con el propietario del esquema si DATABASE_URL_MIGRACIONES está
+# definida (el rol de la app no puede hacer TRUNCATE ... RESTART IDENTITY sobre
+# secuencias que no son suyas).
+engine = create_async_engine(settings.url_migraciones_async, echo=False, future=True)
 AsyncSessionLocal = async_sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
@@ -540,12 +543,15 @@ async def resetear_base_de_datos(db: AsyncSession) -> None:
     idéntico al de una base recién creada.
 
     `alembic_version` se excluye a propósito: es metadata de migraciones, no
-    dato de la operación.
+    dato de la operación. La bitácora de auditoría y sus anclas también: son
+    de solo inserción (la base rechaza el TRUNCATE) y resembrar los datos de
+    demostración no borra el registro de lo que se hizo.
     """
     tablas = [
         tabla.name
         for tabla in Base.metadata.sorted_tables
         if tabla.name != "alembic_version"
+        and not tabla.info.get("solo_insercion")
     ]
 
     if not tablas:
