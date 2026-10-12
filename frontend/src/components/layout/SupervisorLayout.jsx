@@ -77,6 +77,14 @@ const IconHistorialTareas = () => (
   </svg>
 )
 
+const IconBitacora = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <line x1="9" y1="10" x2="15" y2="10" />
+    <line x1="9" y1="14" x2="13" y2="14" />
+  </svg>
+)
+
 const IconMenu = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="3" y1="6" x2="21" y2="6" />
@@ -127,6 +135,8 @@ const NAV_GROUPS = [
       // quedaba sin el contexto del empleado que estaba consultando.
       { to: '/supervisor/empleados',  label: 'Empleados',  Icon: IconEmpleados },
       { to: '/supervisor/inventario', label: 'Inventario', Icon: IconInventario },
+      // HU-S9-03: solo el admin la ve (la tabla de utils/permisos.js filtra).
+      { to: '/supervisor/bitacora',   label: 'Bitácora',   Icon: IconBitacora },
     ],
   },
 ]

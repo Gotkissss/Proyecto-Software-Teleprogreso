@@ -115,7 +115,7 @@ export function rangoRapido(clave, referencia = new Date()) {
 }
 
 /** Obtiene el nombre sugerido por el backend cuando CORS expone el header. */
-function nombreDesdeContentDisposition(valor) {
+export function nombreDesdeContentDisposition(valor) {
   if (!valor) return null
 
   const coincidencia = valor.match(/filename="?([^";]+)"?/i)
@@ -123,7 +123,7 @@ function nombreDesdeContentDisposition(valor) {
 }
 
 /** Dispara la descarga sin navegar fuera de la página. */
-function descargarArchivo(contenido, nombreArchivo) {
+export function descargarArchivo(contenido, nombreArchivo) {
   const blob = contenido instanceof Blob
     ? contenido
     : new Blob([contenido], { type: MIME_XLSX })

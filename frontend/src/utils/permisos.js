@@ -7,6 +7,7 @@ export const ROLES = Object.freeze({
   TECNICO: 'tecnico',
 })
 
+const REQUIRE_ADMIN = Object.freeze([ROLES.ADMIN])
 const REQUIRE_ADMIN_SUPERVISOR_GERENTE = Object.freeze([ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.GERENTE])
 const REQUIRE_SUPERVISOR = Object.freeze([ROLES.ADMIN, ROLES.SUPERVISOR])
 const REQUIRE_GERENTE = Object.freeze([ROLES.ADMIN, ROLES.GERENTE])
@@ -34,6 +35,8 @@ export const PERMISOS_RUTAS = Object.freeze({
   '/supervisor/historial-tareas': REQUIRE_ADMIN_SUPERVISOR_GERENTE,
   '/supervisor/perfil': REQUIRE_ADMIN_SUPERVISOR_GERENTE,
   '/supervisor/reportes': REQUIRE_GERENTE,
+  // HU-S9-03: GET /auditoria/* es require_admin.
+  '/supervisor/bitacora': REQUIRE_ADMIN,
 })
 
 const RUTA_INICIAL = Object.freeze({

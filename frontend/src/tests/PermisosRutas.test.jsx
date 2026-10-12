@@ -46,6 +46,7 @@ vi.mock('../pages/EmpleadosPage', () => ({ default: () => <p>PANTALLA_REAL</p> }
 vi.mock('../pages/NuevaTareaPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 vi.mock('../pages/InventarioPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 vi.mock('../pages/CarroDetallePage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
+vi.mock('../pages/BitacoraPage', () => ({ default: () => <p>PANTALLA_REAL</p> }))
 
 import App from '../App'
 import ProtectedRoute from '../components/layout/ProtectedRoute'
