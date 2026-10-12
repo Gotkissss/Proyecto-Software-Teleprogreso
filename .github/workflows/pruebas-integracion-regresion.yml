@@ -48,6 +48,10 @@ jobs:
           echo "SECRET_KEY=$clave" >> "$GITHUB_ENV"
       - name: Aplicar migraciones
         run: alembic upgrade head
+      # DoD del Sprint 9: toda migración se prueba en los dos sentidos. Se baja
+      # hasta antes de la bitácora (0009 y 0010) y se vuelve a subir.
+      - name: Migraciones ida y vuelta
+        run: alembic downgrade 0008 && alembic upgrade head
       - name: Pruebas de integracion
         run: python -m pytest -m integracion -v -rs --junitxml=reportes/integracion.xml
       - name: Pruebas de regresion
