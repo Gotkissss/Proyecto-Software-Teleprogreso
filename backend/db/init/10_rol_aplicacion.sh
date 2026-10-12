@@ -18,6 +18,12 @@
 #   4. Le pone un techo de conexiones y timeouts, para que un cliente colgado
 #      no pueda agotar el pool ni dejar transacciones abiertas bloqueando
 #      tablas indefinidamente.
+#   5. NO le deja crear objetos: las migraciones las aplica el propietario del
+#      esquema ($POSTGRES_USER, servicio `migraciones` de docker-compose), y el
+#      rol de la app solo recibe permisos de datos sobre lo que él cree. Así la
+#      app nunca es dueña de una tabla, y la bitácora de auditoría (migración
+#      0010) queda para ella en solo SELECT e INSERT: no puede desactivar sus
+#      triggers, modificarla ni vaciarla.
 #
 # Es OPCIONAL y con fallback: si no se define APP_DB_USER en el .env, el script
 # no hace nada y el backend sigue conectando con el usuario de siempre. Así
@@ -75,13 +81,22 @@ psql -v ON_ERROR_STOP=1 \
     REVOKE ALL ON DATABASE :"app_db" FROM PUBLIC;
     GRANT CONNECT, TEMPORARY ON DATABASE :"app_db" TO :"app_user";
 
-    -- Permisos dentro del esquema de trabajo. El rol necesita CREATE porque
-    -- es quien aplica las migraciones de Alembic; no necesita nada más.
+    -- Permisos dentro del esquema de trabajo: usarlo, no crear en él. Las
+    -- migraciones de Alembic las aplica el propietario, no este rol.
     REVOKE ALL ON SCHEMA public FROM PUBLIC;
-    GRANT USAGE, CREATE ON SCHEMA public TO :"app_user";
+    GRANT USAGE ON SCHEMA public TO :"app_user";
 
     -- Objetos que ya existan (extensiones instaladas antes que este script).
     GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"app_user";
+
+    -- Lo que creen las migraciones (como el propietario, que es quien corre
+    -- este script) nace con permisos de datos para la app. TRUNCATE lo usa
+    -- `seed.py --reset`. La migración 0010 recorta la bitácora a SELECT e
+    -- INSERT.
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+        GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO :"app_user";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+        GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"app_user";
 EOSQL
 
 # Las bases de servicio quedan fuera del alcance del rol de la aplicación: sin

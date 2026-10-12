@@ -1,0 +1,134 @@
+"""
+mantenimiento.py — Tareas de mantenimiento de datos de Teleprogreso S.A.
+-----------------------------------------------------------------------------
+Uso (desde backend/):
+
+    python mantenimiento.py purgar               # retención de datos
+    python mantenimiento.py verificar-bitacora   # integridad de la auditoría
+
+`purgar` borra, cada uno en su propia transacción:
+
+  1. Tokens revocados que ya expiraron (antes solo se purgaban cuando alguien
+     hacía logout).
+  2. Puntos GPS de los técnicos (`ubicacion_empleado`) más viejos que
+     RETENCION_UBICACIONES_DIAS (90 por defecto).
+  3. Filas de la bitácora más viejas que RETENCION_BITACORA_DIAS (90 por
+     defecto), con bitacora_auditoria_purgar(): borra solo un prefijo de la
+     cadena y deja un ancla para que la verificación siga cuadrando.
+
+Cada purga que borra algo deja su fila en la bitácora (rol 'sistema', con un
+request_id `mantenimiento-…` común a toda la ejecución).
+
+Se conecta con DATABASE_URL_MIGRACIONES (el propietario del esquema) si está
+definida: la bitácora solo la puede purgar su propietario, nunca el rol de la
+app. Se ejecuta en cada arranque (servicio `migraciones` de docker-compose y
+CMD del Dockerfile); para que la retención no dependa de los despliegues,
+prográmalo además una vez al día (ver README, "Mantenimiento").
+
+`verificar-bitacora` recorre la cadena completa y termina con código 1 si
+está rota, indicando la primera fila que no cuadra y por qué.
+
+Ambos terminan con código 0 si todo fue bien y 1 si algo falló.
+-----------------------------------------------------------------------------
+"""
+import sys
+import uuid
+from datetime import timedelta
+
+from sqlalchemy import create_engine, delete
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.core.config import settings
+from app.core.security import sentencia_purga_tokens
+from app.core.tiempo import ahora as ahora_local
+from app.models.ubicacion import UbicacionEmpleado
+from app.services import auditoria
+from app.services.bitacora import insertar, registro_sistema
+
+
+def _motor():
+    return create_engine(settings.url_migraciones, pool_pre_ping=True)
+
+
+def _purgar_tokens(conexion, request_id: str) -> str:
+    filas = conexion.execute(sentencia_purga_tokens()).rowcount or 0
+    if filas:
+        insertar(
+            conexion,
+            registro_sistema("purgar", "token_revocado", {"filas": filas, "criterio": "expirados"}, request_id),
+        )
+    return f"token_revocado: {filas} filas expiradas"
+
+
+def _purgar_ubicaciones(conexion, request_id: str) -> str:
+    dias = settings.RETENCION_UBICACIONES_DIAS
+    # fecha_hora_registro se guarda en hora local sin zona (core/tiempo.py).
+    limite = ahora_local() - timedelta(days=dias)
+    filas = conexion.execute(
+        delete(UbicacionEmpleado).where(UbicacionEmpleado.fecha_hora_registro < limite)
+    ).rowcount or 0
+    if filas:
+        insertar(
+            conexion,
+            registro_sistema(
+                "purgar",
+                "ubicacion_empleado",
+                {"filas": filas, "retencion_dias": dias, "antes_de": limite.isoformat()},
+                request_id,
+            ),
+        )
+    return f"ubicacion_empleado: {filas} puntos con más de {dias} días"
+
+
+def _purgar_bitacora(conexion, request_id: str) -> str:
+    dias = settings.RETENCION_BITACORA_DIAS
+    filas, hasta = auditoria.purgar_sync(conexion, dias, request_id)
+    detalle = f" (hasta la fila #{hasta}, ancla registrada)" if filas else ""
+    return f"bitacora_auditoria: {filas} filas con más de {dias} días{detalle}"
+
+
+def purgar() -> int:
+    request_id = f"mantenimiento-{uuid.uuid4().hex[:16]}"
+    motor = _motor()
+    fallos = 0
+    try:
+        for paso in (_purgar_tokens, _purgar_ubicaciones, _purgar_bitacora):
+            try:
+                with motor.begin() as conexion:
+                    print(f"[mantenimiento] {paso(conexion, request_id)}")
+            except SQLAlchemyError as error:
+                fallos += 1
+                causa = getattr(error, "orig", error)
+                print(f"[mantenimiento] ERROR en {paso.__name__}: {causa}", file=sys.stderr)
+    finally:
+        motor.dispose()
+    return 1 if fallos else 0
+
+
+def verificar_bitacora() -> int:
+    motor = _motor()
+    try:
+        with motor.connect() as conexion:
+            filas, id_rota, motivo = auditoria.verificar_sync(conexion)
+    finally:
+        motor.dispose()
+    if motivo is None:
+        print(f"[bitácora] Cadena íntegra: {filas} filas verificadas.")
+        return 0
+    descripcion = auditoria.DESCRIPCION_MOTIVO.get(motivo, "No cuadra en la fila #{id}.")
+    print(f"[bitácora] CADENA ROTA ({motivo}): {descripcion.format(id=id_rota)}", file=sys.stderr)
+    return 1
+
+
+COMANDOS = {"purgar": purgar, "verificar-bitacora": verificar_bitacora}
+
+
+def main(argumentos: list[str]) -> int:
+    if len(argumentos) != 1 or argumentos[0] not in COMANDOS:
+        print(f"Uso: python mantenimiento.py [{' | '.join(COMANDOS)}]", file=sys.stderr)
+        return 2
+    return COMANDOS[argumentos[0]]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

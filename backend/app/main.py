@@ -46,6 +46,7 @@ from app.routers.carros     import router as carros_router
 from app.routers.activos    import router as activos_router
 from app.routers.alertas    import router as alertas_router
 from app.routers.reportes   import router as reportes_router
+from app.routers.auditoria  import router as auditoria_router
 
 # Carpeta de las imagenes subidas (STATIC_DIR). Vive en el servicio de uploads
 # para que escritura y publicacion no puedan apuntar a sitios distintos.
@@ -148,6 +149,7 @@ app.include_router(carros_router)
 app.include_router(activos_router)     # GET/POST/DELETE /activos/* (inventario, herramientas, asignaciones)
 app.include_router(alertas_router)     # GET/PATCH /alertas/*
 app.include_router(reportes_router)    # GET /reportes/asistencia | tareas-completadas | productividad
+app.include_router(auditoria_router)   # GET /auditoria | /catalogos | /verificacion | /exportar (solo admin)
 
 
 # ── Health checks ─────────────────────────────────────────────────────────────

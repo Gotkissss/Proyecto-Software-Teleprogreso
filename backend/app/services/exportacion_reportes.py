@@ -288,3 +288,52 @@ def nombre_archivo_reporte(tipo: str, fecha_inicio, fecha_fin) -> str:
         f"reporte_{tipo_archivo}_{fecha_inicio.isoformat()}_"
         f"{fecha_fin.isoformat()}.xlsx"
     )
+
+
+def generar_excel_tabla(
+    *,
+    titulo: str,
+    subtitulo: str,
+    nombre_hoja: str,
+    encabezados: tuple[str, ...],
+    filas: list[tuple],
+) -> bytes:
+    """
+    Libro con el mismo formato que los reportes (título, subtítulo, encabezado
+    con filtro y fila congelada) para listados que no tienen fila de totales,
+    como la exportación de la bitácora de auditoría.
+    """
+    libro = Workbook()
+    hoja = libro.active
+    hoja.title = nombre_hoja
+    ultima_columna = get_column_letter(len(encabezados))
+
+    hoja.merge_cells(f"A1:{ultima_columna}1")
+    hoja["A1"] = titulo
+    hoja["A1"].font = Font(bold=True, color="FFFFFF", size=14)
+    hoja["A1"].fill = PatternFill("solid", fgColor=COLOR_TITULO)
+    hoja["A1"].alignment = Alignment(horizontal="center")
+
+    hoja.merge_cells(f"A2:{ultima_columna}2")
+    hoja["A2"] = subtitulo
+    hoja["A2"].alignment = Alignment(horizontal="center")
+
+    fila_encabezados = 4
+    for columna, encabezado in enumerate(encabezados, start=1):
+        celda = hoja.cell(row=fila_encabezados, column=columna, value=encabezado)
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor=COLOR_ENCABEZADO)
+        celda.alignment = Alignment(horizontal="center")
+
+    for fila in filas:
+        hoja.append(fila)
+
+    hoja.freeze_panes = f"A{fila_encabezados + 1}"
+    hoja.auto_filter.ref = (
+        f"A{fila_encabezados}:{ultima_columna}{fila_encabezados + len(filas)}"
+    )
+    _ajustar_columnas(hoja)
+
+    contenido = BytesIO()
+    libro.save(contenido)
+    return contenido.getvalue()

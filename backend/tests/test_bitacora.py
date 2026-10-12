@@ -1,14 +1,14 @@
 # backend/tests/test_bitacora.py
 """
-Bitácora de auditoría: hash encadenado, descripción de cambios del hook y los
-eventos que no cambian filas (login fallido, bloqueo, logout, 403, lecturas).
-Los eventos los recoge el fixture `eventos_bitacora` de conftest.py.
+Bitácora de auditoría: descripción de cambios del hook, inserciones masivas y
+los eventos que no cambian filas (login fallido, bloqueo, logout, 403,
+lecturas). Los eventos los recoge el fixture `eventos_bitacora` de conftest.py.
 """
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -59,21 +59,8 @@ def _de(eventos, accion):
     return [e for e in eventos if e["accion"] == accion]
 
 
-# --- Hash encadenado ---------------------------------------------------------
-
-REGISTRO = {"accion": "crear", "entidad": "tarea", "id_entidad": 1, "cambios": {"a": 1, "b": 2}}
-
-
-def test_el_hash_es_determinista_y_no_depende_del_orden_de_las_claves():
-    reordenado = {**REGISTRO, "cambios": {"b": 2, "a": 1}}  # JSONB reordena al guardar
-    assert bitacora.calcular_hash(None, REGISTRO) == bitacora.calcular_hash(None, reordenado)
-    assert len(bitacora.calcular_hash(None, REGISTRO)) == 64
-
-
-def test_el_hash_cambia_con_cualquier_campo_y_con_el_anterior():
-    base = bitacora.calcular_hash("a" * 64, REGISTRO)
-    assert bitacora.calcular_hash("b" * 64, REGISTRO) != base
-    assert bitacora.calcular_hash("a" * 64, {**REGISTRO, "id_entidad": 2}) != base
+# La cadena de hashes la calcula la base (trigger de la migración 0010): sus
+# pruebas están en tests/integracion/test_auditoria.py.
 
 
 # --- Lo que el hook guarda de cada fila -------------------------------------
@@ -84,6 +71,19 @@ def test_crear_guarda_los_valores_y_oculta_el_hash_de_contrasena():
 
     assert cambios["nombre"] == "Ana"
     assert cambios["hash_contrasena"] == "***"
+
+
+def test_la_lista_negra_oculta_el_valor_pero_no_el_hecho():
+    emp = Empleado()
+    set_committed_value(emp, "hash_contrasena", "viejo")
+    set_committed_value(emp, "version_token", 3)
+    emp.hash_contrasena = "nuevo"
+    emp.version_token = 4
+
+    assert bitacora.describir_cambios(emp, "actualizar") == {
+        "hash_contrasena": {"antes": "***", "despues": "***"},
+        "version_token": {"antes": "***", "despues": "***"},
+    }
 
 
 def test_actualizar_guarda_solo_lo_que_cambio_con_antes_y_despues():
@@ -115,7 +115,8 @@ def en_peticion():
 
 def _sesion(new=(), dirty=(), deleted=()):
     return SimpleNamespace(
-        new=list(new), dirty=list(dirty), deleted=list(deleted), info={}, connection=MagicMock
+        new=list(new), dirty=list(dirty), deleted=list(deleted), info={}, connection=MagicMock,
+        is_modified=lambda _obj: True,
     )
 
 
@@ -153,6 +154,28 @@ def test_el_diff_es_el_de_antes_del_flush(en_peticion, monkeypatch):
     assert fila["cambios"] == {"telefono": {"antes": "5550-0001", "despues": "5550-0002"}}
 
 
+def test_los_puntos_gps_quedan_resumidos_sin_coordenadas(en_peticion, monkeypatch):
+    from app.models.ubicacion import UbicacionEmpleado
+
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    puntos = [
+        UbicacionEmpleado(id_empleado=4, coordenada="SRID=4326;POINT(-90.5 14.6)")
+        for _ in range(3)
+    ]
+    sesion = _sesion(new=puntos)
+
+    bitacora._capturar_diff(sesion, None, None)
+    for i, punto in enumerate(puntos, start=10):
+        punto.id_ubicacion = i
+    bitacora._escribir_diff(sesion, None)
+
+    [fila] = escritos
+    assert (fila["accion"], fila["entidad"], fila["id_entidad"]) == ("crear", "ubicacion_empleado", None)
+    assert fila["cambios"] == {"resumen": True, "filas": 3, "ids": [10, 11, 12]}
+    assert "POINT" not in str(fila)
+
+
 def test_tocar_sin_cambiar_no_deja_fila(en_peticion, monkeypatch):
     escritos = []
     monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
@@ -173,8 +196,9 @@ def test_un_delete_masivo_deja_condicion_y_filas(en_peticion, monkeypatch):
 
     escritos = []
     monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
-    resultado = SimpleNamespace(rowcount=2)
+    resultado = SimpleNamespace(rowcount=2, returns_rows=False)
     estado = SimpleNamespace(
+        is_insert=False,
         is_update=False,
         is_delete=True,
         statement=delete(EmpleadoTarea).where(EmpleadoTarea.id_tarea == 260),
@@ -187,6 +211,52 @@ def test_un_delete_masivo_deja_condicion_y_filas(en_peticion, monkeypatch):
     assert (fila["accion"], fila["entidad"]) == ("eliminar", "empleado_tarea")
     assert fila["cambios"]["filas"] == 2
     assert "260" in fila["cambios"]["condicion"]
+
+
+def test_un_insert_masivo_con_returning_deja_los_ids_y_no_consume_el_resultado(en_peticion, monkeypatch):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from app.models.alerta import Alerta
+
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    filas = MagicMock()
+    filas.all.return_value = [(31,), (32,)]
+    congelado = MagicMock(return_value=filas)
+    resultado = SimpleNamespace(returns_rows=True, freeze=lambda: congelado)
+    estado = SimpleNamespace(
+        is_insert=True,
+        is_update=False,
+        is_delete=False,
+        statement=pg_insert(Alerta).values([{"tipo": "x"}]).returning(Alerta.id_alerta),
+        invoke_statement=lambda: resultado,
+        session=SimpleNamespace(connection=MagicMock),
+    )
+
+    devuelto = bitacora._auditar_masivo(estado)
+
+    assert devuelto is filas  # quien llamó recibe una copia intacta
+    [fila] = escritos
+    assert (fila["accion"], fila["entidad"]) == ("crear", "alerta")
+    assert fila["cambios"] == {"masivo": True, "filas": 2, "ids": [31, 32]}
+
+
+def test_un_masivo_que_no_toca_filas_no_deja_rastro(en_peticion, monkeypatch):
+    from sqlalchemy import update
+
+    escritos = []
+    monkeypatch.setattr(bitacora, "insertar", lambda _conexion, registro: escritos.append(registro))
+    estado = SimpleNamespace(
+        is_insert=False,
+        is_update=True,
+        is_delete=False,
+        statement=update(Empleado).where(Empleado.id_empleado == 0).values(nombre="x"),
+        invoke_statement=lambda: SimpleNamespace(rowcount=0, returns_rows=False),
+        session=SimpleNamespace(connection=MagicMock),
+    )
+
+    bitacora._auditar_masivo(estado)
+    assert escritos == []
 
 
 def test_fuera_de_una_peticion_el_hook_no_captura():
@@ -248,7 +318,7 @@ mini = FastAPI()
 mini.add_middleware(ContextoPeticionMiddleware)
 
 
-@mini.get("/recorrido/{id_empleado}", dependencies=[Depends(auditar_lectura("ubicacion"))])
+@mini.get("/recorrido/{id_empleado}", dependencies=[auditar_lectura("ubicacion")])
 async def _leer(id_empleado: int):
     if id_empleado == 404:
         raise HTTPException(status_code=404)
@@ -263,6 +333,21 @@ def test_una_lectura_sensible_deja_quien_que_y_con_que_filtros(eventos_bitacora)
     [evento] = _de(eventos_bitacora, "leer")
     assert (evento["entidad"], evento["id_entidad"], evento["id_actor"]) == ("ubicacion", 12, 3)
     assert evento["cambios"]["consulta"] == {"fecha": "2026-10-11"}
+
+
+def test_la_misma_lectura_repetida_se_registra_una_vez_por_ventana(eventos_bitacora):
+    gerente = _persona(3, "gerente")
+    mini.dependency_overrides[get_db] = _db_con(gerente)
+    cliente = TestClient(mini)
+
+    for _ in range(4):  # el mapa del supervisor se refresca solo
+        assert cliente.get("/recorrido/12?fecha=2026-10-11", headers=_token(gerente)).status_code == 200
+    cliente.get("/recorrido/12?fecha=2026-10-12", headers=_token(gerente))  # otro filtro, otra lectura
+
+    assert [e["cambios"]["consulta"]["fecha"] for e in _de(eventos_bitacora, "leer")] == [
+        "2026-10-11",
+        "2026-10-12",
+    ]
 
 
 def test_una_lectura_fallida_no_cuenta_como_lectura(eventos_bitacora):

@@ -49,7 +49,7 @@ ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
     status_code=status.HTTP_200_OK,
 )
 async def get_metricas_supervisor(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
@@ -163,7 +163,7 @@ async def get_metricas_supervisor(
     status_code=status.HTTP_200_OK,
 )
 async def get_tecnicos_disponibles(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
     id_tarea: Annotated[
         Optional[int],

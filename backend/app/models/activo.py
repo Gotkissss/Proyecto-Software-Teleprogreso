@@ -4,6 +4,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+# Filas hijas cuya clave foránea es también su clave primaria y que la base ya
+# borra en cascada: el ORM no las carga ni las toca al borrar al padre.
+_CASCADA_BD = "all, delete-orphan"
+
 
 class Activo(Base):
     __tablename__ = "activo"
@@ -15,10 +19,13 @@ class Activo(Base):
     tipo:           Mapped[str]        = mapped_column(String(20), nullable=False)  # carro | material | herramienta
     foto_url:       Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Relaciones ISA
-    carro:       Mapped["Carro | None"]       = relationship(back_populates="activo", uselist=False)
-    material:    Mapped["Material | None"]    = relationship(back_populates="activo", uselist=False)
-    herramienta: Mapped["Herramienta | None"] = relationship(back_populates="activo", uselist=False)
+    # Relaciones ISA. El subtipo se borra con su activo, y lo borra la base
+    # (ON DELETE CASCADE): sin `passive_deletes` el ORM intentaba dejar en
+    # NULL la clave del subtipo, que es a la vez su clave primaria, y
+    # DELETE /activos/{id} respondía 500 con cualquier activo.
+    carro:       Mapped["Carro | None"]       = relationship(back_populates="activo", uselist=False, cascade=_CASCADA_BD, passive_deletes=True)
+    material:    Mapped["Material | None"]    = relationship(back_populates="activo", uselist=False, cascade=_CASCADA_BD, passive_deletes=True)
+    herramienta: Mapped["Herramienta | None"] = relationship(back_populates="activo", uselist=False, cascade=_CASCADA_BD, passive_deletes=True)
 
 
 class Carro(Base):
@@ -33,8 +40,8 @@ class Carro(Base):
 
     # Relaciones
     activo:       Mapped["Activo"]               = relationship(back_populates="carro")
-    empleado:     Mapped["EmpleadoCarro | None"]  = relationship(back_populates="carro", uselist=False)
-    herramientas: Mapped[list["CarroHerramienta"]] = relationship(back_populates="carro")
+    empleado:     Mapped["EmpleadoCarro | None"]  = relationship(back_populates="carro", uselist=False, cascade=_CASCADA_BD, passive_deletes=True)
+    herramientas: Mapped[list["CarroHerramienta"]] = relationship(back_populates="carro", cascade=_CASCADA_BD, passive_deletes=True)
 
 
 class Material(Base):
@@ -61,7 +68,7 @@ class Herramienta(Base):
 
     # Relaciones
     activo: Mapped["Activo"]                = relationship(back_populates="herramienta")
-    carros: Mapped[list["CarroHerramienta"]] = relationship(back_populates="herramienta")
+    carros: Mapped[list["CarroHerramienta"]] = relationship(back_populates="herramienta", cascade=_CASCADA_BD, passive_deletes=True)
 
 
 class CarroHerramienta(Base):

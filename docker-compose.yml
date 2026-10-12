@@ -87,6 +87,51 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Migraciones, seed y mantenimiento (se ejecuta y termina) ──────────
+  #
+  # Aplica las migraciones, siembra los datos de demostración y purga lo que
+  # pasó su retención, y sale. Corre con el PROPIETARIO del esquema
+  # (POSTGRES_USER), no con el rol de la app: así el backend nunca es dueño de
+  # una tabla y la bitácora de auditoría queda para él en solo SELECT e
+  # INSERT (migración 0010). Es el único contenedor que conoce la contraseña
+  # del superusuario, y no publica puertos ni habla con la red pública.
+  migraciones:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: teleprogreso_migraciones
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      # Settings la exige al importar la configuración; este contenedor no
+      # firma ni valida tokens.
+      SECRET_KEY: ${SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      TIMEZONE: ${TIMEZONE:-America/Guatemala}
+      RETENCION_BITACORA_DIAS: ${RETENCION_BITACORA_DIAS:-90}
+      RETENCION_UBICACIONES_DIAS: ${RETENCION_UBICACIONES_DIAS:-90}
+      # ⚠️ En true, seed.py vacía todas las tablas al arrancar y resiembra
+      # (menos la bitácora de auditoría, que es de solo inserción).
+      # Por defecto false para no borrar datos de desarrollo sin querer.
+      SEED_RESET: ${SEED_RESET:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - datos
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    # La purga no detiene el arranque: si falla, lo dice y el backend sube
+    # igual (se reintenta en el próximo arranque o en el cron diario).
+    command: >
+      sh -c "alembic upgrade head &&
+             python seed.py &&
+             (python mantenimiento.py purgar || echo '[mantenimiento] la purga falló; revisa el log')"
+
   # ── Backend FastAPI ───────────────────────────────────────────────────
   #
   # Es el ÚNICO servicio conectado a las dos redes: habla con la base por la
@@ -113,9 +158,6 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       TIMEZONE: ${TIMEZONE:-America/Guatemala}
       ALERTA_HORA_LIMITE: ${ALERTA_HORA_LIMITE:-08:00}
-      # ⚠️ En true, seed.py vacía todas las tablas al arrancar y resiembra.
-      # Por defecto false para no borrar datos de desarrollo sin querer.
-      SEED_RESET: ${SEED_RESET:-false}
     ports:
       # Por defecto solo accesible desde esta máquina. Si necesitas abrirlo a la
       # red local (probar desde el celular, por ejemplo), pon BIND_HOST=0.0.0.0
@@ -124,6 +166,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Arranca cuando el esquema ya está al día.
+      migraciones:
+        condition: service_completed_successfully
     networks:
       - datos
       - publica
@@ -137,10 +182,7 @@ services:
       # contexto de build, no los volúmenes. Mismo truco que node_modules en
       # el frontend.
       - /app/.venv
-    command: >
-      sh -c "alembic upgrade head &&
-             python seed.py &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ── Frontend React ────────────────────────────────────────────────────
   #

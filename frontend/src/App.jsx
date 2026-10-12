@@ -28,6 +28,7 @@ import EmpleadosPage    from './pages/EmpleadosPage'
 import NuevaTareaPage from './pages/NuevaTareaPage'
 import InventarioPage from './pages/InventarioPage'
 import CarroDetallePage from './pages/CarroDetallePage'
+import BitacoraPage from './pages/BitacoraPage'
 
 import { rolesPermitidos, ROLES_RAMA_TECNICO, ROLES_RAMA_SUPERVISOR } from './utils/permisos'
 
@@ -90,7 +91,9 @@ export default function App() {
             />
             <Route path="historial-tareas" element={protegida('/supervisor/historial-tareas', <HistorialTareasPage />)} />
             <Route path="perfil" element={protegida('/supervisor/perfil', <PerfilPage />)} />
-            
+            {/* HU-S9-03: bitácora de auditoría, solo admin. */}
+            <Route path="bitacora" element={protegida('/supervisor/bitacora', <BitacoraPage />)} />
+
           </Route>
 
           {/* ── 404 ──────────────────────────────────────── */}

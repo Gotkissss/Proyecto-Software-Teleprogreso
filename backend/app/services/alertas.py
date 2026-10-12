@@ -155,6 +155,9 @@ async def generar_alertas(db: AsyncSession) -> int:
                 ]
             )
             .on_conflict_do_nothing()
+            # Los ids de las que sí entraron quedan en la bitácora
+            # (services/bitacora._auditar_masivo).
+            .returning(Alerta.id_alerta)
         )
         # El flush deja los registros preparados dentro de la transacción
         # actual; el commit continúa siendo responsabilidad de get_db().

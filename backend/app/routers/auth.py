@@ -62,7 +62,7 @@ bearer_scheme = HTTPBearer(auto_error=True)
 async def login(
     request: Request,
     body: LoginRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ):
     """
     Recibe **correo** y **contraseña**.
@@ -200,7 +200,7 @@ async def login(
 )
 async def logout(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _empleado: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -262,7 +262,7 @@ async def perfil(
 )
 async def cambiar_contrasena(
     body: CambiarContrasenaRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     empleado: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """

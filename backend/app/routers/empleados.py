@@ -51,13 +51,13 @@ def _serializar_empleado(empleado, placa=None) -> EmpleadoResponse:
 
 @router.get(
     "",
-    dependencies=[Depends(auditar_lectura("empleado"))],
+    dependencies=[auditar_lectura("empleado")],
     response_model=EmpleadoListResponse,
     summary="Listar todos los empleados",
     status_code=status.HTTP_200_OK,
 )
 async def get_empleados(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
     rol: Optional[str] = Query(
         None,
@@ -116,7 +116,7 @@ async def get_empleados(
 )
 async def create_empleado(
     empleado_data: EmpleadoCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     """
@@ -136,7 +136,7 @@ async def create_empleado(
 async def update_empleado(
     id: int,
     data: EmpleadoUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     return await empleados_service.editar_empleado(db, id, data, current_user)
@@ -151,7 +151,7 @@ async def update_empleado(
 async def update_estado_empleado(
     id: int,
     data: EmpleadoEstadoUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_admin)],
 ):
     if id == current_user.id_empleado:
@@ -192,7 +192,7 @@ async def update_estado_empleado(
 async def update_contrasena_empleado(
     id: int,
     data: EmpleadoPasswordUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -235,7 +235,7 @@ async def update_contrasena_empleado(
     status_code=status.HTTP_200_OK,
 )
 async def get_mi_equipo(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """

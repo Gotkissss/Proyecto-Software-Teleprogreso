@@ -40,6 +40,10 @@ describe('PERMISOS_RUTAS', () => {
     }
   })
 
+  it('la bitácora es solo del admin (GET /auditoria es require_admin)', () => {
+    expect(rolesPermitidos('/supervisor/bitacora')).toEqual([ROLES.ADMIN])
+  })
+
   it('cada ruta hija solo admite roles que su rama también admite', () => {
     for (const ruta of RUTAS) {
       const rama = ruta.startsWith('/supervisor') ? ROLES_RAMA_SUPERVISOR : ROLES_RAMA_TECNICO

@@ -38,7 +38,7 @@ from app.services.reportes import (
 router = APIRouter(
     prefix="/reportes",
     tags=["Reportes"],
-    dependencies=[Depends(auditar_lectura("reporte"))],
+    dependencies=[auditar_lectura("reporte")],
 )
 
 # Reportes que miran a la persona (asistencia, pausas): se filtran con
@@ -76,7 +76,7 @@ def _validar_rango(fecha_inicio: date, fecha_fin: date) -> None:
     summary="Resumen operativo por empleado",
 )
 async def get_reporte_resumen(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_gerente)],
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,
@@ -108,7 +108,7 @@ async def get_reporte_resumen(
     summary="Reporte agregado de asistencia",
 )
 async def get_reporte_asistencia(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_gerente)],
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,
@@ -136,7 +136,7 @@ async def get_reporte_asistencia(
     summary="Reporte agregado de tareas completadas",
 )
 async def get_reporte_tareas_completadas(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_gerente)],
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,
@@ -158,7 +158,7 @@ async def get_reporte_tareas_completadas(
     summary="Reporte agregado de productividad",
 )
 async def get_reporte_productividad(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_gerente)],
     fecha_inicio: FechaInicio,
     fecha_fin: FechaFin,
@@ -180,7 +180,7 @@ async def get_reporte_productividad(
     summary="Exportar un reporte a Excel",
 )
 async def exportar_reporte(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[
         Empleado,
         Depends(require_admin_supervisor_gerente),

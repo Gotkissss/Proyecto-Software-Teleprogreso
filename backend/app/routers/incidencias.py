@@ -182,7 +182,7 @@ async def _obtener_incidencia(
 async def crear_incidencia(
     id: int,
     data: IncidenciaCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -230,14 +230,14 @@ async def crear_incidencia(
 
 @router.get(
     "/{id}/incidencias",
-    dependencies=[Depends(auditar_lectura("evidencia"))],
+    dependencies=[auditar_lectura("evidencia")],
     response_model=List[IncidenciaResponse],
     summary="Listar las evidencias de una tarea",
     status_code=status.HTTP_200_OK,
 )
 async def get_incidencias(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -269,7 +269,7 @@ async def get_incidencias(
 async def upload_foto_evidencia(
     id: int,
     id_incidencia: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     file: Annotated[
         UploadFile, File(description="Imagen jpg, jpeg, png, webp o gif.")
@@ -337,7 +337,7 @@ async def upload_foto_evidencia(
 async def eliminar_incidencia(
     id: int,
     id_incidencia: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """

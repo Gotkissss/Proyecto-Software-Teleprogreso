@@ -31,7 +31,8 @@ from app.core.security import decode_access_token, token_esta_revocado
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.core.contexto import registrar_actor
-from app.services.bitacora import anotar_evento
+from app.core.reglas import SEGUNDOS_LECTURA_REPETIDA
+from app.services.bitacora import anotar_evento, primera_vez
 
 # Extrae el Bearer token del header Authorization
 # auto_error=False para poder responder 401 (no 403) cuando falta el token
@@ -40,7 +41,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 async def get_current_empleado(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Empleado:
     """
     Dependencia base: valida el JWT y devuelve el empleado autenticado.
@@ -133,25 +134,38 @@ require_admin_supervisor_gerente = require_roles("admin", "supervisor", "gerente
 def auditar_lectura(entidad: str):
     """
     Deja en la bitácora una lectura de datos sensibles (personal, GPS,
-    asistencia, evidencias, reportes). Uso en el decorador:
+    asistencia, evidencias, reportes). Devuelve ya el `Depends`; uso en el
+    decorador:
 
-        @router.get("/...", dependencies=[Depends(auditar_lectura("empleado"))])
+        @router.get("/...", dependencies=[auditar_lectura("empleado")])
+
+    scope="function": el código tras el `yield` corre antes de enviar la
+    respuesta (desde FastAPI 0.118 el predeterminado es después), así que el
+    evento llega a tiempo de que ContextoPeticionMiddleware lo guarde.
 
     Lo que va después del `yield` solo corre si el endpoint respondió bien:
     una lectura rechazada (403, 404) no cuenta como lectura, y el 403 ya se
     registra aparte como acceso_denegado.
+
+    La misma lectura (actor, ruta y filtros) se registra una vez cada
+    SEGUNDOS_LECTURA_REPETIDA: un mapa que se refresca solo no debe llenar la
+    bitácora de filas idénticas.
     """
     async def _auditar(
         request: Request,
-        _actor: Annotated[Empleado, Depends(get_current_empleado)],
+        actor: Annotated[Empleado, Depends(get_current_empleado)],
     ):
         yield
+        consulta = dict(request.query_params)
+        clave = f"leer:{actor.id_empleado}:{request.url.path}:{sorted(consulta.items())}"
+        if not primera_vez(clave, SEGUNDOS_LECTURA_REPETIDA):
+            return
         ids = [int(v) for v in request.path_params.values() if str(v).isdigit()]
         anotar_evento(
             "leer",
             entidad,
             ids[0] if ids else None,
-            {"ruta": request.url.path, "consulta": dict(request.query_params)},
+            {"ruta": request.url.path, "consulta": consulta},
         )
 
-    return _auditar
+    return Depends(_auditar, scope="function")

@@ -53,3 +53,32 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - run: python -m pytest tests/ -v
+
+  dependencias:
+    name: Auditoría de dependencias (informativa)
+    runs-on: ubuntu-latest
+    # T1 del Sprint 9: pip-audit y npm audit en cada PR. Primera vuelta
+    # INFORMATIVA: si encuentra avisos el job sale en rojo pero no bloquea el
+    # PR. Pendientes conocidos al cerrar el Sprint 9 (ver SEGURIDAD.md):
+    # python-jose/ecdsa/pyasn1, python-dotenv y pytest en el backend; axios,
+    # form-data y react-router (producción) y las herramientas de build y
+    # pruebas en el frontend. Cuando se resuelvan, se quita
+    # `continue-on-error` y pasa a ser bloqueante.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: pip-audit (backend)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --desc
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: 20
+      - name: npm audit (frontend, severidad alta o mayor)
+        if: always()
+        working-directory: frontend
+        run: npm audit --audit-level=high

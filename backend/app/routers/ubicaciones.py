@@ -82,7 +82,7 @@ async def _jornada_en_curso(db: AsyncSession, id_empleado: int) -> Optional[Asis
 )
 async def registrar_ubicacion(
     data: UbicacionCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -135,12 +135,12 @@ async def registrar_ubicacion(
 
 @router.get(
     "/tecnicos",
-    dependencies=[Depends(auditar_lectura("ubicacion"))],
+    dependencies=[auditar_lectura("ubicacion")],
     response_model=list[UbicacionTecnicoResponse],
     summary="Última posición conocida de cada técnico en jornada",
 )
 async def listar_ubicaciones_tecnicos(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     return await obtener_ultimas_ubicaciones(db)
@@ -156,7 +156,7 @@ async def listar_ubicaciones_tecnicos(
 )
 async def registrar_ubicaciones_lote(
     data: UbicacionLoteCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -177,13 +177,13 @@ async def registrar_ubicaciones_lote(
 
 @router.get(
     "/{id_empleado}/recorrido",
-    dependencies=[Depends(auditar_lectura("ubicacion"))],
+    dependencies=[auditar_lectura("ubicacion")],
     response_model=RecorridoResponse,
     summary="Recorrido de un técnico en un día",
 )
 async def get_recorrido(
     id_empleado: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
     fecha: Annotated[
         Optional[date],

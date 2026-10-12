@@ -74,7 +74,7 @@ def _serializar_herramienta(
     status_code=status.HTTP_200_OK,
 )
 async def get_carros(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
@@ -98,7 +98,7 @@ async def get_carros(
 )
 async def get_carro_by_id(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
@@ -117,7 +117,7 @@ async def get_carro_by_id(
 )
 async def get_herramientas_de_carro(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -148,7 +148,7 @@ async def get_herramientas_de_carro(
 async def asignar_herramienta_a_carro(
     id: int,
     body: AsignarHerramientaRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -177,7 +177,7 @@ async def asignar_herramienta_a_carro(
 async def liberar_herramienta_de_carro(
     id: int,
     id_h: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -205,7 +205,7 @@ async def liberar_herramienta_de_carro(
 async def asignar_tecnico_a_carro(
     id: int,
     body: AsignarTecnicoRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -244,7 +244,7 @@ async def asignar_tecnico_a_carro(
 )
 async def liberar_asignacion_tecnico(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """

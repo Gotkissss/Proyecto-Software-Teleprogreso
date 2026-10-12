@@ -2,7 +2,7 @@
 """
 Guardado y borrado de imágenes subidas — Teleprogreso S.A.
 -----------------------------------------------------------------------------
-Centraliza la validación (extensión + tamaño) y la escritura en disco que antes
+Centraliza la validación (extensión, tamaño y firma del archivo) y la escritura en disco que antes
 vivía duplicada en el endpoint de imagen de activos, para que el upload de
 fotos de evidencia use exactamente las mismas reglas.
 
@@ -28,6 +28,39 @@ from app.core.config import settings
 # Extensiones y tamaño máximo permitidos para cualquier imagen del sistema.
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_FILE_SIZE_MB = 5
+
+# Formato real de cada extensión admitida. La extensión la escribe quien sube
+# el archivo; el formato se lee de sus primeros bytes (ver formato_real).
+FORMATO_POR_EXTENSION = {
+    ".jpg": "jpeg",
+    ".jpeg": "jpeg",
+    ".png": "png",
+    ".webp": "webp",
+    ".gif": "gif",
+}
+EXTENSION_POR_FORMATO = {"jpeg": ".jpg", "png": ".png", "webp": ".webp", "gif": ".gif"}
+
+
+def formato_real(contenido: bytes) -> str | None:
+    """
+    Formato de imagen según la firma de sus primeros bytes, o None si no es
+    ninguno de los admitidos.
+
+    La extensión sola no dice nada: un HTML o un ejecutable renombrado a
+    .jpg pasaba la validación y quedaba publicado en /static. Se comparan los
+    "magic bytes" a mano (sin dependencias nuevas; `imghdr` ya no existe en
+    Python 3.13).
+    """
+    if contenido.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if contenido.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if contenido[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if len(contenido) >= 12 and contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
+        return "webp"
+    return None
+
 
 # Respaldo cuando no hay STATIC_DIR configurado: `backend/static`, junto al
 # código. Es lo correcto en local y en docker-compose.
@@ -84,7 +117,12 @@ async def guardar_imagen(
 
     Raises:
         HTTPException 400 si la extensión no está permitida, si el archivo
-        supera el límite de tamaño o si viene vacío.
+        supera el límite de tamaño, si viene vacío o si su contenido no es una
+        imagen JPEG, PNG, WEBP o GIF.
+
+    Si el contenido es una imagen válida pero de otro formato que el que dice
+    su extensión (un PNG llamado .jpg), se guarda con la extensión real: así
+    /static lo sirve con el tipo correcto.
     """
     extension = os.path.splitext(file.filename or "")[1].lower()
     if extension not in ALLOWED_EXTENSIONS:
@@ -109,6 +147,18 @@ async def guardar_imagen(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"El archivo supera el límite de {MAX_FILE_SIZE_MB} MB.",
         )
+
+    formato = formato_real(contenido)
+    if formato is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "El archivo no es una imagen válida. Sube una foto JPG, PNG, "
+                "WEBP o GIF."
+            ),
+        )
+    if FORMATO_POR_EXTENSION[extension] != formato:
+        extension = EXTENSION_POR_FORMATO[formato]
 
     destino = os.path.join(STATIC_ROOT, subcarpeta)
     os.makedirs(destino, exist_ok=True)

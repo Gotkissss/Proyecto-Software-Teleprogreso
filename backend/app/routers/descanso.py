@@ -163,7 +163,7 @@ async def _descanso_activo(db: AsyncSession, id_asistencia: int) -> Optional[Des
     status_code=status.HTTP_200_OK,
 )
 async def get_tipos_pausa(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -200,7 +200,7 @@ async def get_tipos_pausa(
     status_code=status.HTTP_201_CREATED,
 )
 async def iniciar_descanso(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     data: Optional[DescansoIniciar] = None,
 ):
@@ -291,7 +291,7 @@ async def iniciar_descanso(
     status_code=status.HTTP_200_OK,
 )
 async def finalizar_descanso(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -366,7 +366,7 @@ async def finalizar_descanso(
     status_code=status.HTTP_200_OK,
 )
 async def get_descanso_activo(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -400,7 +400,7 @@ async def get_descanso_activo(
     status_code=status.HTTP_200_OK,
 )
 async def get_descansos_hoy(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """

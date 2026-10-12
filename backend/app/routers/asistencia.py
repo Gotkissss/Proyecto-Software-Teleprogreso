@@ -101,7 +101,7 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
     status_code=status.HTTP_201_CREATED,
 )
 async def registrar_entrada(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     ubicacion: Optional[UbicacionCreate] = None,
 ):
@@ -189,7 +189,7 @@ async def registrar_entrada(
     status_code=status.HTTP_200_OK,
 )
 async def registrar_salida(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     ubicacion: Optional[UbicacionCreate] = None,
 ):
@@ -280,7 +280,7 @@ async def registrar_salida(
     status_code=status.HTTP_200_OK,
 )
 async def get_asistencia_hoy(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -377,13 +377,13 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
 
 @router.get(
     "/historial",
-    dependencies=[Depends(auditar_lectura("asistencia"))],
+    dependencies=[auditar_lectura("asistencia")],
     response_model=HistorialAsistenciaResponse,
     summary="Historial de jornadas con horas trabajadas y pausas",
     status_code=status.HTTP_200_OK,
 )
 async def get_historial_asistencia(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     empleado: Optional[int] = Query(
         None,
