@@ -60,7 +60,7 @@ async def _roles_admitidos(path: str) -> set[str]:
 
 def test_todas_las_rutas_de_reportes_exigen_rol_de_gerencia():
     rutas = [r.path for r in router.routes if isinstance(r, APIRoute)]
-    assert len(rutas) == 5  # 4 reportes + exportación
+    assert len(rutas) == 6  # 4 reportes + serie + exportación
     for path in rutas:
         assert require_gerente in _dependencias_de(path), path
         # Si alguien cambia la dependencia por la amplia, esto lo señala.
@@ -74,6 +74,11 @@ async def test_el_reporte_y_su_exportacion_admiten_exactamente_los_mismos_roles(
     json = await _roles_admitidos(f"/reportes/{tipo}")
     exportacion = await _roles_admitidos("/reportes/{tipo}/exportar")
     assert json == exportacion == {"admin", "gerente"}
+
+
+@pytest.mark.asyncio
+async def test_la_serie_temporal_es_de_gerencia():
+    assert await _roles_admitidos("/reportes/serie") == {"admin", "gerente"}
 
 
 @pytest.mark.asyncio
