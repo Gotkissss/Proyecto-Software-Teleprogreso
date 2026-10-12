@@ -160,14 +160,18 @@ async def revoke_token(db: AsyncSession, payload: dict[str, Any]) -> bool:
     return True
 
 
+def sentencia_purga_tokens():
+    """DELETE de los tokens revocados que ya expiraron por su cuenta."""
+    return delete(TokenRevocado).where(TokenRevocado.expira < datetime.utcnow())
+
+
 async def purgar_tokens_expirados(db: AsyncSession) -> int:
     """
     Borra las filas de tokens que ya expiraron por su cuenta.
 
-    Se llama desde el logout: una vez pasada la expiración el registro no
-    aporta nada y, sin esta purga, la tabla crecería indefinidamente.
+    Se llama desde el logout y desde `mantenimiento.py purgar`: una vez pasada
+    la expiración el registro no aporta nada y, sin esta purga, la tabla
+    crecería indefinidamente.
     """
-    result = await db.execute(
-        delete(TokenRevocado).where(TokenRevocado.expira < datetime.utcnow())
-    )
+    result = await db.execute(sentencia_purga_tokens())
     return result.rowcount or 0
