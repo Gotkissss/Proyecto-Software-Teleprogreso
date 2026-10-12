@@ -3,7 +3,15 @@
 # ──────────────────────────────────────────────────────────
 
 # Framework web
-fastapi==0.111.0
+# 0.133.1 + starlette 1.7.0 (T2 del Sprint 9): starlette 0.37.2 y
+# python-multipart 0.0.9 tenían avisos de denegación de servicio y de
+# lectura de archivos (pip-audit, SEGURIDAD.md). Desde FastAPI 0.118 el código
+# tras el `yield` de una dependencia corre DESPUÉS de enviar la respuesta;
+# get_db y auditar_lectura se declaran con scope="function" para que el commit
+# y la auditoría sigan ocurriendo antes (ver app/db/session.py).
+# 0.133.1 es la última que no exige pydantic>=2.9.
+fastapi==0.133.1
+starlette==1.7.0
 uvicorn[standard]==0.29.0
 
 # Base de datos
@@ -29,7 +37,10 @@ pydantic-settings==2.2.1
 python-dotenv==1.0.1
 
 # Utilidades
-python-multipart==0.0.9
+python-multipart==0.0.32
+# EmailStr (schemas de empleado y login). FastAPI 0.111 lo instalaba por su
+# cuenta; las versiones nuevas ya no. Misma versión que ya se usaba.
+email-validator==2.3.0
 openpyxl==3.1.5
 # Base de datos de zonas horarias: las imágenes -slim de Python no la traen y
 # zoneinfo no puede resolver "America/Guatemala" sin ella.

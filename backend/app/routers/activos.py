@@ -127,7 +127,7 @@ def _build_detalle(activo: Activo, subtipo) -> ActivoDetalleResponse:
 )
 async def crear_activo(
     body: Union[CarroCreate, HerramientaCreate, MaterialCreate] = Body(..., discriminator="tipo"),
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")] = None,
     _current_user: Annotated[Empleado, Depends(require_supervisor)] = None,
 ):
     """
@@ -226,7 +226,7 @@ async def crear_activo(
 )
 async def get_activo_by_id(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(get_current_empleado)],
 ):
     """
@@ -267,7 +267,7 @@ async def get_activo_by_id(
 async def actualizar_activo(
     id: int,
     body: ActivoUpdateRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -350,7 +350,7 @@ async def actualizar_activo(
 )
 async def eliminar_activo(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -431,7 +431,7 @@ from app.services.uploads import (
 async def upload_imagen_activo(
     id: int,
     file: UploadFile = File(...),
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")] = None,
     _current_user: Annotated[Empleado, Depends(require_supervisor)] = None,
 ):
     """

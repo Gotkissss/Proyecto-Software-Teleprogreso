@@ -59,7 +59,7 @@ ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
     status_code=status.HTTP_200_OK,
 )
 async def get_tareas(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     estado: Annotated[Optional[str], Query()] = None,
     id_tecnico: Annotated[Optional[int], Query()] = None,
@@ -88,7 +88,7 @@ async def get_tareas(
     status_code=status.HTTP_200_OK,
 )
 async def get_mi_ruta(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     lat: Annotated[
         Optional[float],
@@ -132,7 +132,7 @@ async def get_mi_ruta(
     status_code=status.HTTP_200_OK,
 )
 async def get_mapa_supervisor(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
     fecha: Annotated[Optional[date], Query()] = None,
     id_tecnico: Annotated[Optional[int], Query()] = None,
@@ -166,7 +166,7 @@ async def get_mapa_supervisor(
 )
 async def create_tarea(
     tarea: TareaCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -194,7 +194,7 @@ async def create_tarea(
 async def update_tarea(
     id: int,
     data: TareaUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -226,7 +226,7 @@ async def update_tarea(
 async def update_estado(
     id: int,
     data: TareaUpdateEstado,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -247,7 +247,7 @@ async def update_estado(
 async def reasignar_tarea(
     id: int,
     data: TareaReasignar,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """
@@ -268,7 +268,7 @@ async def reasignar_tarea(
 )
 async def iniciar_tarea(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
     ubicacion: Optional[UbicacionCreate] = None,
 ):
@@ -293,7 +293,7 @@ async def iniciar_tarea(
 )
 async def finalizar_tarea(
     id: int,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
     ubicacion: Optional[UbicacionCreate] = None,
 ):
@@ -327,7 +327,7 @@ async def finalizar_tarea(
     status_code=status.HTTP_200_OK,
 )
 async def get_tareas_completadas(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
     fecha_desde: Optional[date] = Query(
         None, description="Fecha mínima (YYYY-MM-DD). Por defecto, hace 7 días."

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -248,7 +248,7 @@ mini = FastAPI()
 mini.add_middleware(ContextoPeticionMiddleware)
 
 
-@mini.get("/recorrido/{id_empleado}", dependencies=[Depends(auditar_lectura("ubicacion"))])
+@mini.get("/recorrido/{id_empleado}", dependencies=[auditar_lectura("ubicacion")])
 async def _leer(id_empleado: int):
     if id_empleado == 404:
         raise HTTPException(status_code=404)

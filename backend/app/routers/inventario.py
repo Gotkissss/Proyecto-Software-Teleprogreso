@@ -34,7 +34,7 @@ router = APIRouter(prefix="/activos", tags=["Inventario"])
     status_code=status.HTTP_200_OK,
 )
 async def get_materiales_bajo_stock(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
@@ -79,7 +79,7 @@ async def get_materiales_bajo_stock(
     status_code=status.HTTP_200_OK,
 )
 async def get_materiales(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """
@@ -124,7 +124,7 @@ async def get_materiales(
     status_code=status.HTTP_200_OK,
 )
 async def get_herramientas(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
 ):
     """

@@ -40,7 +40,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 async def get_current_empleado(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
 ) -> Empleado:
     """
     Dependencia base: valida el JWT y devuelve el empleado autenticado.
@@ -133,9 +133,14 @@ require_admin_supervisor_gerente = require_roles("admin", "supervisor", "gerente
 def auditar_lectura(entidad: str):
     """
     Deja en la bitácora una lectura de datos sensibles (personal, GPS,
-    asistencia, evidencias, reportes). Uso en el decorador:
+    asistencia, evidencias, reportes). Devuelve ya el `Depends`; uso en el
+    decorador:
 
-        @router.get("/...", dependencies=[Depends(auditar_lectura("empleado"))])
+        @router.get("/...", dependencies=[auditar_lectura("empleado")])
+
+    scope="function": el código tras el `yield` corre antes de enviar la
+    respuesta (desde FastAPI 0.118 el predeterminado es después), así que el
+    evento llega a tiempo de que ContextoPeticionMiddleware lo guarde.
 
     Lo que va después del `yield` solo corre si el endpoint respondió bien:
     una lectura rechazada (403, 404) no cuenta como lectura, y el 403 ya se
@@ -154,4 +159,4 @@ def auditar_lectura(entidad: str):
             {"ruta": request.url.path, "consulta": dict(request.query_params)},
         )
 
-    return _auditar
+    return Depends(_auditar, scope="function")

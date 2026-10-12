@@ -26,7 +26,7 @@ router = APIRouter(prefix="/alertas", tags=["Alertas"])
     status_code=status.HTTP_200_OK,
 )
 async def get_alertas(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     # Lectura abierta a los tres roles administrativos: el gerente entra al
     # mismo panel que el supervisor y antes recibía 403 al abrir Alertas.
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
@@ -94,7 +94,7 @@ async def get_alertas(
 async def update_alerta(
     id: int,
     data: AlertaUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """Actualiza el estado de una alerta persistente."""

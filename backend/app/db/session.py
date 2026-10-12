@@ -62,7 +62,15 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-# Dependency injection para los endpoints de FastAPI
+# Dependency injection para los endpoints de FastAPI.
+#
+# Se declara SIEMPRE como `Depends(get_db, scope="function")`. Desde FastAPI
+# 0.118 el código tras el `yield` de una dependencia corre por defecto después
+# de enviar la respuesta: el commit llegaría tarde (el cliente vería 200 aunque
+# fallara) y la bitácora esperaría el candado de una transacción todavía
+# abierta. Con scope="function" el commit ocurre antes de responder, como
+# siempre. Mezclar scopes abriría dos sesiones en la misma petición (la caché
+# de dependencias distingue el scope): tests/test_dependencias_bd.py lo vigila.
 async def get_db():
     async with AsyncSessionLocal() as session:
         try:
