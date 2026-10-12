@@ -28,10 +28,21 @@ describe('rangos rápidos', () => {
     })
   })
 
-  it('"últimos 7 días" incluye hoy y los seis anteriores', () => {
+  it('"esta semana" va del lunes a hoy', () => {
     expect(rangoRapido('semana', REFERENCIA)).toEqual({
-      fecha_inicio: '2026-08-06',
+      fecha_inicio: '2026-08-10',
       fecha_fin: '2026-08-12',
+    })
+  })
+
+  it('"esta semana" un lunes es solo ese día, y un domingo empieza el lunes anterior', () => {
+    expect(rangoRapido('semana', new Date(2026, 7, 10))).toEqual({
+      fecha_inicio: '2026-08-10',
+      fecha_fin: '2026-08-10',
+    })
+    expect(rangoRapido('semana', new Date(2026, 7, 16))).toEqual({
+      fecha_inicio: '2026-08-10',
+      fecha_fin: '2026-08-16',
     })
   })
 

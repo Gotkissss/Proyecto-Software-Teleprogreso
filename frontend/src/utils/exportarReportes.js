@@ -76,11 +76,13 @@ export const RANGOS_RAPIDOS = [
     calcular: (hoy) => rango(hoy, hoy),
   },
   {
+    // Semana calendario (lunes a hoy), la que se usa para hablar de "esta
+    // semana" en la operación; la comparación va contra la semana anterior.
     clave: 'semana',
-    etiqueta: 'Últimos 7 días',
+    etiqueta: 'Esta semana',
     calcular: (hoy) => {
       const inicio = new Date(hoy)
-      inicio.setDate(inicio.getDate() - 6)
+      inicio.setDate(inicio.getDate() - ((inicio.getDay() + 6) % 7))
       return rango(inicio, hoy)
     },
   },
