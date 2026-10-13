@@ -28,6 +28,11 @@ import {
   validarFoto,
 } from '../../api/incidenciaService'
 import { obtenerPosicionActual } from '../../utils/posicionActual'
+import {
+  borrarBorrador,
+  guardarBorrador,
+  leerBorrador,
+} from '../../utils/borradorTarea'
 import styles from './ModalFinalizarTarea.module.css'
 
 const IconCamara = () => (
@@ -59,15 +64,33 @@ export default function ModalFinalizarTarea({
   const [previewUrl, setPreviewUrl] = useState(null)
   const [errores, setErrores] = useState({})
   const [guardando, setGuardando] = useState(false)
+  // Lo que había escrito antes de que se le cayera la sesión (HU-S9-05).
+  const [recuperado, setRecuperado] = useState(null)
 
-  // Al abrirlo con otra tarea se limpia todo.
+  // Al abrirlo con otra tarea se limpia todo... salvo lo que el técnico ya
+  // había escrito para ESTA tarea y no llegó a enviarse. El informe son varias
+  // líneas escritas de pie y con una mano: perderlo por un 401 significa
+  // volver a escribirlo de memoria.
   useEffect(() => {
     if (!open) return
-    setDescripcion('')
+
+    const borrador = leerBorrador(servicio?.id_servicio)
+    setDescripcion(borrador?.descripcion ?? '')
+    setRecuperado(borrador)
     setFoto(null)
     setErrores({})
     setGuardando(false)
   }, [open, servicio?.id_servicio])
+
+  // Se guarda en cada cambio y no al cerrar: si lo que se lleva la sesión por
+  // delante es la pestaña entera, no hay ningún "al cerrar" que ejecutar.
+  useEffect(() => {
+    if (!open || !servicio?.id_servicio) return
+    guardarBorrador(servicio.id_servicio, {
+      descripcion,
+      nombreFoto: foto?.name ?? null,
+    })
+  }, [open, servicio?.id_servicio, descripcion, foto])
 
   // La preview usa una URL de objeto que hay que revocar para no filtrar
   // memoria cada vez que el técnico cambia de foto.
@@ -140,6 +163,9 @@ export default function ModalFinalizarTarea({
         foto,
         posicion,
       })
+      // Enviado: el borrador ya no sirve y reofrecerlo luego sería confuso.
+      borrarBorrador(servicio.id_servicio)
+      setRecuperado(null)
       toast.success('Tarea finalizada y evidencia registrada.')
       onFinalizada?.(servicio.id_servicio, incidencia)
       onClose?.()
@@ -178,6 +204,29 @@ export default function ModalFinalizarTarea({
       )}
 
       {/* ── Descripción ── */}
+      {recuperado && (
+        <div className={styles.borrador} role="status">
+          <span>
+            Recuperamos lo que habías escrito antes de salir
+            {recuperado.nombreFoto && (
+              <>. La foto que habías elegido era <strong>{recuperado.nombreFoto}</strong>,
+                tenés que volver a seleccionarla</>
+            )}.
+          </span>
+          <button
+            type="button"
+            className={styles.descartarBorrador}
+            onClick={() => {
+              borrarBorrador(servicio.id_servicio)
+              setDescripcion('')
+              setRecuperado(null)
+            }}
+          >
+            Empezar de cero
+          </button>
+        </div>
+      )}
+
       <label className={styles.label} htmlFor="fin-descripcion">
         ¿Qué realizaste? <span className={styles.required}>*</span>
       </label>

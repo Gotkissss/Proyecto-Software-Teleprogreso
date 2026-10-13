@@ -1,0 +1,45 @@
+/* ============================================================
+   AvisoSesion.module.css
+   Teleprogreso S.A. — Aviso de sesión por vencer (HU-S9-05)
+   ============================================================ */
+
+.texto {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+/* La cuenta atrás es el dato que decide: se lee de un vistazo. */
+.reloj {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--color-text);
+}
+
+.btnPrimario,
+.btnSecundario {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.btnPrimario {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btnPrimario:disabled,
+.btnSecundario:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

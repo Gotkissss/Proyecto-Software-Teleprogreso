@@ -13,6 +13,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToastProvider } from '../components/ui/Toast'
 import ModalFinalizarTarea from '../components/tareas/ModalFinalizarTarea'
+import { guardarBorrador, leerBorrador } from '../utils/borradorTarea'
 import {
   MAX_FOTO_MB,
   finalizarTareaConEvidencia,
@@ -76,6 +77,10 @@ describe('validarFoto', () => {
 describe('ModalFinalizarTarea', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Desde la HU-S9-05 el modal guarda un borrador por tarea en
+    // localStorage. Sin limpiarlo, lo que escribe un test reaparece en el
+    // siguiente y los dos fallan por una razón que no es la que prueban.
+    localStorage.clear()
   })
 
   it('muestra el nombre de la tarea que se va a cerrar', () => {
@@ -189,5 +194,61 @@ describe('ModalFinalizarTarea', () => {
 
     expect(await screen.findByText(/La tarea sigue abierta/i)).toBeInTheDocument()
     expect(onFinalizada).not.toHaveBeenCalled()
+  })
+
+  /* ── Borrador (HU-S9-05) ────────────────────────────────────────────── */
+
+  it('guarda lo escrito mientras se escribe, sin esperar a enviarlo', async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+
+    await usuario.type(
+      screen.getByLabelText(/¿Qué realizaste\?/i),
+      'Se cambió el conector',
+    )
+
+    // Se guarda en cada cambio y no al cerrar: si lo que se lleva la sesión
+    // por delante es la pestaña entera, no hay ningún "al cerrar" que correr.
+    await waitFor(() => {
+      expect(leerBorrador(SERVICIO.id_servicio)?.descripcion).toBe(
+        'Se cambió el conector',
+      )
+    })
+  })
+
+  it('al volver a entrar reofrece lo que había escrito', async () => {
+    guardarBorrador(SERVICIO.id_servicio, {
+      descripcion: 'Lo que escribí antes de que se cayera la sesión',
+      nombreFoto: 'evidencia.jpg',
+    })
+
+    renderizar()
+
+    expect(screen.getByLabelText(/¿Qué realizaste\?/i)).toHaveValue(
+      'Lo que escribí antes de que se cayera la sesión',
+    )
+    expect(screen.getByText(/Recuperamos lo que habías escrito/i)).toBeInTheDocument()
+    // La foto no se puede guardar, así que se le dice cuál era para que la
+    // vuelva a elegir sin dudar.
+    expect(screen.getByText('evidencia.jpg')).toBeInTheDocument()
+  })
+
+  it('"empezar de cero" descarta el borrador', async () => {
+    guardarBorrador(SERVICIO.id_servicio, { descripcion: 'Texto viejo' })
+    const usuario = userEvent.setup()
+
+    renderizar()
+    await usuario.click(screen.getByRole('button', { name: /Empezar de cero/i }))
+
+    expect(screen.getByLabelText(/¿Qué realizaste\?/i)).toHaveValue('')
+    expect(leerBorrador(SERVICIO.id_servicio)).toBeNull()
+  })
+
+  it('el borrador de otra tarea no se cuela en esta', () => {
+    guardarBorrador(999, { descripcion: 'De otra tarea' })
+
+    renderizar()
+
+    expect(screen.getByLabelText(/¿Qué realizaste\?/i)).toHaveValue('')
   })
 })

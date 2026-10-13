@@ -122,6 +122,15 @@ async def _logout(e):
     return await e.llamar("POST", "/auth/logout", await e.empleado("supervisor"))
 
 
+@caso("POST", "/auth/renovar")
+async def _renovar(e):
+    # HU-S9-05. Renovar extiende una sesión viva: revoca el token anterior y
+    # emite uno nuevo, y eso tiene que quedar registrado — una sesión que se
+    # extiende sola durante horas sin dejar rastro es justo lo que habría que
+    # poder revisar después.
+    return await e.llamar("POST", "/auth/renovar", await e.empleado("tecnico"))
+
+
 @caso("POST", "/auth/cambiar-contrasena")
 async def _cambiar_contrasena(e):
     return await e.llamar(

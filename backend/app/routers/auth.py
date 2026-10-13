@@ -6,6 +6,7 @@ Rutas:
   POST /auth/logout             -> revoca el token activo del usuario
   GET  /auth/perfil             -> devuelve los datos del usuario autenticado
   POST /auth/cambiar-contrasena -> cambia la clave e invalida JWT anteriores
+  POST /auth/renovar            -> emite un token nuevo y revoca el anterior
 """
 import logging
 from typing import Annotated
@@ -219,6 +220,64 @@ async def logout(
 
     anotar_evento("logout", "empleado", _empleado.id_empleado)
     return {"detail": "Sesion cerrada correctamente"}
+
+
+# -------- POST /auth/renovar -------------------------------------------
+@router.post(
+    "/renovar",
+    response_model=TokenResponse,
+    summary="Renovar la sesión antes de que venza",
+    status_code=status.HTTP_200_OK,
+)
+async def renovar(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    empleado: Annotated[Empleado, Depends(get_current_empleado)],
+):
+    """
+    Emite un token nuevo para una sesión que TODAVÍA es válida.
+
+    El problema que resuelve: el JWT dura una hora y no había forma de
+    extenderlo. Un técnico que pasaba de esa hora rellenando el informe de una
+    tarea recibía 401 al enviarlo, y el frontend lo mandaba a login recargando
+    la página entera: adiós a lo escrito.
+
+    Esto NO es un refresh token. No hay credencial aparte ni se puede renovar
+    una sesión muerta: la validación la hace `get_current_empleado`, la misma
+    de cualquier otro endpoint, así que un token revocado, uno con el
+    `version_token` viejo (cambió su contraseña o se la restablecieron) o una
+    cuenta desactivada NO renuevan nada. Renovar extiende algo vivo, no
+    resucita.
+
+    El token anterior se revoca en el acto. Si no, cada renovación dejaría un
+    token más circulando: una hora de sesión se convertiría en una cadena de
+    tokens válidos a la vez, y el logout solo mataría el último.
+    """
+    payload = decode_access_token(credentials.credentials)
+
+    # Primero se emite el nuevo y luego se revoca el viejo, dentro de la misma
+    # transacción: si la emisión fallara después de revocar, el usuario se
+    # quedaría sin sesión justo por pulsar "seguir conectado".
+    token = create_access_token(
+        subject=empleado.id_empleado,
+        rol=empleado.rol,
+        version_token=empleado.version_token,
+    )
+    await revoke_token(db, payload)
+
+    anotar_evento("renovar_sesion", "empleado", empleado.id_empleado)
+
+    logger.info(
+        "Sesión renovada para %s (rol %s)", empleado.correo, empleado.rol
+    )
+
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        rol=empleado.rol,
+        id_empleado=empleado.id_empleado,
+        nombre=f"{empleado.nombre} {empleado.apellido}",
+    )
 
 
 # ----------- GET /auth/me (utilidad de diagnóstico) ----------------------

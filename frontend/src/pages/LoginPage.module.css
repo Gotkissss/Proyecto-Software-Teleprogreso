@@ -397,3 +397,19 @@
   .splashLogo { width: 140px; }
   .splashTagline { font-size: 0.875rem; }
 }
+
+
+/* Aviso de sesión vencida (HU-S9-05). Informativo, no un error: al usuario no
+   se le rompió nada, solo se le acabó el tiempo. */
+.avisoBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary-deep);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}

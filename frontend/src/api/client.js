@@ -56,6 +56,30 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+/**
+ * Evento con el que el cliente avisa de que la sesión dejó de valer.
+ *
+ * Antes este interceptor hacía `window.location.href = '/login'`: una recarga
+ * completa del navegador que tira el árbol de React entero. Lo que el técnico
+ * estuviera escribiendo —las notas de la evidencia, por ejemplo— se perdía sin
+ * aviso, y con varias peticiones en vuelo la página se recargaba una vez por
+ * cada 401.
+ *
+ * Ahora solo se emite esto. Quién navega es AuthContext, con React Router, que
+ * conserva el estado de la aplicación y puede explicar el motivo.
+ */
+export const EVENTO_SESION_CADUCADA = 'teleprogreso:sesion-caducada'
+
+// Single-flight: con cinco peticiones en vuelo llegan cinco 401, y sin esta
+// bandera se emitirían cinco eventos y se dispararían cinco navegaciones. Se
+// rearma al volver a entrar (ver `marcarSesionIniciada`).
+let sesionYaCaducada = false
+
+/** Rearma el aviso. Lo llama el login, una vez que hay sesión nueva. */
+export function marcarSesionIniciada() {
+  sesionYaCaducada = false
+}
+
 /* ── Response Interceptor ────────────────────────────────────────────── */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -63,7 +87,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+
+      if (!sesionYaCaducada) {
+        sesionYaCaducada = true
+        window.dispatchEvent(new CustomEvent(EVENTO_SESION_CADUCADA))
+      }
     }
     return Promise.reject(error)
   }

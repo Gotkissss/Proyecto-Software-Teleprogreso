@@ -207,6 +207,36 @@ queda en `bitacora_auditoria` (migraciones `0009` y `0010`):
   filtros, detalle del antes/después, exportación a Excel y aviso si la cadena
   está rota o si la conexión del backend podría alterarla.
 
+## Sesión
+
+El JWT dura una hora. Antes nadie miraba su `exp`: la sesión se acababa en seco,
+la siguiente petición devolvía 401 y el cliente hacía
+`window.location.href = '/login'` — una recarga completa del navegador que se
+llevaba por delante lo que el técnico estuviera escribiendo, y que con varias
+peticiones en vuelo se repetía una vez por cada 401.
+
+`POST /auth/renovar` emite un token nuevo para una sesión **todavía válida** y
+revoca el anterior en el acto, para que no queden dos tokens vivos de la misma
+sesión. **No es un refresh token**: no hay credencial aparte y la validación es
+`get_current_empleado`, la misma dependencia que protege todo lo demás. Por eso
+un token revocado, uno con el `version_token` viejo —le cambiaron o le
+restablecieron la contraseña— y una cuenta desactivada **no renuevan nada**:
+ahí la sesión tiene que morir de verdad. Renovar extiende algo vivo, no
+resucita.
+
+Cada renovación deja fila en la bitácora, con su actor y su IP.
+
+En el cliente, el aviso sale cinco minutos antes del corte y solo ofrece dos
+salidas explícitas —seguir conectado o cerrar sesión— porque la tercera,
+ignorarlo, es justo la que había antes. Cuando la sesión sí muere se navega con
+React Router a `/login?expirado=1`, que explica el motivo en vez de dejar al
+usuario en la pantalla de login sin saber si pulsó algo sin querer.
+
+Y lo escrito en el modal de finalizar tarea se guarda en `localStorage`
+**mientras se escribe** — si lo que se cae es la pestaña entera no hay ningún
+"al cerrar" que ejecutar — y se reofrece al volver. La foto no cabe ahí: se
+guarda su nombre para que el técnico sepa cuál volver a elegir.
+
 ## Retención de datos
 
 `python mantenimiento.py purgar` corre en cada arranque (servicio

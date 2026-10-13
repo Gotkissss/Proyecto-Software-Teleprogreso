@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/ui/Spinner'
 import styles from './LoginPage.module.css'
@@ -48,6 +49,11 @@ export default function LoginPage() {
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState(null)
   const [splashDone, setSplashDone] = useState(false)
+  // HU-S9-05: a login se llega por tres caminos (entrar, cerrar sesión y que
+  // se acabe el tiempo) y los tres se veían igual. Con `?expirado=1` se dice
+  // cuál fue, para que el usuario no crea que falló algo.
+  const [parametros] = useSearchParams()
+  const sesionExpirada = parametros.get('expirado') === '1'
 
   // Splash screen: muestra el logo grande durante 1.6s antes
   // de revelar el formulario. Se omite si el usuario ya inició
@@ -176,6 +182,15 @@ export default function LoginPage() {
             </div>
 
             <form className={styles.form} onSubmit={handleSubmit} noValidate>
+              {sesionExpirada && !error && (
+                <div className={styles.avisoBanner} role="status">
+                  <span>
+                    Tu sesión se cerró por seguridad. Volvé a entrar para seguir
+                    donde estabas.
+                  </span>
+                </div>
+              )}
+
               {error && (
                 <div className={styles.errorBanner} role="alert">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

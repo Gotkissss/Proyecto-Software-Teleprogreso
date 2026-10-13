@@ -222,3 +222,33 @@
   cursor: not-allowed;
   transform: none;
 }
+
+
+/* Aviso de borrador recuperado (HU-S9-05). Informativo: no pasó nada malo,
+   simplemente no se perdió lo escrito. */
+.borrador {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary-deep);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.descartarBorrador {
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-primary-dark);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
