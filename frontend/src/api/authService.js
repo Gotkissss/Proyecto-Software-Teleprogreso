@@ -1,4 +1,4 @@
-import apiClient from './client'
+import apiClient, { marcarSesionIniciada } from './client'
 
 export const login = async (correo, contrasena) => {
   const { data } = await apiClient.post('/auth/login', {
@@ -6,7 +6,39 @@ export const login = async (correo, contrasena) => {
     contrasena,
   })
   localStorage.setItem('access_token', data.access_token)
+  // Rearma el aviso de sesión caducada, que se desactiva tras el primer 401
+  // para no disparar una navegación por cada petición en vuelo.
+  marcarSesionIniciada()
   return data
+}
+
+/**
+ * Pide un token nuevo para la sesión en curso (POST /auth/renovar).
+ *
+ * Single-flight: si el aviso de vencimiento y una recarga de pantalla piden
+ * renovar a la vez, la segunda llamada se engancha a la primera en vez de
+ * emitir dos tokens. No es solo eficiencia: cada renovación REVOCA el token
+ * anterior, así que dos renovaciones en paralelo pueden dejar como vigente
+ * uno que la otra acaba de invalidar, y la sesión se cae justo al intentar
+ * salvarla.
+ */
+let renovacionEnVuelo = null
+
+export const renovarSesion = () => {
+  if (renovacionEnVuelo) return renovacionEnVuelo
+
+  renovacionEnVuelo = apiClient
+    .post('/auth/renovar')
+    .then(({ data }) => {
+      localStorage.setItem('access_token', data.access_token)
+      marcarSesionIniciada()
+      return data
+    })
+    .finally(() => {
+      renovacionEnVuelo = null
+    })
+
+  return renovacionEnVuelo
 }
 
 export const getMe = async () => {

@@ -14,6 +14,11 @@ import { useEffect } from 'react'
 import styles from './Modal.module.css'
 
 export default function Modal({ open, onClose, title, children, width = 480 }) {
+  // Sin `onClose` el diálogo no se puede cerrar: ni con Escape, ni pulsando
+  // fuera, ni con la X — que en ese caso ni se dibuja, porque un botón que no
+  // hace nada es peor que no tenerlo. Lo usa el aviso de sesión por vencer,
+  // donde las dos salidas tienen que ser decisiones explícitas.
+  const cerrable = typeof onClose === 'function'
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && onClose?.()
@@ -28,7 +33,11 @@ export default function Modal({ open, onClose, title, children, width = 480 }) {
   if (!open) return null
 
   return (
-    <div className={styles.overlay} onClick={onClose} role="presentation">
+    <div
+      className={styles.overlay}
+      onClick={cerrable ? onClose : undefined}
+      role="presentation"
+    >
       <div
         className={styles.modal}
         style={{ maxWidth: width }}
@@ -39,7 +48,9 @@ export default function Modal({ open, onClose, title, children, width = 480 }) {
       >
         <div className={styles.header}>
           <h3 className={styles.title}>{title}</h3>
-          <button className={styles.close} onClick={onClose} aria-label="Cerrar">×</button>
+          {cerrable && (
+            <button className={styles.close} onClick={onClose} aria-label="Cerrar">×</button>
+          )}
         </div>
         <div className={styles.body}>{children}</div>
       </div>
