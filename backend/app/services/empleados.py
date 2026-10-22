@@ -35,6 +35,7 @@ from app.core.reglas import (
     ESTADOS_TAREA_ACTIVOS,
     ROL_ADMIN,
     puede_administrar,
+    validar_politica_contrasena,
 )
 from app.core.security import hash_password
 from app.core.tiempo import ahora as ahora_local
@@ -350,14 +351,17 @@ async def restablecer_contrasena(
     if not puede_administrar(current_user.rol, empleado.rol):
         raise forbidden("No tienes permiso para restablecer la contraseña de esta cuenta.")
 
-        # "Distinta del correo": el schema no ve la cuenta de destino (solo viaja
-    # el id en la ruta), así que esta parte de la política se comprueba aquí.
-    # Va después de la autorización para no confirmar el correo a quien no
-    # puede tocar la cuenta. Se compara también con la parte antes de la @.
-    correo = empleado.correo.lower()
-    if data.contrasena.lower() in (correo, correo.split("@")[0]):
-        raise bad_request("La contraseña no puede ser igual al correo de la cuenta.")
-    
+    # Política única (HU-S10-01): el schema ya validó longitud, espacios y
+    # contraseñas comunes. "Distinta del correo" no se ve desde el schema (solo
+    # viaja el id en la ruta), así que se comprueba aquí con la cuenta a la
+    # vista. Va después de la autorización para no confirmar el correo a quien
+    # no puede tocar la cuenta. No se compara con la actual: quien restablece
+    # no la conoce.
+    try:
+        validar_politica_contrasena(data.contrasena, correo=empleado.correo)
+    except ValueError as error:
+        raise bad_request(str(error)) from error
+
     empleado.hash_contrasena = hash_password(data.contrasena)
     # Las sesiones que el empleado tuviera abiertas dejan de valer aquí mismo.
     # Sin esto, restablecer la contraseña de una cuenta que se cree

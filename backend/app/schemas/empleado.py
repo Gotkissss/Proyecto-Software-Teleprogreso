@@ -19,8 +19,14 @@ from datetime import date, datetime
 from typing import Optional
 from enum import Enum
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
-from app.core.reglas import es_contrasena_comun
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from app.core.reglas import validar_politica_contrasena
 
 
 # ── Enums de dominio ───────────────────────────────────────────────────────
@@ -53,10 +59,11 @@ class EmpleadoCreate(BaseModel):
 
     @field_validator("contrasena")
     @classmethod
-    def contrasena_minima(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("La contrasena debe tener al menos 8 caracteres.")
-        return v
+    def validar_contrasena(cls, v: str, info: ValidationInfo) -> str:
+        # Política única (HU-S10-01). `correo` se declara antes que `contrasena`,
+        # así que ya está en info.data (si venía mal formado no está y esa
+        # comprobación se omite; el error del correo ya se reporta aparte).
+        return validar_politica_contrasena(v, correo=info.data.get("correo"))
 
     @field_validator("fecha_contratacion")
     @classmethod
@@ -141,18 +148,11 @@ class EmpleadoPasswordUpdate(BaseModel):
 
     @field_validator("contrasena")
     @classmethod
-    def contrasena_minima(cls, v: str) -> str:
-        # Mismo minimo que al crear el empleado, para que no haya dos reglas
-        # distintas segun por donde se establezca la clave.
-        if len(v) < 8:
-            raise ValueError("La contrasena debe tener al menos 8 caracteres.")
-        if v.strip() != v:
-            raise ValueError("La contrasena no puede empezar ni terminar con espacios.")
-        if not v.strip():
-            raise ValueError("La contrasena no puede estar vacia.")
-        if es_contrasena_comun(v):
-            raise ValueError("La contrasena es demasiado comun. Elige otra.")
-        return v
+    def validar_contrasena(cls, v: str) -> str:
+        # Política única (HU-S10-01). La parte "distinta del correo" no se ve
+        # desde aquí (solo viaja el id en la ruta) y se aplica en
+        # services/empleados.restablecer_contrasena.
+        return validar_politica_contrasena(v)
 
     @model_validator(mode="after")
     def contrasenas_coinciden(self) -> "EmpleadoPasswordUpdate":
