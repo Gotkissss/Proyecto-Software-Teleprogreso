@@ -24,13 +24,18 @@ mano antes de la sesión.
 
 ## Cuentas
 
-| Bloque | Rol en la prueba | Correo | Contraseña |
-|---|---|---|---|
-| A | Técnico de campo | `tecnico@teleprogreso.com` | `Tecnico1234!` |
-| B | Supervisor / administrador | `admin@teleprogreso.com` | `Admin1234!` |
+| Bloque | Rol en la prueba | Correo |
+|---|---|---|
+| A | Técnico de campo | `tecnico@teleprogreso.com` |
+| B | Supervisor / administrador | `admin@teleprogreso.com` |
 
-Son las dos únicas cuentas que el participante usa. Van en la hoja impresa de
-credenciales que se le entrega; el moderador no las dicta ni teclea.
+Son las dos únicas cuentas que el participante usa. **Las contraseñas ya no
+están en este archivo ni en el README**: la prueba terminó y las que estaban
+aquí eran las mismas del seed, así que cualquiera que leyera el repositorio
+podía entrar al despliegue. Si hay que volver a correr
+sesiones, las contraseñas las entrega el equipo por un canal privado y van en
+la hoja impresa de credenciales que se le da al participante; el moderador no
+las dicta ni teclea.
 
 El resto de los empleados que aparecen en pantalla (María López, Diego
 Morales, Ana Castillo) existen para dar cuerpo al escenario: nadie inicia

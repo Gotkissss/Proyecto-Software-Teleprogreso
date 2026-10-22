@@ -80,18 +80,33 @@ docker compose up --build
 | Backend API | http://localhost:8000 |
 | Docs (Swagger) | http://localhost:8000/docs |
  
-Credenciales de prueba (seed automático):
- 
-| Rol | Correo | Contraseña |
-|---|---|---|
-| Admin | admin@teleprogreso.com | Admin1234! |
-| Supervisor | supervisor@teleprogreso.com | Super1234! |
-| Gerente | gerente@teleprogreso.com | Gerente1234! |
-| Técnico | tecnico@teleprogreso.com | Tecnico1234! |
+### Cuentas de demostración
+
+El seed automático crea estas cuentas para poder probar cada rol:
+
+| Rol | Correo |
+|---|---|
+| Admin | admin@teleprogreso.com |
+| Supervisor | supervisor@teleprogreso.com |
+| Gerente | gerente@teleprogreso.com |
+| Técnico | tecnico@teleprogreso.com |
 
 El seed crea además tres técnicos más (`maria.lopez@`, `diego.morales@`,
-`ana.castillo@`, todos con `Tecnico1234!`) y uno inactivo
-(`pedro.hernandez@`) para poder probar el filtro de estado.
+`ana.castillo@`) y uno inactivo (`pedro.hernandez@`) para poder probar el
+filtro de estado.
+
+**Las contraseñas no se publican en este repositorio.**
+
+- **En local** (`docker compose`, `ENVIRONMENT=development`): son las que están
+  escritas en `backend/seed.py`. Sirven solo para desarrollo: con
+  `ENVIRONMENT=production` el seed se niega a usarlas.
+- **En el despliegue (Railway):** las contraseñas de las cuentas de demo las
+  fijó el equipo y se comparten por un canal privado. Si las necesitas,
+  pídelas ahí; no las pongas en el repositorio, en un PR ni en un chat público.
+
+Cómo se controlan los datos de demo en un despliegue (`SEMBRAR_DEMO`,
+`CONTRASENA_DEMO`) y cómo retirarlos cuando la empresa pase a usar datos
+reales está en `SEGURIDAD.md`, sección «Cuentas y contraseñas».
 
 ## 🗄️ Repoblar la base de datos
 
