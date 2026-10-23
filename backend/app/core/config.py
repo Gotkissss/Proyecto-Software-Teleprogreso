@@ -1,3 +1,4 @@
+import logging
 import re
 import secrets
 from typing import List, Union
@@ -21,6 +22,28 @@ SECRETOS_PROHIBIDOS = {
 # la llave: 32 caracteres aleatorios es el piso razonable para que no se pueda
 # romper por fuerza bruta fuera de línea.
 LONGITUD_MINIMA_SECRET_KEY = 32
+
+logger = logging.getLogger(__name__)
+
+
+def motivo_llave_debil(clave: str) -> str | None:
+    """
+    Por qué una llave de firma no sirve, o None si es aceptable. La usan
+    SECRET_KEY y CLAVE_FIRMA_ARCHIVOS: las dos firman algo que el cliente no
+    debe poder fabricar.
+    """
+    if len(clave) < LONGITUD_MINIMA_SECRET_KEY:
+        return (
+            f"tiene {len(clave)} caracteres y se requieren al menos "
+            f"{LONGITUD_MINIMA_SECRET_KEY}"
+        )
+    if clave.lower() in SECRETOS_PROHIBIDOS:
+        return "es un valor de ejemplo conocido"
+    if any(p in clave.lower() for p in ("changeme", "your-secret", "your_secret", "cambiar")):
+        return "parece una plantilla sin rellenar"
+    if len(set(clave)) < 8:
+        return "repite muy pocos caracteres distintos (no es aleatoria)"
+    return None
 
 
 class Settings(BaseSettings):
@@ -64,6 +87,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # ── Firma de las URLs de archivos (HU-S10-02) ────────────────────────────
+    # Llave HMAC de los enlaces temporales a las fotos subidas
+    # (app/core/archivos_firmados.py). Es otra llave y no SECRET_KEY a
+    # propósito: se puede rotar sin cerrar las sesiones, y quien obtenga una
+    # no puede fabricar lo que firma la otra. Obligatoria en producción; en
+    # desarrollo y pruebas, si falta, se genera una al azar al arrancar.
+    CLAVE_FIRMA_ARCHIVOS: str = ""
 
     # ── Defensa del login ────────────────────────────────────────────────────
     # El login es la única puerta a los datos, así que es donde va a pegar
@@ -122,6 +153,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "DATABASE_URL", "DATABASE_URL_SYNC", "DATABASE_URL_MIGRACIONES", "SECRET_KEY", "ALGORITHM",
+        "CLAVE_FIRMA_ARCHIVOS",
         mode="before",
     )
     @classmethod
@@ -223,20 +255,7 @@ class Settings(BaseSettings):
             # La suite de pruebas usa llaves de juguete a propósito.
             return self
 
-        clave = self.SECRET_KEY or ""
-        motivo = None
-
-        if len(clave) < LONGITUD_MINIMA_SECRET_KEY:
-            motivo = (
-                f"tiene {len(clave)} caracteres y se requieren al menos "
-                f"{LONGITUD_MINIMA_SECRET_KEY}"
-            )
-        elif clave.lower() in SECRETOS_PROHIBIDOS:
-            motivo = "es un valor de ejemplo conocido"
-        elif any(p in clave.lower() for p in ("changeme", "your-secret", "your_secret", "cambiar")):
-            motivo = "parece una plantilla sin rellenar"
-        elif len(set(clave)) < 8:
-            motivo = "repite muy pocos caracteres distintos (no es aleatoria)"
+        motivo = motivo_llave_debil(self.SECRET_KEY or "")
 
         if motivo:
             sugerencia = secrets.token_urlsafe(48)
@@ -247,6 +266,55 @@ class Settings(BaseSettings):
                 "Pon esta línea en tu .env (o genera otra con "
                 "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`):\n"
                 f"    SECRET_KEY={sugerencia}"
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validar_clave_archivos(self):
+        """
+        La llave de las URLs firmadas: obligatoria y fuerte en producción,
+        distinta de SECRET_KEY siempre. Sin ella, en desarrollo y pruebas se
+        usa una al azar por proceso: los enlaces dejan de valer al reiniciar,
+        que fuera de producción no importa.
+        """
+        sugerencia = secrets.token_urlsafe(48)
+        clave = self.CLAVE_FIRMA_ARCHIVOS
+
+        if not clave:
+            if self.ENVIRONMENT == "production":
+                raise ValueError(
+                    "CLAVE_FIRMA_ARCHIVOS es obligatoria en producción: firma "
+                    "los enlaces temporales a las fotos subidas.\n"
+                    "Define la variable (o genera otra con "
+                    "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`):\n"
+                    f"    CLAVE_FIRMA_ARCHIVOS={sugerencia}"
+                )
+            if self.ENVIRONMENT == "development":
+                logger.warning(
+                    "CLAVE_FIRMA_ARCHIVOS no está definida: se usa una llave al "
+                    "azar y los enlaces a fotos dejan de valer al reiniciar."
+                )
+            self.CLAVE_FIRMA_ARCHIVOS = sugerencia
+            return self
+
+        if clave == self.SECRET_KEY:
+            raise ValueError(
+                "CLAVE_FIRMA_ARCHIVOS no puede ser igual a SECRET_KEY: son dos "
+                "llaves distintas para que una filtrada no comprometa a la otra.\n"
+                f"    CLAVE_FIRMA_ARCHIVOS={sugerencia}"
+            )
+
+        if self.ENVIRONMENT == "test":
+            return self
+
+        motivo = motivo_llave_debil(clave)
+        if motivo:
+            raise ValueError(
+                f"CLAVE_FIRMA_ARCHIVOS insegura: {motivo}.\n"
+                "Con una llave débil cualquiera puede fabricar enlaces a las "
+                "fotos de evidencia.\n"
+                f"    CLAVE_FIRMA_ARCHIVOS={sugerencia}"
             )
 
         return self

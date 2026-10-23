@@ -35,6 +35,11 @@ def _settings(**extra):
     return Settings(**{**BASE_CONFIG, **extra})
 
 
+# Producción exige además la llave de las URLs firmadas (HU-S10-02). Las
+# pruebas de producción la llevan para que fallen por lo que dicen probar.
+CLAVE_ARCHIVOS_VALIDA = "Qw3eR5tY7uI9oP2aS4dF6gH8jK1lZ3xC5vB7nM9qW2eR"
+
+
 @pytest.mark.parametrize(
     "clave",
     [
@@ -82,6 +87,7 @@ def test_produccion_exige_allowed_hosts():
     with pytest.raises(ValueError):
         _settings(ENVIRONMENT="production",
                   SECRET_KEY="Xk7pQ2mW9zR4tY6uI8oP1aS3dF5gH0jK2lZ4xC6vB8nM",
+                  CLAVE_FIRMA_ARCHIVOS=CLAVE_ARCHIVOS_VALIDA,
                   BACKEND_CORS_ORIGINS=["https://app.teleprogreso.com"],
                   ALLOWED_HOSTS=[])
 
@@ -90,6 +96,7 @@ def test_produccion_rechaza_origenes_sin_https():
     with pytest.raises(ValueError):
         _settings(ENVIRONMENT="production",
                   SECRET_KEY="Xk7pQ2mW9zR4tY6uI8oP1aS3dF5gH0jK2lZ4xC6vB8nM",
+                  CLAVE_FIRMA_ARCHIVOS=CLAVE_ARCHIVOS_VALIDA,
                   BACKEND_CORS_ORIGINS=["http://app.teleprogreso.com"],
                   ALLOWED_HOSTS=["app.teleprogreso.com"])
 
