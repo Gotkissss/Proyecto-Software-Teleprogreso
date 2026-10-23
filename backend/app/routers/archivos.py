@@ -23,7 +23,7 @@ import os
 import re
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from app.core.archivos_firmados import firma_valida
 from app.core.exceptions import bad_request, forbidden, not_found
@@ -36,6 +36,7 @@ CARPETAS_PERMITIDAS = ("incidencias", "activos")
 _NOMBRE_VALIDO = re.compile(r"^[A-Za-z0-9_.-]+$")
 _EXP_VALIDA = re.compile(r"^[0-9]{1,12}$")
 _FIRMA_VALIDA = re.compile(r"^[0-9a-f]{64}$")
+_SEGMENTO_PELIGROSO = re.compile(r"\.\.|[\\:\x00]")
 
 TIPO_POR_FORMATO = {
     "jpeg": "image/jpeg",
@@ -81,19 +82,25 @@ def _ruta_en_static(carpeta: str, nombre: str) -> str | None:
     return ruta
 
 
-def _tipo_de_imagen(ruta: str) -> str | None:
-    """Content-Type según los primeros bytes del archivo, o None si no es una imagen admitida."""
+def _leer_imagen(ruta: str) -> tuple[bytes, str] | None:
+    """Contenido y Content-Type del archivo, o None si no se pudo leer, supera el máximo o no es imagen."""
+    maximo = uploads.MAX_FILE_SIZE_MB * 1024 * 1024
     try:
         with open(ruta, "rb") as archivo:
-            cabecera = archivo.read(16)
+            contenido = archivo.read(maximo + 1)
     except OSError:
         return None
-    return TIPO_POR_FORMATO.get(uploads.formato_real(cabecera))
+    if len(contenido) > maximo:
+        return None
+    tipo = TIPO_POR_FORMATO.get(uploads.formato_real(contenido[:16]))
+    if tipo is None:
+        return None
+    return contenido, tipo
 
 
 @router.get(
     "/{carpeta}/{nombre}",
-    response_class=FileResponse,
+    response_class=Response,
     summary="Ver una foto subida a partir de su enlace firmado",
     responses={
         400: {"description": "La carpeta o el nombre no tienen un formato válido."},
@@ -126,12 +133,23 @@ async def get_archivo(
     if not os.path.isfile(ruta):
         raise not_found(_NO_ENCONTRADO)
 
-    tipo = _tipo_de_imagen(ruta)
-    if tipo is None:
+    # Se lee todo aquí (máximo MAX_FILE_SIZE_MB): con FileResponse el archivo
+    # se abría otra vez al enviar y, si ya no estaba, la respuesta era un 500.
+    leida = _leer_imagen(ruta)
+    if leida is None:
         raise not_found(_NO_ENCONTRADO)
 
-    return FileResponse(
-        ruta,
+    contenido, tipo = leida
+    return Response(
+        content=contenido,
         media_type=tipo,
         headers={"Cache-Control": "private", "X-Content-Type-Options": "nosniff"},
     )
+
+
+@router.get("/{resto:path}", include_in_schema=False)
+async def get_archivo_ruta_no_valida(resto: str):
+    """Ruta de respaldo: 400 si intenta salir de la carpeta, 404 en otro caso. Nunca sirve un archivo."""
+    if _SEGMENTO_PELIGROSO.search(resto):
+        raise bad_request(_RUTA_NO_VALIDA)
+    raise not_found(_NO_ENCONTRADO)
