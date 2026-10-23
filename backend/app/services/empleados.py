@@ -198,6 +198,8 @@ async def crear_empleado(
         estado="activo",
         telefono=data.telefono,
         fecha_contratacion=data.fecha_contratacion,
+        # La contraseña la eligió el admin, no su dueño (HU-S10-01).
+        debe_cambiar_contrasena=True,
     )
     db.add(nuevo_empleado)
     await db.flush()
@@ -371,6 +373,9 @@ async def restablecer_contrasena(
     # propio (POST /auth/cambiar-contrasena); solo faltaba aplicarlo también
     # por esta puerta.
     empleado.version_token += 1
+    # Quien la restablece la conoce: su dueño tiene que cambiarla al entrar
+    # (HU-S10-01).
+    empleado.debe_cambiar_contrasena = True
     logger.warning(
         "Contraseña restablecida para %s (id=%s) por %s (id=%s, rol=%s)",
         empleado.correo,

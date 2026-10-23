@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, false, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,7 +15,13 @@ class Empleado(Base):
     version_token:      Mapped[int]      = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    correo:             Mapped[str]      = mapped_column(String(100), nullable=False, unique=True)
+    # HU-S10-01: la contraseña la puso otra persona y hay que cambiarla antes
+    # de usar el sistema (ver core/deps.py). Nace en false para las cuentas
+    # existentes y las del seed.
+    debe_cambiar_contrasena: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    correo:            Mapped[str]      = mapped_column(String(100), nullable=False, unique=True)
     fecha_contratacion: Mapped[date]     = mapped_column(Date, nullable=False)
     fecha_registro:     Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     ultimo_acceso:      Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

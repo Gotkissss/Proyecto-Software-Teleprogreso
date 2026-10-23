@@ -297,6 +297,9 @@ async def me(
         "correo": empleado.correo,
         "rol": empleado.rol,
         "estado": empleado.estado,
+        # HU-S10-01: el frontend lleva a la pantalla de cambio obligatorio sin
+        # esperar a que alguna llamada responda 403.
+        "debe_cambiar_contrasena": empleado.debe_cambiar_contrasena,
     }
 
 
@@ -354,6 +357,8 @@ async def cambiar_contrasena(
         body.nueva_contrasena,
     )
     empleado.version_token += 1
+    # La eligió su dueño: se acaba el cambio obligatorio (HU-S10-01).
+    empleado.debe_cambiar_contrasena = False
     await db.flush()
 
     return {

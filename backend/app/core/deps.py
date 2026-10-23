@@ -27,6 +27,7 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import APIException
 from app.core.security import decode_access_token, token_esta_revocado
 from app.db.session import get_db
 from app.models.empleado import Empleado
@@ -38,14 +39,32 @@ from app.services.bitacora import anotar_evento, primera_vez
 # auto_error=False para poder responder 401 (no 403) cuando falta el token
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# HU-S10-01: lo único que puede usar una cuenta con el cambio de contraseña
+# pendiente. Rutas exactas, no un prefijo: /auth/otra-cosa queda bloqueada.
+# /auth/login no está porque no pide token.
+RUTAS_CON_CAMBIO_PENDIENTE = frozenset({
+    "/auth/me",
+    "/auth/perfil",
+    "/auth/cambiar-contrasena",
+    "/auth/renovar",
+    "/auth/logout",
+})
+
 
 async def get_current_empleado(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    request: Request = None,
 ) -> Empleado:
     """
     Dependencia base: valida el JWT y devuelve el empleado autenticado.
-    Lanza 401 si el token falta o es inválido/expirado/revocado.
+    Lanza 401 si el token falta o es inválido/expirado/revocado, y 403
+    PASSWORD_CHANGE_REQUIRED si tiene que cambiar su contraseña y la ruta no
+    es de las que sirven para hacerlo.
+
+    `request` lo inyecta FastAPI; es opcional solo para poder llamar a la
+    dependencia a mano (pruebas). Sin él no hay ruta que comparar y una cuenta
+    con el cambio pendiente queda bloqueada.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -92,7 +111,23 @@ async def get_current_empleado(
             detail="Cuenta de usuario inactiva",
         )
 
+    # Se registra antes del bloqueo para que el 403 de abajo quede en la
+    # bitácora con su actor.
     registrar_actor(empleado)
+
+    # getattr: los empleados simulados de las pruebas anteriores a la columna
+    # no la traen; el modelo real siempre la tiene.
+    ruta = request.url.path if request is not None else None
+    if (
+        getattr(empleado, "debe_cambiar_contrasena", False)
+        and ruta not in RUTAS_CON_CAMBIO_PENDIENTE
+    ):
+        raise APIException(
+            status.HTTP_403_FORBIDDEN,
+            "Debes cambiar tu contraseña antes de continuar.",
+            "PASSWORD_CHANGE_REQUIRED",
+        )
+
     return empleado
 
 
