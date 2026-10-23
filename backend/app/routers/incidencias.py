@@ -98,13 +98,16 @@ async def _obtener_tarea_autorizada(
 
     if current_user.rol == ROL_GERENTE:
         if escritura:
-            raise HTTPException(
+            error = HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "El rol gerente es de consulta: puede revisar las evidencias "
-                    "pero no registrarlas. Coordina el registro con el supervisor."
-                ),
+                detail="Puedes consultar las evidencias de esta tarea, pero no registrarlas.",
             )
+            # Como en require_roles: el cliente no ve qué rol sí registra.
+            error.detalle_bitacora = (
+                "El rol gerente es de consulta: puede revisar las evidencias "
+                "pero no registrarlas. Coordina el registro con el supervisor."
+            )
+            raise error
         return tarea
 
     result_asig = await db.execute(
