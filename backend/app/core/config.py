@@ -116,7 +116,7 @@ class Settings(BaseSettings):
 
     # ── Almacenamiento de las imágenes subidas ───────────────────────────────
     # Carpeta donde se escriben las fotos de evidencia y las imágenes de
-    # activos, y que main.py publica en /static.
+    # activos, y que GET /archivos/... sirve con enlace firmado.
     #
     # Se configura por entorno porque el disco del contenedor es EFÍMERO: en
     # Railway cada deploy (y cada reinicio) arranca un contenedor nuevo y

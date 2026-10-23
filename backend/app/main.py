@@ -17,7 +17,6 @@ por aqui pasa antes por los filtros de abajo.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.staticfiles import StaticFiles
 import os
 
 from app.core.contexto import ContextoPeticionMiddleware
@@ -47,9 +46,10 @@ from app.routers.activos    import router as activos_router
 from app.routers.alertas    import router as alertas_router
 from app.routers.reportes   import router as reportes_router
 from app.routers.auditoria  import router as auditoria_router
+from app.routers.archivos   import router as archivos_router
 
 # Carpeta de las imagenes subidas (STATIC_DIR). Vive en el servicio de uploads
-# para que escritura y publicacion no puedan apuntar a sitios distintos.
+# para que escritura y lectura no puedan apuntar a sitios distintos.
 from app.services.uploads import STATIC_ROOT
 
 # En produccion no se publica la documentacion interactiva: es un mapa completo
@@ -115,17 +115,16 @@ app.add_middleware(LimiteTamanoBody)
 #    X-Request-ID en la respuesta.
 app.add_middleware(ContextoPeticionMiddleware)
 
-# ── Archivos estaticos: fotos de evidencia e imagenes de activos ──────
-# La carpeta la resuelve services/uploads.py a partir de STATIC_DIR, y se
-# reutiliza aqui a proposito: si el que escribe las fotos y el que las sirve
-# apuntaran a rutas distintas, la subida responderia 200 y la imagen saldria
-# rota sin ningun error visible.
+# ── Archivos subidos: fotos de evidencia e imagenes de activos ──────
+# Ya no se publican en /static: solo se sirven por GET /archivos/... con un
+# enlace firmado (routers/archivos.py). La carpeta la resuelve
+# services/uploads.py a partir de STATIC_DIR y se crea aqui porque las subidas
+# escriben en ella.
 #
 # En Railway hay que apuntar STATIC_DIR al montaje de un volumen persistente;
 # si no, cada deploy arranca con la carpeta vacia y las fotos ya subidas pasan
 # a devolver 404.
 os.makedirs(STATIC_ROOT, exist_ok=True)
-app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
 # ── Manejadores globales de error ─────────────────────────────────────────────
 register_exception_handlers(app)
@@ -150,6 +149,7 @@ app.include_router(activos_router)     # GET/POST/DELETE /activos/* (inventario,
 app.include_router(alertas_router)     # GET/PATCH /alertas/*
 app.include_router(reportes_router)    # GET /reportes/asistencia | tareas-completadas | productividad
 app.include_router(auditoria_router)   # GET /auditoria | /catalogos | /verificacion | /exportar (solo admin)
+app.include_router(archivos_router)    # GET /archivos/{carpeta}/{nombre} (enlace firmado, sin JWT)
 
 
 # ── Health checks ─────────────────────────────────────────────────────────────

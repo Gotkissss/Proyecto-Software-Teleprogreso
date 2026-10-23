@@ -35,6 +35,7 @@ from app.schemas.activo import (
     ActivoUpdateRequest,
     CarroCreate,
     HerramientaCreate,
+    ImagenActivoResponse,
     MaterialCreate,
 )
 from typing import Union
@@ -425,6 +426,7 @@ from app.services.uploads import (
 
 @router.post(
     "/{id:int}/imagen",
+    response_model=ImagenActivoResponse,
     summary="Subir o reemplazar la imagen de un activo",
     status_code=status.HTTP_200_OK,
 )
@@ -441,7 +443,8 @@ async def upload_imagen_activo(
     - Tamaño máximo: 5 MB
     - La imagen anterior se elimina si existía
 
-    La URL pública queda guardada en `activo.foto_url` y se devuelve en la respuesta.
+    La ruta queda guardada en `activo.foto_url` y la respuesta la devuelve
+    como enlace firmado.
     Roles: admin, supervisor.
     """
     # Verificar activo
@@ -458,4 +461,7 @@ async def upload_imagen_activo(
     )
     await db.flush()
 
-    return {"detail": "Imagen subida correctamente.", "foto_url": activo.foto_url}
+    return ImagenActivoResponse(
+        detail="Imagen subida correctamente.",
+        foto_url=activo.foto_url,
+    )

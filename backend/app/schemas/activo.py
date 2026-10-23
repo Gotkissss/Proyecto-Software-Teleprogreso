@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from app.core.archivos_firmados import UrlArchivo
 from app.core.reglas import ESTADOS_HERRAMIENTA, ESTADOS_VEHICULO
 
 
@@ -38,7 +39,7 @@ class ActivoBase(BaseModel):
     descripcion:    Optional[str] = None
     tipo:           str
     fecha_registro: date
-    foto_url:       Optional[str] = None
+    foto_url:       UrlArchivo = None
 
     class Config:
         from_attributes = True
@@ -82,7 +83,7 @@ class HerramientaEnCarroResponse(BaseModel):
     modelo:           Optional[str] = None
     estado:           str
     descripcion:      Optional[str] = None
-    foto_url:         Optional[str] = None
+    foto_url:         UrlArchivo = None
 
     # Campos de la relacion CarroHerramienta
     fecha_asignacion: Optional[datetime] = None
@@ -227,7 +228,7 @@ class ActivoDetalleResponse(BaseModel):
     descripcion:    Optional[str] = None
     tipo:           str
     fecha_registro: date
-    foto_url:       Optional[str] = None
+    foto_url:       UrlArchivo = None
 
     # Carro
     placa:               Optional[str] = None
@@ -250,4 +251,11 @@ class ActivoDetalleResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ImagenActivoResponse(BaseModel):
+    """Respuesta de POST /activos/{id}/imagen."""
+
+    detail:   str
+    foto_url: UrlArchivo = None
 
