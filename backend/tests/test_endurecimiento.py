@@ -192,9 +192,9 @@ def test_una_imagen_subida_conserva_su_origen_pero_no_puede_ejecutar_nada():
     `allow-same-origin` devuelve el origen y nada más: sin `allow-scripts` ni
     `allow-forms`, un HTML colado entre las subidas sigue sin ejecutar nada.
     """
-    # 404 porque el archivo no existe; las cabeceras se añaden igual y es lo
+    # 403 porque el enlace no trae firma; las cabeceras se añaden igual y es lo
     # único que se está comprobando aquí.
-    csp = client.get("/static/incidencias/inexistente.jpg").headers[
+    csp = client.get("/archivos/incidencias/inexistente.jpg").headers[
         "Content-Security-Policy"
     ]
 

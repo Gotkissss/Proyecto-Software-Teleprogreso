@@ -14,12 +14,14 @@ Los dos invariantes que se fijan aquí:
   1. La carpeta sale de la configuración, no está incrustada en el código.
   2. El que ESCRIBE los archivos y el que los SIRVE usan exactamente la misma
      carpeta. Si se separan, la subida responde 200 y la imagen sale rota: un
-     fallo que no deja rastro en ningún log.
+     fallo que no deja rastro en ningún log. Desde HU-S10-02 la carpeta ya no
+     se monta en /static: la sirve GET /archivos/... leyendo
+     uploads.STATIC_ROOT en cada petición (ver test_archivos_protegidos.py).
 """
 
 import os
 
-from app.services.uploads import STATIC_ROOT, resolver_static_root
+from app.services.uploads import resolver_static_root
 
 
 # ─── De dónde sale la carpeta ────────────────────────────────────────────────
@@ -52,11 +54,20 @@ def test_la_ruta_devuelta_es_absoluta(tmp_path):
     assert os.path.isabs(resolver_static_root(relativa))
 
 
-# ─── Escritura y publicación, la misma carpeta ───────────────────────────────
+# ─── Publicación: ya no hay /static ──────────────────────────────────────────
 
-def test_se_sirve_la_misma_carpeta_en_la_que_se_escribe():
+def test_no_queda_montaje_publico_en_static():
     from app.main import app
 
-    montaje = next(r for r in app.routes if getattr(r, "name", "") == "static")
+    rutas = [getattr(r, "path", "") for r in app.routes]
 
-    assert os.path.abspath(montaje.app.directory) == STATIC_ROOT
+    assert all(not ruta.startswith("/static") for ruta in rutas)
+    assert not any(getattr(r, "name", "") == "static" for r in app.routes)
+
+
+def test_la_ruta_de_archivos_firmados_existe():
+    from app.main import app
+
+    rutas = [getattr(r, "path", "") for r in app.routes]
+
+    assert "/archivos/{carpeta}/{nombre}" in rutas

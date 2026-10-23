@@ -76,7 +76,7 @@ vi.mock('../api/rutaService', () => ({
               {
                 id_incidencia: 1,
                 descripcion: 'Se instaló la acometida y se configuró la ONT.',
-                foto_evidencia: '/static/incidencias/x.jpg',
+                foto_evidencia: '/archivos/incidencias/x.jpg?exp=1&firma=f',
                 fecha_reporte: '2026-07-28T15:03:00',
               },
             ],
@@ -183,7 +183,7 @@ vi.mock('../api/tareaService', () => ({
 vi.mock('../api/incidenciaService', () => ({
   getIncidencias: vi.fn(async () => []),
   crearIncidencia: vi.fn(async () => ({ id_incidencia: 1 })),
-  subirFotoEvidencia: vi.fn(async () => ({ foto_evidencia: '/static/x.jpg' })),
+  subirFotoEvidencia: vi.fn(async () => ({ foto_evidencia: '/archivos/incidencias/x.jpg?exp=1&firma=f' })),
   eliminarIncidencia: vi.fn(async () => ({})),
   finalizarTarea: vi.fn(async () => ({ id_tarea: 1, estado_tarea: 'completado' })),
   finalizarTareaConEvidencia: vi.fn(async () => ({ id_incidencia: 1 })),
