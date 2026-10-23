@@ -17,25 +17,23 @@ enlace emitido hace más de MINUTOS_URL_FIRMADA ya está vencido. Sin base de
 datos: TestClient, tmp_path y monkeypatch de uploads.STATIC_ROOT.
 """
 
-import io
 import re
 import time
 from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.core.archivos_firmados import firma_valida, url_firmada
 from app.core.reglas import MINUTOS_URL_FIRMADA
-from app.core.security import create_access_token
 from app.db.session import get_db
 from app.main import app
 from app.models.activo import Activo
 from app.models.tarea import Incidencia, Tarea
+from app.routers import archivos as router_archivos
 from app.routers.activos import upload_imagen_activo
 from app.routers.archivos import get_archivo
 from app.routers.incidencias import get_incidencias, upload_foto_evidencia
@@ -51,9 +49,11 @@ from app.schemas.incidencia import FotoEvidenciaResponse, IncidenciaResponse
 from app.schemas.tarea import EvidenciaResumen
 from app.services import uploads
 
+from tests.test_bitacora import _db_con, _persona, _token
+from tests.test_incidencias import JPEG, PNG, _upload
+from tests.test_url_firmada import _partes
+
 VIGENCIA = MINUTOS_URL_FIRMADA * 60
-JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 NOMBRE = "incidencia_12_" + "0a1b2c3d" * 4 + ".jpg"
 RUTA = f"/static/incidencias/{NOMBRE}"
 MENSAJE_ENLACE = (
@@ -77,15 +77,6 @@ def carpeta(tmp_path, monkeypatch):
     (tmp_path / "activos").mkdir()
     (tmp_path / "incidencias" / NOMBRE).write_bytes(JPEG)
     return tmp_path
-
-
-def _partes(url):
-    """('carpeta', 'nombre', exp, firma) de un enlace firmado."""
-    separada = urlsplit(url)
-    _, prefijo, carpeta, nombre = separada.path.split("/")
-    assert prefijo == "archivos"
-    consulta = parse_qs(separada.query)
-    return carpeta, nombre, int(consulta["exp"][0]), consulta["firma"][0]
 
 
 def _con_query(url, **cambios):
@@ -189,6 +180,54 @@ def test_un_archivo_que_no_es_imagen_no_se_sirve(cliente, carpeta):
     assert b"<script>" not in res.content
 
 
+def test_si_el_archivo_desaparece_antes_de_leerlo_404(cliente, carpeta, monkeypatch):
+    # isfile dice que está, pero al abrirlo ya no existe: no se borra nada del disco.
+    monkeypatch.setattr(router_archivos.os.path, "isfile", lambda ruta: True)
+
+    res = cliente.get(url_firmada("/static/incidencias/se_fue.jpg"))
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Archivo no encontrado."
+
+
+def test_si_el_archivo_no_se_puede_leer_404(cliente, carpeta, monkeypatch):
+    def _sin_permiso(*args, **kwargs):
+        raise PermissionError("bloqueado")
+
+    monkeypatch.setattr(router_archivos, "open", _sin_permiso, raising=False)
+
+    res = cliente.get(url_firmada(RUTA))
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Archivo no encontrado."
+
+
+def _jpeg_de(tamano):
+    """Bytes de un JPEG válido por su cabecera con exactamente `tamano` bytes."""
+    return JPEG + b"\x00" * (tamano - len(JPEG))
+
+
+def test_un_archivo_mayor_al_maximo_404_sin_servir_nada(cliente, carpeta):
+    maximo = uploads.MAX_FILE_SIZE_MB * 1024 * 1024
+    (carpeta / "incidencias" / "grande.jpg").write_bytes(_jpeg_de(maximo + 1))
+
+    res = cliente.get(url_firmada("/static/incidencias/grande.jpg"))
+
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Archivo no encontrado."
+
+
+def test_un_archivo_justo_en_el_maximo_se_sirve(cliente, carpeta):
+    maximo = uploads.MAX_FILE_SIZE_MB * 1024 * 1024
+    (carpeta / "incidencias" / "limite.jpg").write_bytes(_jpeg_de(maximo))
+
+    res = cliente.get(url_firmada("/static/incidencias/limite.jpg"))
+
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "image/jpeg"
+    assert len(res.content) == maximo
+
+
 @pytest.mark.parametrize(
     "ruta",
     [
@@ -212,6 +251,38 @@ async def test_un_nombre_con_salto_de_carpeta_400_antes_de_mirar_la_firma(carpet
         await get_archivo("incidencias", nombre, exp=None, firma=None)
 
     assert error.value.status_code == 400
+
+
+# httpx y los navegadores resuelven ".." literal antes de enviar; las formas
+# codificadas sí llegan así al servidor.
+@pytest.mark.parametrize(
+    "ruta",
+    [
+        "/archivos/incidencias/%2E%2E%2Fsecreto.jpg",        # ../
+        "/archivos/incidencias/..%2F..%2Fapp%2Fmain.py",     # ..%2F
+        "/archivos/..%2Fincidencias/foto.jpg",               # .. en la carpeta
+        "/archivos/incidencias/%2E%2E",                      # .. solo
+        "/archivos/incidencias/sub/..%5Cfoto.jpg",           # barra invertida
+        "/archivos/incidencias/sub/c%3Afoto.jpg",            # dos puntos
+        "/archivos/incidencias/sub/foto%00.jpg",             # byte nulo
+    ],
+)
+def test_una_ruta_que_intenta_salir_de_la_carpeta_400(cliente, carpeta, ruta):
+    res = cliente.get(ruta + "?exp=1&firma=" + "0" * 64)
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "La ruta del archivo no es válida."
+
+
+@pytest.mark.parametrize(
+    "ruta",
+    ["/archivos/", "/archivos/incidencias", "/archivos/incidencias/sub/foto.jpg", "/archivos/a/b/c"],
+)
+def test_una_ruta_desconocida_404_sin_servir_nada(cliente, carpeta, ruta):
+    res = cliente.get(ruta + "?exp=1&firma=" + "0" * 64)
+
+    assert res.status_code == 404
+    assert res.content != JPEG
 
 
 def test_lee_static_root_en_cada_peticion(cliente, tmp_path, monkeypatch):
@@ -320,10 +391,6 @@ def _db(*valores):
     return db
 
 
-def _upload(nombre, contenido):
-    return UploadFile(filename=nombre, file=io.BytesIO(contenido))
-
-
 @pytest.mark.asyncio
 async def test_subir_foto_de_evidencia_responde_firmada_y_guarda_la_ruta(carpeta, monkeypatch):
     import app.routers.incidencias as incidencias_router
@@ -352,34 +419,6 @@ async def test_subir_imagen_de_activo_responde_firmada_y_guarda_la_ruta(carpeta)
     assert activo.foto_url.startswith("/static/activos/activo_3_")
     nombre = activo.foto_url.rsplit("/", 1)[1]
     assert _es_firmada(respuesta.model_dump(mode="json")["foto_url"], "activos", nombre)
-
-
-def _persona(id_empleado, rol):
-    return SimpleNamespace(
-        id_empleado=id_empleado, rol=rol, estado="activo", version_token=0,
-        nombre="N", apellido="A", correo=f"{rol}@teleprogreso.com",
-    )
-
-
-def _db_con(objeto):
-    """get_db falso: token no revocado y cualquier otro SELECT devuelve `objeto`."""
-    async def _fake():
-        async def _execute(statement, *args, **kwargs):
-            resultado = MagicMock()
-            resultado.scalar_one_or_none.return_value = (
-                None if "token_revocado" in str(statement) else objeto
-            )
-            return resultado
-
-        db = AsyncMock()
-        db.execute = AsyncMock(side_effect=_execute)
-        yield db
-
-    return _fake
-
-
-def _token(persona):
-    return {"Authorization": f"Bearer {create_access_token(subject=persona.id_empleado, rol=persona.rol)}"}
 
 
 def test_mi_equipo_entrega_las_fotos_firmadas_por_http(cliente, monkeypatch):
@@ -462,3 +501,23 @@ def test_el_403_por_rol_no_nombra_roles_pero_la_bitacora_si(cliente, eventos_bit
     [evento] = [e for e in eventos_bitacora if e["accion"] == "acceso_denegado"]
     assert "Rol 'tecnico'" in evento["cambios"]["detalle"]
     assert "Se requiere uno de: admin, supervisor, gerente" in evento["cambios"]["detalle"]
+
+
+def test_el_403_del_gerente_al_registrar_no_nombra_roles_pero_la_bitacora_si(cliente, eventos_bitacora):
+    gerente = _persona(7, "gerente")
+    app.dependency_overrides[get_db] = _db_con(gerente)
+
+    res = cliente.post(
+        "/tareas/1/incidencias",
+        json={"descripcion": "Revisión de la instalación."},
+        headers=_token(gerente),
+    )
+
+    assert res.status_code == 403
+    detalle = res.json()["detail"]
+    assert detalle == "Puedes consultar las evidencias de esta tarea, pero no registrarlas."
+    assert not any(rol in detalle.lower() for rol in ROLES)
+
+    [evento] = [e for e in eventos_bitacora if e["accion"] == "acceso_denegado"]
+    assert "El rol gerente es de consulta" in evento["cambios"]["detalle"]
+    assert "Coordina el registro con el supervisor" in evento["cambios"]["detalle"]
