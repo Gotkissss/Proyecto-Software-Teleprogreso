@@ -121,7 +121,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         anotar_evento(
             "acceso_denegado",
             "ruta",
-            cambios={"metodo": request.method, "ruta": request.url.path, "detalle": exc.detail},
+            cambios={
+                "metodo": request.method,
+                "ruta": request.url.path,
+                "detalle": getattr(exc, "detalle_bitacora", exc.detail),
+            },
         )
     # Mensajes por defecto para errores de autenticacion
     default_messages = {

@@ -50,6 +50,8 @@ RUTAS_CON_CAMBIO_PENDIENTE = frozenset({
     "/auth/logout",
 })
 
+SIN_PERMISO = "No tienes permiso para realizar esta acción."
+
 
 async def get_current_empleado(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
@@ -144,13 +146,16 @@ def require_roles(*roles: str):
         empleado: Annotated[Empleado, Depends(get_current_empleado)],
     ) -> Empleado:
         if empleado.rol not in roles:
-            raise HTTPException(
+            error = HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Rol '{empleado.rol}' no tiene permiso para este recurso. "
-                    f"Se requiere uno de: {', '.join(roles)}"
-                ),
+                detail=SIN_PERMISO,
             )
+            # El cliente no ve qué roles entran; la bitácora sí lo guarda.
+            error.detalle_bitacora = (
+                f"Rol '{empleado.rol}' no tiene permiso para este recurso. "
+                f"Se requiere uno de: {', '.join(roles)}"
+            )
+            raise error
         return empleado
 
     return _check
