@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
+from app.core.reglas import validar_politica_contrasena
+
 
 class LoginRequest(BaseModel):
     correo: EmailStr
@@ -53,13 +55,9 @@ class CambiarContrasenaRequest(BaseModel):
     @field_validator("nueva_contrasena")
     @classmethod
     def validar_nueva_contrasena(cls, valor: str) -> str:
-        if len(valor) < 8:
-            raise ValueError("La contrasena debe tener al menos 8 caracteres.")
-        if valor.strip() != valor:
-            raise ValueError(
-                "La contrasena no puede empezar ni terminar con espacios."
-            )
-        return valor
+        # Política única (HU-S10-01). "Distinta del correo" y "distinta de la
+        # actual" se comprueban en el router, que conoce la cuenta.
+        return validar_politica_contrasena(valor)
 
     @model_validator(mode="after")
     def contrasenas_coinciden(self) -> "CambiarContrasenaRequest":

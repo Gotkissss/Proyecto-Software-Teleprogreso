@@ -237,6 +237,90 @@ Y lo escrito en el modal de finalizar tarea se guarda en `localStorage`
 "al cerrar" que ejecutar — y se reofrece al volver. La foto no cabe ahí: se
 guarda su nombre para que el técnico sepa cuál volver a elegir.
 
+## Cuentas y contraseñas
+
+Dos cosas distintas que antes estaban mezcladas: que **haya datos de
+demostración** en un despliegue y que **sus contraseñas sean públicas**. Lo
+primero puede ser necesario (una presentación se hace con datos de prueba); lo
+segundo nunca debe pasar. El README publicaba una tabla con las contraseñas del
+seed y el despliegue las usaba tal cual, así que leer el repositorio bastaba
+para entrar como admin.
+
+### Una sola política de contraseña
+
+`validar_politica_contrasena` (`backend/app/core/reglas.py`) es la única regla,
+y la usan los tres caminos que fijan una contraseña: crear un empleado
+(`EmpleadoCreate`), restablecerla (`EmpleadoPasswordUpdate`, por un admin o
+supervisor) y cambiarla uno mismo (`CambiarContrasenaRequest`). Antes crear y
+cambiar pedían solo 8 caracteres y únicamente el restablecimiento frenaba las
+contraseñas comunes: la misma clave pasaba por una puerta y la rechazaban en
+otra.
+
+Una contraseña válida:
+
+- tiene al menos 8 caracteres y no empieza ni termina con espacios;
+- no está en la lista de contraseñas comunes
+  (`backend/app/core/datos/contrasenas_comunes.txt`, una por línea, sin
+  distinguir mayúsculas; para añadir una basta una línea nueva, sin tocar
+  código ni instalar nada). La lista incluye las contraseñas de demo que
+  estuvieron publicadas;
+- es distinta del correo y de su parte local (lo que va antes de la `@`);
+- es distinta de la contraseña actual. Esta última solo se comprueba al
+  cambiarla uno mismo: quien restablece la de otra persona no la conoce.
+
+### Cambio obligatorio
+
+La columna `empleado.debe_cambiar_contrasena` marca las cuentas cuya contraseña
+no la eligió su dueño. Pasa a `true` cuando un admin crea un empleado, cuando
+se le restablece la contraseña por la API y en la cuenta de administrador
+inicial. Mientras esté en `true`, el backend solo deja pasar `/auth/me`,
+`/auth/perfil`, `/auth/cambiar-contrasena`, `/auth/renovar` y `/auth/logout`; lo
+demás responde 403 con `error: PASSWORD_CHANGE_REQUIRED`. El frontend lleva a
+esa persona a `/cambiar-contrasena`, una pantalla sin menú donde lo único
+posible es cambiarla o cerrar sesión.
+
+Las filas que ya existían y las cuentas del seed nacen en `false`, para que las
+cuentas de demo sigan entrando directo.
+
+### Datos de demostración en el despliegue
+
+> **Nota temporal.** Mientras esté vigente, hay datos de prueba en producción.
+> Se quita de este documento al retirarlos (ver más abajo).
+
+El seed corre en cada arranque del backend. Estas variables de entorno (en
+Railway, en el servicio del backend) deciden qué siembra:
+
+| Variable | Para qué sirve |
+|---|---|
+| `SEMBRAR_DEMO` | `true` siembra el escenario completo de demostración (empleados, tareas, vehículos, inventario, asistencia...). `false` siembra solo los catálogos (`tipo_pausa`) y la cuenta de administrador inicial. Hasta la presentación queda en `true` en Railway. |
+| `CONTRASENA_DEMO` | Contraseña con la que se crean las cuentas de demo cuando el seed corre en un despliegue. Los valores escritos en `seed.py` son solo para desarrollo local: con `ENVIRONMENT=production` el seed se niega a usarlos. |
+| `ADMIN_INICIAL_CORREO` y `ADMIN_INICIAL_CONTRASENA` | Cuenta de administrador que crea el seed con `SEMBRAR_DEMO=false`. La contraseña se valida con la política de arriba. Si falta cualquiera de las dos, no se crea a nadie y el seed lo dice en el log. Esa cuenta entra con cambio de contraseña obligatorio. |
+
+Reglas que no cambian con ninguna variable:
+
+- El seed **no imprime contraseñas** en el log de arranque.
+- Si ya hay empleados en la base, el seed no vuelve a sembrar: cambiar a mano
+  la contraseña de una cuenta de demo sobrevive a los despliegues.
+- Las contraseñas reales de las cuentas de demo en Railway las conoce solo el
+  equipo, y se comparten por un canal privado. Nunca van al repositorio, a un
+  PR ni a un chat público.
+
+### Retirar los datos de demostración
+
+Se hace después de la presentación, cuando la empresa vaya a usar el sistema
+con sus datos reales. Es un cambio de configuración, no de código:
+
+1. Sacar un respaldo de la base, por si hace falta consultar algo de la demo.
+2. En Railway: `SEMBRAR_DEMO=false`, definir `ADMIN_INICIAL_CORREO` y
+   `ADMIN_INICIAL_CONTRASENA`, y quitar `CONTRASENA_DEMO`.
+3. Vaciar los datos de demo (una base nueva, o el reset de `seed.py` hecho por
+   el propietario de la base, ver README) y redesplegar. El seed deja solo los
+   catálogos y el administrador inicial, que entra con cambio de contraseña
+   obligatorio.
+4. Verificar que no existe ninguna cuenta de demo (`*@teleprogreso.com` del
+   seed) y que la bitácora arranca con su ancla.
+5. Quitar de este documento la nota temporal de arriba.
+
 ## Retención de datos
 
 `python mantenimiento.py purgar` corre en cada arranque (servicio
@@ -273,6 +357,9 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 4. Programa la purga diaria (`python mantenimiento.py purgar`, ver README) y,
    de vez en cuando, revisa la pantalla Bitácora o corre
    `python mantenimiento.py verificar-bitacora`.
+5. En un despliegue, no dejes que el seed use las contraseñas de demo: define
+   `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
+   `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
 
 ## Lo que esto no cubre
 

@@ -15,6 +15,7 @@ Ahora el backend lee de aquí y además publica el límite en la respuesta de
 adivinarlo.
 -----------------------------------------------------------------------------
 """
+from pathlib import Path
 
 # ── Carga de trabajo ─────────────────────────────────────────────────────────
 
@@ -88,22 +89,87 @@ ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
 
-# Política de contraseñas (HU-S9-02). Las 20 contraseñas comunes de 8 o más
-# caracteres que más se repiten en filtraciones y diccionarios, en minúscula
-# (se compara sin distinguir mayúsculas). Se dejaron fuera las de menos de 8
-# porque el mínimo de longitud ya las rechaza. Es una lista corta a propósito:
-# frena lo más obvio, no sustituye un diccionario completo.
-CONTRASENAS_COMUNES = frozenset({
-    "12345678", "123456789", "1234567890", "11111111", "00000000",
-    "87654321", "123123123", "password", "password1", "password123",
-    "passw0rd", "qwerty123", "qwertyui", "qwertyuiop", "iloveyou",
-    "admin123", "welcome1", "abc12345", "contrasena", "contrasena1",
-})
+# ── Política de contraseñas (HU-S9-02, HU-S10-01) ───────────────────────────
+#
+# Una sola política para todos los caminos que fijan una contraseña: crear un
+# empleado, restablecerla (admin/supervisor) y cambiarla uno mismo. Antes cada
+# schema tenía su propia versión: crear y cambiar pedían solo 8 caracteres y
+# únicamente el restablecimiento rechazaba las comunes, así que la misma clave
+# pasaba por una puerta y la frenaban en otra.
+
+LONGITUD_MINIMA_CONTRASENA = 8
+
+# Lista de contraseñas comunes en un archivo de datos (sin dependencia nueva).
+# Se lee una sola vez al importar. Está dentro de `app/`, así que viaja con la
+# imagen de Docker sin tocar el Dockerfile.
+ARCHIVO_CONTRASENAS_COMUNES = (
+    Path(__file__).resolve().parent / "datos" / "contrasenas_comunes.txt"
+)
+
+
+def _cargar_contrasenas_comunes() -> frozenset[str]:
+    """Lee el archivo: una por línea, en minúscula; ignora vacías y # comentarios."""
+    with ARCHIVO_CONTRASENAS_COMUNES.open(encoding="utf-8") as archivo:
+        return frozenset(
+            linea.strip().lower()
+            for linea in archivo
+            if linea.strip() and not linea.lstrip().startswith("#")
+        )
+
+
+# Se compara sin distinguir mayúsculas.
+CONTRASENAS_COMUNES = _cargar_contrasenas_comunes()
 
 
 def es_contrasena_comun(contrasena: str) -> bool:
     """True si la contraseña está en la lista de las más comunes."""
     return contrasena.lower() in CONTRASENAS_COMUNES
+
+
+def validar_politica_contrasena(
+    contrasena: str,
+    *,
+    correo: str | None = None,
+    contrasena_actual: str | None = None,
+) -> str:
+    """
+    Aplica la política única de contraseñas y devuelve la contraseña intacta.
+
+    Reglas, en este orden:
+      1. Mínimo 8 caracteres.
+      2. Sin espacios al inicio ni al final.
+      3. Fuera de la lista de contraseñas comunes.
+      4. Distinta del correo y de su parte local (lo que va antes de la @).
+      5. Distinta de la contraseña actual.
+
+    `correo` y `contrasena_actual` son opcionales porque no todos los caminos
+    los tienen a mano: el schema de restablecimiento no ve la cuenta de destino
+    y quien restablece no conoce la clave actual. Cada llamador pasa lo que
+    sabe, y la comprobación que no aplica simplemente se omite.
+
+    Lanza ValueError con un mensaje listo para mostrar. Sirve tal cual dentro de
+    un `field_validator` de Pydantic (lo convierte en 422) y los routers o
+    servicios lo envuelven en un 400.
+    """
+    if len(contrasena) < LONGITUD_MINIMA_CONTRASENA:
+        raise ValueError(
+            f"La contraseña debe tener al menos {LONGITUD_MINIMA_CONTRASENA} caracteres."
+        )
+    if contrasena.strip() != contrasena:
+        raise ValueError("La contraseña no puede empezar ni terminar con espacios.")
+    if es_contrasena_comun(contrasena):
+        raise ValueError("La contraseña es demasiado común. Elige otra.")
+    if correo:
+        correo_normalizado = correo.strip().lower()
+        parte_local = correo_normalizado.split("@")[0]
+        if contrasena.lower() in (correo_normalizado, parte_local):
+            raise ValueError("La contraseña no puede ser igual al correo de la cuenta.")
+    if contrasena_actual is not None and contrasena == contrasena_actual:
+        raise ValueError(
+            "La contraseña nueva debe ser diferente de la contraseña actual."
+        )
+    return contrasena
+
 
 # Jerarquía de cuentas (HU-S9-02). Decide quién puede actuar sobre la cuenta de
 # quién. Gerente y supervisor comparten nivel a propósito: ninguno manda sobre

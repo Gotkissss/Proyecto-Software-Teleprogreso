@@ -18,6 +18,9 @@ import HistorialTareasPage from './pages/HistorialTareasPage'
 /* Perfil del usuario autenticado — se monta bajo los dos layouts porque se
    abre desde el menú del avatar, que es común a técnico y supervisor. */
 import PerfilPage from './pages/PerfilPage'
+/* HU-S10-01: pantalla de cambio de contraseña obligatorio. */
+import CambioObligatorioPage from './pages/CambioObligatorioPage'
+import { RUTA_CAMBIO_OBLIGATORIO } from './utils/cambioObligatorio'
 
 /* Páginas del supervisor */
 import DashboardPage    from './pages/DashboardPage'
@@ -98,6 +101,19 @@ export default function App() {
             <Route path="bitacora" element={protegida('/supervisor/bitacora', <BitacoraPage />)} />
 
           </Route>
+
+          {/* ── Cambio de contraseña obligatorio (HU-S10-01) ──────────
+              Sin layout ni menú. `permitirCambioPendiente` evita que
+              ProtectedRoute redirija esta ruta a sí misma. Sin `roles`: la
+              puede ver cualquier sesión, sea cual sea su rol. ───────── */}
+          <Route
+            path={RUTA_CAMBIO_OBLIGATORIO}
+            element={
+              <ProtectedRoute permitirCambioPendiente>
+                <CambioObligatorioPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ── 404 ──────────────────────────────────────── */}
           <Route path="*" element={<Navigate to="/" replace />} />

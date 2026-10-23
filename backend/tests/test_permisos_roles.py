@@ -37,6 +37,7 @@ def _empleado(rol: str, id_empleado: int = 1):
     emp.rol = rol
     emp.estado = "activo"
     emp.version_token = 0
+    emp.debe_cambiar_contrasena = False
     return emp
 
 

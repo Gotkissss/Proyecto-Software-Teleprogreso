@@ -411,6 +411,9 @@ def test_con_token_valido_la_ruta_completa_responde_201(
     # ser un entero de verdad porque get_current_empleado la compara con la que
     # viaja dentro del JWT (0 en los tokens recién emitidos).
     empleado_tecnico.version_token = 0
+    # Igual con la bandera de cambio obligatorio (HU-S10-01): un MagicMock
+    # respondería con otro MagicMock, que cuenta como verdadero.
+    empleado_tecnico.debe_cambiar_contrasena = False
 
     app.dependency_overrides[get_db] = _generador(
         _db_autenticada(empleado_tecnico, _jornada())

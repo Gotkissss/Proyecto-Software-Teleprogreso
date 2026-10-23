@@ -6,6 +6,10 @@
  */
 
 import axios from 'axios'
+import {
+  EVENTO_CAMBIO_OBLIGATORIO,
+  esErrorCambioObligatorio,
+} from '../utils/cambioObligatorio'
 
 // Resolución de la URL base del API:
 // 1. Si la build inyectó VITE_API_URL (Railway / .env.production) → usarla.
@@ -92,6 +96,12 @@ apiClient.interceptors.response.use(
         sesionYaCaducada = true
         window.dispatchEvent(new CustomEvent(EVENTO_SESION_CADUCADA))
       }
+    } else if (esErrorCambioObligatorio(error)) {
+      // HU-S10-01: la sesión sigue siendo válida, pero el backend no deja hacer
+      // nada hasta cambiar la contraseña. NO se borra el token (hace falta para
+      // llamar a /auth/cambiar-contrasena); solo se avisa y AuthContext marca
+      // al usuario para que ProtectedRoute lo lleve a la pantalla de cambio.
+      window.dispatchEvent(new CustomEvent(EVENTO_CAMBIO_OBLIGATORIO))
     }
     return Promise.reject(error)
   }

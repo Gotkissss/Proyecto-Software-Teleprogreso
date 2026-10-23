@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.contexto import registrar_actor
 from app.core.deps import get_current_empleado
 from app.core.exceptions import bad_request
+from app.core.reglas import validar_politica_contrasena
 from app.core.rate_limit import (
     intentos_login,
     intentos_login_por_correo,
@@ -296,6 +297,9 @@ async def me(
         "correo": empleado.correo,
         "rol": empleado.rol,
         "estado": empleado.estado,
+        # HU-S10-01: el frontend lleva a la pantalla de cambio obligatorio sin
+        # esperar a que alguna llamada responda 403.
+        "debe_cambiar_contrasena": empleado.debe_cambiar_contrasena,
     }
 
 
@@ -336,16 +340,25 @@ async def cambiar_contrasena(
     if not contrasena_valida:
         raise bad_request("La contraseña actual es incorrecta.")
 
-    if body.nueva_contrasena == body.contrasena_actual:
-        raise bad_request(
-            "La contraseña nueva debe ser diferente de la contraseña actual."
+    # Política única (HU-S10-01): el schema ya validó longitud, espacios y
+    # contraseñas comunes; aquí, con la cuenta a la vista, se comprueba lo que
+    # depende de ella: distinta del correo y distinta de la actual.
+    try:
+        validar_politica_contrasena(
+            body.nueva_contrasena,
+            correo=empleado.correo,
+            contrasena_actual=body.contrasena_actual,
         )
+    except ValueError as error:
+        raise bad_request(str(error)) from error
 
     empleado.hash_contrasena = await run_in_threadpool(
         hash_password,
         body.nueva_contrasena,
     )
     empleado.version_token += 1
+    # La eligió su dueño: se acaba el cambio obligatorio (HU-S10-01).
+    empleado.debe_cambiar_contrasena = False
     await db.flush()
 
     return {

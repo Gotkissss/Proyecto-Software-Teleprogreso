@@ -22,6 +22,11 @@ import { EVENTO_SESION_CADUCADA } from '../api/client'
 import AvisoSesion from '../components/layout/AvisoSesion'
 import { rutaInicialPorRol } from '../utils/permisos'
 import { msHastaAviso, restanteDe } from '../utils/sesion'
+import {
+  EVENTO_CAMBIO_OBLIGATORIO,
+  RUTA_CAMBIO_OBLIGATORIO,
+  debeCambiarContrasena,
+} from '../utils/cambioObligatorio'
 
 const AuthContext = createContext(null)
 
@@ -84,6 +89,21 @@ export function AuthProvider({ children }) {
     window.addEventListener(EVENTO_SESION_CADUCADA, alCaducar)
     return () => window.removeEventListener(EVENTO_SESION_CADUCADA, alCaducar)
   }, [expirarSesion])
+
+  // HU-S10-01: el backend respondió 403 PASSWORD_CHANGE_REQUIRED (por ejemplo,
+  // un admin le restableció la contraseña con la pantalla ya abierta). Se marca
+  // al usuario y ProtectedRoute lo lleva a la pantalla de cambio obligatorio.
+  // Si ya estaba marcado se devuelve el mismo objeto para no re-renderizar.
+  useEffect(() => {
+    const alExigirCambio = () =>
+      setUser((actual) =>
+        actual && !debeCambiarContrasena(actual)
+          ? { ...actual, debe_cambiar_contrasena: true }
+          : actual,
+      )
+    window.addEventListener(EVENTO_CAMBIO_OBLIGATORIO, alExigirCambio)
+    return () => window.removeEventListener(EVENTO_CAMBIO_OBLIGATORIO, alExigirCambio)
+  }, [])
 
   // Programa el aviso para cinco minutos antes del vencimiento del token
   // actual. Se rehace en cada cambio de token, o sea también al renovar.
@@ -150,7 +170,11 @@ export function AuthProvider({ children }) {
     expirandoRef.current = false
     setUser(userData)
     setToken(loginData.access_token)
-    const redirectPath = getRedirectPath(userData.rol || loginData.rol)
+    // HU-S10-01: con la contraseña puesta por otra persona se entra directo a
+    // la pantalla de cambio, no al panel (que respondería 403).
+    const redirectPath = debeCambiarContrasena(userData)
+      ? RUTA_CAMBIO_OBLIGATORIO
+      : getRedirectPath(userData.rol || loginData.rol)
     navigate(redirectPath, { replace: true })
   }, [navigate])
 

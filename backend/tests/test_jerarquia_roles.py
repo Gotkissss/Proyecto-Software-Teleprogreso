@@ -160,8 +160,10 @@ from pydantic import ValidationError
 from app.core.reglas import CONTRASENAS_COMUNES
 
 
-def test_la_lista_de_comunes_tiene_20_y_todas_pasan_el_minimo():
-    assert len(CONTRASENAS_COMUNES) == 20
+def test_la_lista_de_comunes_esta_ampliada_y_todas_pasan_el_minimo():
+    # HU-S10-01: la lista vive en un archivo de datos y creció de 20 a varios
+    # cientos. El tope inferior evita que alguien la vacíe sin querer.
+    assert len(CONTRASENAS_COMUNES) >= 200
     assert all(len(c) >= 8 for c in CONTRASENAS_COMUNES)
 
 

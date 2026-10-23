@@ -22,18 +22,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
-import Spinner from '../components/ui/Spinner'
-import { useToast } from '../components/ui/Toast'
-import { useAuth } from '../context/AuthContext'
-import { cambiarContrasena, getPerfil } from '../api/authService'
+import FormularioCambioContrasena, {
+  MIN_CONTRASENA,
+  validarCambioContrasena,
+} from '../components/perfil/FormularioCambioContrasena'
+import { getPerfil } from '../api/authService'
 import styles from './PerfilPage.module.css'
 
-/* ── Reglas de la contraseña ────────────────────────────────────────────────
-   El mínimo lo fija el backend (schemas/auth.py y schemas/empleado.py). Se
-   repite aquí para poder avisar antes de gastar una petición, pero el que
-   manda sigue siendo el servidor.
-   ------------------------------------------------------------------------ */
-export const MIN_CONTRASENA = 8
+// El formulario y sus reglas viven en components/perfil (HU-S10-01 lo reutiliza
+// en la pantalla de cambio obligatorio). Se re-exportan para no romper a
+// quien los importaba desde aquí.
+export { MIN_CONTRASENA, validarCambioContrasena }
 
 const ROL_LABEL = {
   admin:      'Administrador',
@@ -109,105 +108,11 @@ const IconLock = () => (
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
 )
-const IconEye = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-)
-const IconEyeOff = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-    <line x1="1" y1="1" x2="23" y2="23" />
-  </svg>
-)
-const IconAlert = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-)
-
-/* ── Validación del formulario ──────────────────────────────────────────────
-   Se exporta para poder probarla sin montar la pantalla entera.
-   ------------------------------------------------------------------------ */
-export function validarCambioContrasena(form) {
-  const errores = {}
-
-  if (!form.actual) {
-    errores.actual = 'Escribe tu contraseña actual.'
-  }
-
-  if (!form.nueva) {
-    errores.nueva = 'Escribe la contraseña nueva.'
-  } else if (form.nueva.length < MIN_CONTRASENA) {
-    errores.nueva = `La contraseña nueva debe tener al menos ${MIN_CONTRASENA} caracteres.`
-  } else if (form.nueva.trim() !== form.nueva) {
-    errores.nueva = 'La contraseña no puede empezar ni terminar con espacios.'
-  } else if (form.actual && form.nueva === form.actual) {
-    errores.nueva = 'La contraseña nueva debe ser distinta de la actual.'
-  }
-
-  if (!form.confirmacion) {
-    errores.confirmacion = 'Repite la contraseña nueva.'
-  } else if (form.nueva && form.confirmacion !== form.nueva) {
-    errores.confirmacion = 'Las contraseñas no coinciden.'
-  }
-
-  return errores
-}
-
-/* ── Campo de contraseña con botón de mostrar/ocultar ─────────────────────── */
-function CampoContrasena({ id, label, valor, onChange, error, disabled, autoComplete }) {
-  const [visible, setVisible] = useState(false)
-
-  return (
-    <div className={styles.campo}>
-      <label className={styles.label} htmlFor={id}>{label}</label>
-      <div className={styles.inputWrap}>
-        <input
-          id={id}
-          type={visible ? 'text' : 'password'}
-          className={`${styles.input} ${error ? styles.inputError : ''}`}
-          value={valor}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          autoComplete={autoComplete}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-error` : undefined}
-        />
-        <button
-          type="button"
-          className={styles.verBtn}
-          onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          tabIndex={-1}
-        >
-          {visible ? <IconEyeOff /> : <IconEye />}
-        </button>
-      </div>
-      {error && (
-        <p className={styles.campoError} id={`${id}-error`} role="alert">{error}</p>
-      )}
-    </div>
-  )
-}
-
 /* ── Pantalla ─────────────────────────────────────────────────────────────── */
 export default function PerfilPage() {
-  const toast = useToast()
-  const { cerrarSesionLocal } = useAuth()
-
   const [perfil,  setPerfil]  = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
-
-  const [form, setForm] = useState({ actual: '', nueva: '', confirmacion: '' })
-  const [errores,      setErrores]      = useState({})
-  const [errorEnvio,   setErrorEnvio]   = useState(null)
-  const [guardando,    setGuardando]    = useState(false)
 
   const cargarPerfil = useCallback(async () => {
     setLoading(true)
@@ -224,64 +129,6 @@ export default function PerfilPage() {
   }, [])
 
   useEffect(() => { cargarPerfil() }, [cargarPerfil])
-
-  const handleChange = (campo) => (valor) => {
-    setForm((prev) => ({ ...prev, [campo]: valor }))
-    // El error del campo se retira en cuanto se vuelve a escribir: dejarlo
-    // puesto mientras se corrige hace pensar que la corrección no sirvió.
-    setErrores((prev) => (prev[campo] ? { ...prev, [campo]: null } : prev))
-    setErrorEnvio(null)
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-
-    const erroresValidacion = validarCambioContrasena(form)
-    setErrores(erroresValidacion)
-    if (Object.keys(erroresValidacion).length > 0) return
-
-    setGuardando(true)
-    setErrorEnvio(null)
-    try {
-      const respuesta = await cambiarContrasena({
-        contrasenaActual: form.actual,
-        nuevaContrasena:  form.nueva,
-        confirmacion:     form.confirmacion,
-      })
-
-      toast.success(
-        respuesta?.detail ||
-          'Contraseña actualizada correctamente. Inicia sesión nuevamente.'
-      )
-      // El token ya no vale del lado del servidor: quedarse aquí solo llevaría
-      // a un 401 en la siguiente petición.
-      cerrarSesionLocal()
-    } catch (err) {
-      const status = err?.response?.status
-      const detail = err?.response?.data?.detail
-      let mensaje
-
-      if (status === 400) {
-        mensaje = typeof detail === 'string'
-          ? detail
-          : 'No se pudo cambiar la contraseña. Revisa los datos.'
-      } else if (status === 422) {
-        // 422 = el schema del backend rechazó el payload. Su `detail` es una
-        // lista de objetos de Pydantic, ilegible tal cual para el usuario.
-        mensaje = 'La contraseña nueva no cumple los requisitos mínimos.'
-      } else if (status === 401) {
-        mensaje = 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo otra vez.'
-      } else {
-        mensaje = 'No se pudo cambiar la contraseña. Inténtalo de nuevo.'
-      }
-
-      setErrorEnvio(mensaje)
-      toast.error(mensaje)
-      console.error('Error al cambiar la contraseña:', err)
-    } finally {
-      setGuardando(false)
-    }
-  }
 
   if (loading || error) {
     return (
@@ -387,56 +234,7 @@ export default function PerfilPage() {
           sesión de nuevo con la contraseña nueva.
         </p>
 
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          {errorEnvio && (
-            <div className={styles.errorBanner} role="alert">
-              <IconAlert />
-              <span>{errorEnvio}</span>
-            </div>
-          )}
-
-          <CampoContrasena
-            id="perfil-actual"
-            label="Contraseña actual"
-            valor={form.actual}
-            onChange={handleChange('actual')}
-            error={errores.actual}
-            disabled={guardando}
-            autoComplete="current-password"
-          />
-
-          <CampoContrasena
-            id="perfil-nueva"
-            label="Contraseña nueva"
-            valor={form.nueva}
-            onChange={handleChange('nueva')}
-            error={errores.nueva}
-            disabled={guardando}
-            autoComplete="new-password"
-          />
-
-          <CampoContrasena
-            id="perfil-confirmacion"
-            label="Repetir contraseña nueva"
-            valor={form.confirmacion}
-            onChange={handleChange('confirmacion')}
-            error={errores.confirmacion}
-            disabled={guardando}
-            autoComplete="new-password"
-          />
-
-          <p className={styles.ayuda}>
-            Mínimo {MIN_CONTRASENA} caracteres y distinta de la actual.
-          </p>
-
-          <div className={styles.formActions}>
-            <button type="submit" className="btn btn-primary" disabled={guardando}>
-              {guardando
-                ? <><Spinner size="sm" color="white" /> Guardando…</>
-                : 'Cambiar contraseña'}
-            </button>
-          </div>
-        </form>
+        <FormularioCambioContrasena idBase="perfil" />
       </section>
     </div>
   )
