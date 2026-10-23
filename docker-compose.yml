@@ -115,6 +115,12 @@ services:
       # (menos la bitácora de auditoría, que es de solo inserción).
       # Por defecto false para no borrar datos de desarrollo sin querer.
       SEED_RESET: ${SEED_RESET:-false}
+      # Qué siembra y con qué contraseñas (HU-S10-01, ver SEGURIDAD.md). Sin
+      # definir: escenario de demo con las contraseñas de desarrollo.
+      SEMBRAR_DEMO: ${SEMBRAR_DEMO:-true}
+      CONTRASENA_DEMO: ${CONTRASENA_DEMO:-}
+      ADMIN_INICIAL_CORREO: ${ADMIN_INICIAL_CORREO:-}
+      ADMIN_INICIAL_CONTRASENA: ${ADMIN_INICIAL_CONTRASENA:-}
     depends_on:
       db:
         condition: service_healthy

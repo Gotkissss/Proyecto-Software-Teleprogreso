@@ -25,8 +25,10 @@ el experimento, y no por gusto:
 ESCENARIO QUE DEJA (lo que el moderador debe ver antes de cada sesión)
 ---------------------------------------------------------------------
   Cuentas (las únicas dos que se usan en la prueba):
-      tecnico@teleprogreso.com / Tecnico1234!   → Bloque A (técnico de campo)
-      admin@teleprogreso.com   / Admin1234!     → Bloque B (supervisor)
+      tecnico@teleprogreso.com   → Bloque A (técnico de campo)
+      admin@teleprogreso.com     → Bloque B (supervisor)
+  Contraseña: la de CONTRASENA_DEMO, igual que en seed.py (HU-S10-01). Las de
+  EMPLEADOS de abajo son solo para desarrollo local.
 
   - 4 técnicos en plantilla; 3 en jornada y el de prueba SIN entrada marcada.
   - El técnico de prueba tiene 3 tareas para hoy, las tres `pendiente`, una
@@ -71,7 +73,9 @@ o con el envoltorio de `scripts/reset-neurolab.ps1`, que es la misma línea.
 ⚠️  `--reset` BORRA todos los datos de operación (TRUNCATE de todas las
 tablas menos la bitácora de auditoría, que es de solo inserción, y
 `alembic_version`). Es lo que se quiere entre participantes, y es la razón de
-que el flag sea obligatorio: sin él el script no toca nada.
+que el flag sea obligatorio: sin él el script no toca nada. Con
+SEMBRAR_DEMO=false el despliegue ya tiene datos reales y el script se niega a
+correr.
 -----------------------------------------------------------------------------
 """
 import asyncio
@@ -104,11 +108,14 @@ from app.models.ubicacion import UbicacionEmpleado
 # aquí. Importar el módulo no conecta a la base: su engine es perezoso.
 import seed as seed_demo
 from seed import (
+    ConfiguracionSeedInvalida,
+    contrasena_demo,
     crear_historial_tareas,
     crear_inventario,
     crear_tipos_pausa,
     punto,
     resetear_base_de_datos,
+    sembrar_demo,
     verificar_postgis,
 )
 
@@ -387,8 +394,13 @@ def hora_pasada(objetivo: time, margen_minutos: int = 30) -> time:
 # SIEMBRA
 # ═══════════════════════════════════════════════════════════════════════════
 
-async def crear_empleados(db: AsyncSession) -> dict[str, Empleado]:
-    """Crea las cuentas y las devuelve indexadas por correo."""
+async def crear_empleados(
+    db: AsyncSession, contrasena: str | None = None
+) -> dict[str, Empleado]:
+    """
+    Crea las cuentas y las devuelve indexadas por correo. `contrasena` (la de
+    CONTRASENA_DEMO) reemplaza a la de cada cuenta.
+    """
     print("\n👤 Creando cuentas...")
     por_correo: dict[str, Empleado] = {}
 
@@ -397,7 +409,7 @@ async def crear_empleados(db: AsyncSession) -> dict[str, Empleado]:
             nombre=datos["nombre"],
             apellido=datos["apellido"],
             correo=datos["correo"],
-            hash_contrasena=hash_password(datos["contrasena"]),
+            hash_contrasena=hash_password(contrasena or datos["contrasena"]),
             rol=datos["rol"],
             # Todas activas: una cuenta inactiva no suma a la plantilla de 4
             # técnicos que cuenta el panel, y aquí la plantilla es dato del
@@ -772,8 +784,13 @@ async def verificar_escenario(db: AsyncSession) -> list[str]:
     return fallos
 
 
-async def imprimir_hoja_del_moderador(db: AsyncSession, marcadas: dict[str, Tarea]) -> None:
-    """Los datos que el moderador necesita a la vista durante la sesión."""
+async def imprimir_hoja_del_moderador(
+    db: AsyncSession, marcadas: dict[str, Tarea], con_contrasena_demo: bool = False
+) -> None:
+    """
+    Los datos que el moderador necesita a la vista durante la sesión. Sin
+    contraseñas: este texto queda en el log del despliegue.
+    """
     pendientes = await db.scalar(
         select(func.count(Tarea.id_tarea)).where(Tarea.estado_tarea == "pendiente")
     )
@@ -782,8 +799,12 @@ async def imprimir_hoja_del_moderador(db: AsyncSession, marcadas: dict[str, Tare
     print("  HOJA DEL MODERADOR — estado de partida")
     print("=" * 72)
     print("\n  Cuentas (hoja impresa de credenciales):")
-    print(f"    Bloque A · técnico     {TECNICO_PRUEBA:<32} Tecnico1234!")
-    print(f"    Bloque B · supervisor  {ADMIN_PRUEBA:<32} Admin1234!")
+    print(f"    Bloque A · técnico     {TECNICO_PRUEBA}")
+    print(f"    Bloque B · supervisor  {ADMIN_PRUEBA}")
+    if con_contrasena_demo:
+        print("    Contraseña: la de CONTRASENA_DEMO (la entrega el equipo).")
+    else:
+        print("    Contraseñas: las de EMPLEADOS en seed_neurolab.py (solo desarrollo).")
 
     print("\n  Tareas señaladas:")
     print(f"    A2 · la urgente a iniciar   «{marcadas['urgente_a2'].titulo}»")
@@ -819,6 +840,20 @@ es alcanzable desde fuera de su red:
 
 
 async def sembrar() -> None:
+    # Antes del reset, que borra todo: con la configuración mal puesta no se
+    # toca la base.
+    if not sembrar_demo():
+        print(
+            "\n⛔ SEMBRAR_DEMO=false: este despliegue ya no es de demostración. "
+            "seed_neurolab.py borraría sus datos y no se ejecuta."
+        )
+        raise SystemExit(1)
+    try:
+        clave_demo = contrasena_demo([datos["correo"] for datos in EMPLEADOS])
+    except ConfiguracionSeedInvalida as error:
+        print(f"\n⛔ No se siembra nada: {error}")
+        raise SystemExit(1)
+
     async with AsyncSessionLocal() as db:
         await verificar_postgis(db)
 
@@ -828,7 +863,7 @@ async def sembrar() -> None:
     print("\n🧪 Sembrando el escenario del NeuroLab...")
     async with AsyncSessionLocal() as db:
         await crear_tipos_pausa(db)
-        empleados = await crear_empleados(db)
+        empleados = await crear_empleados(db, clave_demo)
         tecnicos = [e for e in empleados.values() if e.rol == ROL_TECNICO]
 
         # El histórico va primero a propósito: GET /tareas corta por id
@@ -854,7 +889,9 @@ async def sembrar() -> None:
     async with AsyncSessionLocal() as db:
         print("\n🔍 Verificando el escenario...")
         fallos = await verificar_escenario(db)
-        await imprimir_hoja_del_moderador(db, marcadas)
+        await imprimir_hoja_del_moderador(
+            db, marcadas, con_contrasena_demo=clave_demo is not None
+        )
 
     await engine.dispose()
     await seed_demo.engine.dispose()

@@ -36,6 +36,19 @@ pero NO toca `alembic_version`: el esquema se sigue gobernando con migraciones.
 ⚠️ SEED_RESET destruye datos. En Railway se activa, se despliega una vez y se
 vuelve a poner en false, o el siguiente reinicio del contenedor borrará todo
 otra vez.
+
+QUÉ SE SIEMBRA Y CON QUÉ CONTRASEÑAS (HU-S10-01, ver SEGURIDAD.md)
+------------------------------------------------------------------
+    SEMBRAR_DEMO=true  (por defecto)  el escenario completo de demostración.
+    SEMBRAR_DEMO=false                solo el catálogo de pausas y el admin
+                                      inicial de ADMIN_INICIAL_CORREO y
+                                      ADMIN_INICIAL_CONTRASENA, con cambio de
+                                      contraseña obligatorio.
+
+Las cuentas de demo toman la contraseña de CONTRASENA_DEMO. Las escritas en
+EMPLEADOS son solo para desarrollo local: con ENVIRONMENT=production el seed
+se niega a usarlas. La configuración se revisa ANTES de tocar la base, para
+que un --reset mal configurado no la deje vacía.
 -----------------------------------------------------------------------------
 """
 import asyncio
@@ -47,7 +60,10 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
+
 from app.core.config import settings
+from app.core.reglas import validar_politica_contrasena
 from app.core.security import hash_password
 # Reloj de la operación (America/Guatemala). El contenedor corre en UTC: con
 # `datetime.now()` los datos sembrados quedaban 6 horas en el futuro, así que
@@ -491,6 +507,88 @@ async def verificar_postgis(db: AsyncSession) -> None:
         print("✅ PostGIS ya está habilitado")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# QUÉ SEMBRAR Y CON QUÉ CONTRASEÑAS (HU-S10-01)
+# Antes el despliegue sembraba las contraseñas escritas aquí y el README las
+# publicaba: leer el repositorio bastaba para entrar como admin. Ahora un
+# despliegue toma la contraseña de una variable, y sin ella no siembra.
+# ═══════════════════════════════════════════════════════════════════════════
+
+VALORES_VERDADEROS = ("1", "true", "yes", "si", "sí")
+
+
+class ConfiguracionSeedInvalida(Exception):
+    """La configuración no permite sembrar; se detecta antes de tocar la base."""
+
+
+def sembrar_demo() -> bool:
+    """
+    SEMBRAR_DEMO decide si se siembra el escenario de demostración. Sin
+    definir vale true: local y el despliegue actual siguen como estaban.
+    """
+    valor = os.getenv("SEMBRAR_DEMO", "").strip().lower()
+    if not valor:
+        return True
+    return valor in VALORES_VERDADEROS
+
+
+def contrasena_demo(correos: list[str]) -> str | None:
+    """
+    Contraseña común de las cuentas de demo (CONTRASENA_DEMO), validada con la
+    política única contra cada correo.
+
+    Devuelve None cuando no está definida y se puede usar la de cada cuenta
+    escrita en el código, lo que solo pasa fuera de producción. También la
+    usa seed_neurolab.py con sus propios correos.
+    """
+    valor = os.getenv("CONTRASENA_DEMO", "")
+    if valor:
+        for correo in correos:
+            try:
+                validar_politica_contrasena(valor, correo=correo)
+            except ValueError as error:
+                raise ConfiguracionSeedInvalida(
+                    f"CONTRASENA_DEMO no cumple la política de contraseñas: {error}"
+                ) from error
+        return valor
+
+    if settings.es_produccion:
+        raise ConfiguracionSeedInvalida(
+            "ENVIRONMENT=production y CONTRASENA_DEMO no está definida: las "
+            "contraseñas de demo escritas en el código son públicas y no se "
+            "usan en un despliegue. Define CONTRASENA_DEMO, o SEMBRAR_DEMO=false "
+            "con ADMIN_INICIAL_CORREO y ADMIN_INICIAL_CONTRASENA."
+        )
+    return None
+
+
+def admin_inicial() -> dict | None:
+    """
+    Cuenta de administrador para SEMBRAR_DEMO=false, desde
+    ADMIN_INICIAL_CORREO y ADMIN_INICIAL_CONTRASENA. None si falta alguna: el
+    seed no inventa una cuenta ni una contraseña.
+    """
+    correo = os.getenv("ADMIN_INICIAL_CORREO", "").strip()
+    contrasena = os.getenv("ADMIN_INICIAL_CONTRASENA", "")
+    if not correo or not contrasena:
+        return None
+
+    try:
+        correo = TypeAdapter(EmailStr).validate_python(correo)
+    except ValidationError as error:
+        raise ConfiguracionSeedInvalida(
+            "ADMIN_INICIAL_CORREO no es un correo válido."
+        ) from error
+    try:
+        validar_politica_contrasena(contrasena, correo=correo)
+    except ValueError as error:
+        raise ConfiguracionSeedInvalida(
+            f"ADMIN_INICIAL_CONTRASENA no cumple la política de contraseñas: {error}"
+        ) from error
+
+    return {"correo": correo, "contrasena": contrasena}
+
+
 def reset_solicitado() -> bool:
     """
     ¿Hay que borrar todo antes de sembrar?
@@ -613,7 +711,10 @@ async def bd_ya_tiene_datos(db: AsyncSession) -> bool:
         return False
 
 
-async def crear_empleados(db: AsyncSession) -> list[Empleado]:
+async def crear_empleados(
+    db: AsyncSession, contrasena: str | None = None
+) -> list[Empleado]:
+    """`contrasena` (la de CONTRASENA_DEMO) reemplaza a la de cada cuenta."""
     print("\n👤 Creando empleados...")
     creados: list[Empleado] = []
 
@@ -622,7 +723,7 @@ async def crear_empleados(db: AsyncSession) -> list[Empleado]:
             nombre=datos["nombre"],
             apellido=datos["apellido"],
             correo=datos["correo"],
-            hash_contrasena=hash_password(datos["contrasena"]),
+            hash_contrasena=hash_password(contrasena or datos["contrasena"]),
             rol=datos["rol"],
             estado=datos["estado"],
             telefono=datos["telefono"],
@@ -634,6 +735,28 @@ async def crear_empleados(db: AsyncSession) -> list[Empleado]:
     await db.flush()
     print(f"   ✅ {len(creados)} empleados creados")
     return creados
+
+
+async def crear_admin_inicial(db: AsyncSession, datos: dict) -> Empleado:
+    """
+    El único empleado que siembra SEMBRAR_DEMO=false. Entra con cambio de
+    contraseña obligatorio: la suya la conoce quien configuró el despliegue.
+    """
+    print("\n👤 Creando administrador inicial...")
+    admin = Empleado(
+        nombre="Administrador",
+        apellido="Inicial",
+        correo=datos["correo"],
+        hash_contrasena=hash_password(datos["contrasena"]),
+        rol="admin",
+        estado="activo",
+        fecha_contratacion=HOY,
+        debe_cambiar_contrasena=True,
+    )
+    db.add(admin)
+    await db.flush()
+    print(f"   ✅ {admin.correo} (debe cambiar su contraseña al entrar)")
+    return admin
 
 
 async def crear_tareas(db: AsyncSession, tecnicos: list[Empleado]) -> list[Tarea]:
@@ -1122,16 +1245,24 @@ async def crear_ubicaciones(db: AsyncSession, tecnicos: list[Empleado]) -> None:
     print(f"   ✅ {total} registros de ubicación")
 
 
-def imprimir_resumen() -> None:
+def imprimir_resumen(con_contrasena_demo: bool = False) -> None:
+    """
+    Lista las cuentas sembradas SIN su contraseña: este texto termina en el
+    log de arranque del despliegue, que no es un lugar para secretos.
+    """
     print("\n" + "=" * 68)
     print("  🎉  Seed completado exitosamente")
     print("=" * 68)
-    print("\n  Credenciales de acceso:\n")
-    print(f"  {'Rol':<11} {'Correo':<38} Contraseña")
-    print(f"  {'-'*11} {'-'*38} {'-'*14}")
+    print("\n  Cuentas de demostración:\n")
+    print(f"  {'Rol':<11} Correo")
+    print(f"  {'-'*11} {'-'*38}")
     for datos in EMPLEADOS:
         marca = "" if datos["estado"] == "activo" else "  (INACTIVO)"
-        print(f"  {datos['rol']:<11} {datos['correo']:<38} {datos['contrasena']}{marca}")
+        print(f"  {datos['rol']:<11} {datos['correo']}{marca}")
+    if con_contrasena_demo:
+        print("\n  Contraseña: la de CONTRASENA_DEMO, para todas las cuentas.")
+    else:
+        print("\n  Contraseñas: las de EMPLEADOS en seed.py (solo desarrollo).")
     print("\n  Las alertas no se siembran: se generan solas al abrir")
     print("  la pantalla de Alertas del supervisor.\n")
     # El aviso solo aplica a la variable de entorno: el flag --reset es una
@@ -1146,6 +1277,21 @@ def imprimir_resumen() -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 async def seed() -> None:
+    # 0. Qué sembrar y con qué contraseñas, ANTES de tocar la base: un
+    #    --reset con la configuración mal puesta no debe dejarla vacía.
+    demo = sembrar_demo()
+    clave_demo = None
+    admin = None
+    try:
+        if demo:
+            clave_demo = contrasena_demo([datos["correo"] for datos in EMPLEADOS])
+        else:
+            admin = admin_inicial()
+    except ConfiguracionSeedInvalida as error:
+        print(f"\n⛔ No se siembra nada: {error}")
+        await engine.dispose()
+        return
+
     # 1. Verificar PostGIS
     async with AsyncSessionLocal() as db:
         await verificar_postgis(db)
@@ -1166,12 +1312,28 @@ async def seed() -> None:
             await engine.dispose()
             return
 
-    # 4. BD vacía → sembrar el escenario completo
+    # 4a. Sin demo: catálogo y, si está configurado, el admin inicial.
+    if not demo:
+        print("\n🌱 SEMBRAR_DEMO=false. Sin datos de demostración.")
+        async with AsyncSessionLocal() as db:
+            await crear_tipos_pausa(db)
+            if admin:
+                await crear_admin_inicial(db, admin)
+            else:
+                print(
+                    "\n⚠️  Falta ADMIN_INICIAL_CORREO o ADMIN_INICIAL_CONTRASENA: "
+                    "no se creó ninguna cuenta y nadie podrá iniciar sesión."
+                )
+            await db.commit()
+        await engine.dispose()
+        return
+
+    # 4b. BD vacía → sembrar el escenario completo
     print("\n🌱 Base de datos vacía. Insertando datos de demostración...")
     async with AsyncSessionLocal() as db:
         await crear_tipos_pausa(db)
 
-        empleados = await crear_empleados(db)
+        empleados = await crear_empleados(db, clave_demo)
         tecnicos = [e for e in empleados if e.rol == "tecnico" and e.estado == "activo"]
 
         # El histórico va PRIMERO a propósito. GET /tareas devuelve como mucho
@@ -1186,7 +1348,7 @@ async def seed() -> None:
         await crear_ubicaciones(db, tecnicos)
 
         await db.commit()
-        imprimir_resumen()
+        imprimir_resumen(con_contrasena_demo=clave_demo is not None)
 
     await engine.dispose()
 
