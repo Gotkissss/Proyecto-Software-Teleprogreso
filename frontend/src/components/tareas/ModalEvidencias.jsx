@@ -17,6 +17,7 @@ import PageState from '../ui/PageState'
 import { useToast } from '../ui/Toast'
 import { urlArchivo } from '../../api/client'
 import { eliminarIncidencia, getIncidencias } from '../../api/incidenciaService'
+import { useRenovarEnlaces } from '../../hooks/useFotoFirmada'
 import FotoEvidencia from './FotoEvidencia'
 import styles from './ModalEvidencias.module.css'
 
@@ -64,12 +65,17 @@ export default function ModalEvidencias({
 
   const idTarea = tarea?.id_tarea ?? tarea?.id_servicio ?? tarea?.id
 
+  const cargarEvidencias = useCallback(async () => {
+    if (!idTarea) return
+    setEvidencias(await getIncidencias(idTarea))
+  }, [idTarea])
+
   const fetchEvidencias = useCallback(async () => {
     if (!idTarea) return
     setLoading(true)
     setError(null)
     try {
-      setEvidencias(await getIncidencias(idTarea))
+      await cargarEvidencias()
     } catch (err) {
       setError(
         err?.response?.data?.detail || 'No se pudieron cargar las evidencias.',
@@ -78,18 +84,9 @@ export default function ModalEvidencias({
     } finally {
       setLoading(false)
     }
-  }, [idTarea])
+  }, [idTarea, cargarEvidencias])
 
-  // Sin spinner: desmontar la lista reiniciaría el intento de cada foto y una
-  // foto borrada pediría enlaces nuevos sin fin.
-  const renovarEnlaces = useCallback(async () => {
-    if (!idTarea) return
-    try {
-      setEvidencias(await getIncidencias(idTarea))
-    } catch (err) {
-      console.error('Error al renovar los enlaces de las fotos:', err)
-    }
-  }, [idTarea])
+  const renovarEnlaces = useRenovarEnlaces(cargarEvidencias)
 
   useEffect(() => {
     if (open) fetchEvidencias()

@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCarros, getHerramientas, getMateriales } from '../api/inventarioService'
+import { useRenovarEnlaces } from '../hooks/useFotoFirmada'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import TablaVehiculos from '../components/inventario/TablaVehiculos'
@@ -153,32 +154,26 @@ export default function InventarioPage() {
 
   const tabInfo = TABS.find(t => t.id === tabActiva)
 
+  const cargarInventario = useCallback(async () => {
+    const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
+    setVehiculos(v)
+    setHerramientas(h)
+    setMateriales(m)
+  }, [])
+
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     setErrorCarga(null)
     try {
-      const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
-      setVehiculos(v)
-      setHerramientas(h)
-      setMateriales(m)
+      await cargarInventario()
     } catch (err) {
       setErrorCarga(err?.response?.data?.detail || 'No se pudo cargar el inventario.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [cargarInventario])
 
-  // Sin spinner: desmontar la tabla reiniciaría el intento de cada miniatura.
-  const renovarEnlaces = useCallback(async () => {
-    try {
-      const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
-      setVehiculos(v)
-      setHerramientas(h)
-      setMateriales(m)
-    } catch (err) {
-      console.error('Error al renovar los enlaces de las fotos:', err)
-    }
-  }, [])
+  const renovarEnlaces = useRenovarEnlaces(cargarInventario)
 
   useEffect(() => {
     cargarDatos()

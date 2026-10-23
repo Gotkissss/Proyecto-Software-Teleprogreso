@@ -64,6 +64,17 @@ describe('FotoEvidencia', () => {
     expect(alExpirar).toHaveBeenCalledTimes(2)
   })
 
+  it('si la recarga falla, avisa en lugar de dejar la imagen rota y no vuelve a pedir', async () => {
+    const alExpirar = vi.fn(() => Promise.reject(new Error('sin red')))
+    renderizar(PRIMERA, alExpirar)
+
+    fireEvent.error(screen.getByAltText('Evidencia'))
+
+    expect(await screen.findByText(/No se pudo cargar la foto/i)).toBeInTheDocument()
+    expect(screen.queryByAltText('Evidencia')).not.toBeInTheDocument()
+    expect(alExpirar).toHaveBeenCalledTimes(1)
+  })
+
   it('sin alExpirar avisa al primer error', () => {
     renderizar(PRIMERA)
 

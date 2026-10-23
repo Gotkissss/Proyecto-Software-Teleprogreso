@@ -19,7 +19,7 @@ import styles from './EquipoPage.module.css'
 // la URL del backend.
 import { urlArchivo } from '../api/client'
 import { getMiEquipo } from '../api/equipoService'
-import { useFotoFirmada } from '../hooks/useFotoFirmada'
+import { useFotoFirmada, useRenovarEnlaces } from '../hooks/useFotoFirmada'
 
 /* ─── ICONOS ─────────────────────────────────────────────────────────────── */
 const IconCar = () => (
@@ -93,30 +93,25 @@ export default function EquipoPage() {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
 
+  const cargarEquipo = useCallback(async () => {
+    const { vehiculo: v, herramientas: h } = await getMiEquipo()
+    setVehiculo(v)
+    setHerramientas(h)
+  }, [])
+
   const fetchEquipo = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const { vehiculo: v, herramientas: h } = await getMiEquipo()
-      setVehiculo(v)
-      setHerramientas(h)
+      await cargarEquipo()
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar tu equipo.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [cargarEquipo])
 
-  // Sin spinner: desmontar la tarjeta reiniciaría el intento de la foto.
-  const renovarEnlaces = useCallback(async () => {
-    try {
-      const { vehiculo: v, herramientas: h } = await getMiEquipo()
-      setVehiculo(v)
-      setHerramientas(h)
-    } catch (err) {
-      console.error('Error al renovar el enlace de la foto:', err)
-    }
-  }, [])
+  const renovarEnlaces = useRenovarEnlaces(cargarEquipo)
 
   useEffect(() => {
     fetchEquipo()

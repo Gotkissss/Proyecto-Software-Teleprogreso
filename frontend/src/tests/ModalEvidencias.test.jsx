@@ -91,6 +91,18 @@ describe('ModalEvidencias', () => {
     expect(screen.getByAltText('Evidencia de la tarea')).toBeInTheDocument()
   })
 
+  it('si la recarga de enlaces falla, la foto queda como no disponible', async () => {
+    getIncidencias.mockResolvedValueOnce(EVIDENCIAS)
+    getIncidencias.mockRejectedValueOnce(new Error('sin red'))
+    renderizar()
+
+    fireEvent.error(await screen.findByAltText('Evidencia de la tarea'))
+
+    expect(await screen.findByText(/No se pudo cargar la foto/i)).toBeInTheDocument()
+    expect(screen.queryByAltText('Evidencia de la tarea')).not.toBeInTheDocument()
+    expect(getIncidencias).toHaveBeenCalledTimes(2)
+  })
+
   it('indica cuando una evidencia no trae foto', async () => {
     getIncidencias.mockResolvedValue([EVIDENCIAS[1]])
     renderizar()

@@ -24,6 +24,7 @@ import { urlArchivo } from '../api/client'
 import { getTareasCompletadas } from '../api/rutaService'
 import { getTecnicosDisponibles } from '../api/tareaService'
 import FotoEvidencia from '../components/tareas/FotoEvidencia'
+import { useRenovarEnlaces } from '../hooks/useFotoFirmada'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
@@ -175,21 +176,21 @@ export default function HistorialTareasPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const pedirHistorial = useCallback(
-    () =>
-      getTareasCompletadas({
+  const cargarHistorial = useCallback(async () => {
+    setHistorial(
+      await getTareasCompletadas({
         fecha_desde: desde,
         fecha_hasta: hasta,
         id_tecnico: esSupervision && idTecnico ? Number(idTecnico) : undefined,
-      }),
-    [desde, hasta, idTecnico, esSupervision]
-  )
+      })
+    )
+  }, [desde, hasta, idTecnico, esSupervision])
 
   const fetchHistorial = useCallback(async () => {
     setLoading(true)
     try {
       setError(null)
-      setHistorial(await pedirHistorial())
+      await cargarHistorial()
     } catch (err) {
       setError(
         err?.response?.data?.detail || 'No se pudo cargar el historial de tareas.'
@@ -197,16 +198,9 @@ export default function HistorialTareasPage() {
     } finally {
       setLoading(false)
     }
-  }, [pedirHistorial])
+  }, [cargarHistorial])
 
-  // Sin spinner: desmontar las tarjetas reiniciaría el intento de cada foto.
-  const renovarEnlaces = useCallback(async () => {
-    try {
-      setHistorial(await pedirHistorial())
-    } catch (err) {
-      console.error('Error al renovar los enlaces de las fotos:', err)
-    }
-  }, [pedirHistorial])
+  const renovarEnlaces = useRenovarEnlaces(cargarHistorial)
 
   useEffect(() => {
     fetchHistorial()
