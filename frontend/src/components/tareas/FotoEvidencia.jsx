@@ -13,17 +13,22 @@
  * envoltorio (el enlace o el botón que amplía la foto) también desaparece: sin
  * imagen que abrir, un enlace que lleva a una página vacía es peor que nada.
  *
+ * El enlace firmado vence a los 10 minutos (HU-S10-02). Con `alExpirar`, el
+ * primer fallo de una foto pide un enlace nuevo antes de mostrar el aviso; si
+ * el nuevo también falla, sale el aviso (ver hooks/useFotoFirmada.js).
+ *
  * `envolver` recibe el <img> ya montado y devuelve el árbol que lo contiene:
  *
  *   <FotoEvidencia
  *     src={urlArchivo(ev.foto_evidencia)}
  *     alt={`Evidencia de ${tarea.titulo}`}
  *     imgClassName={styles.foto}
+ *     alExpirar={recargarEvidencias}
  *     envolver={(img) => <a href={foto} target="_blank" rel="noopener noreferrer">{img}</a>}
  *   />
  * ---------------------------------------------------------------------------
  */
-import { useEffect, useState } from 'react'
+import { useFotoFirmada } from '../../hooks/useFotoFirmada'
 import styles from './FotoEvidencia.module.css'
 
 const IconFotoRota = () => (
@@ -39,17 +44,12 @@ export default function FotoEvidencia({
   alt,
   imgClassName,
   envolver,
+  alExpirar,
   textoNoDisponible = 'No se pudo cargar la foto',
 }) {
-  const [disponible, setDisponible] = useState(true)
+  const { fallida, alFallar } = useFotoFirmada(src, alExpirar)
 
-  // Una foto nueva merece su propio intento: sin esto, al reemplazar la
-  // evidencia el aviso de error se quedaría pegado del archivo anterior.
-  useEffect(() => {
-    setDisponible(true)
-  }, [src])
-
-  if (!src || !disponible) {
+  if (!src || fallida) {
     return (
       <span className={styles.noDisponible} role="img" aria-label={textoNoDisponible}>
         <IconFotoRota />
@@ -64,7 +64,7 @@ export default function FotoEvidencia({
       alt={alt}
       className={imgClassName}
       loading="lazy"
-      onError={() => setDisponible(false)}
+      onError={alFallar}
     />
   )
 

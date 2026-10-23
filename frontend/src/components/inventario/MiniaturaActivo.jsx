@@ -1,3 +1,4 @@
+import { useFotoFirmada } from '../../hooks/useFotoFirmada'
 import styles from './MiniaturaActivo.module.css'
 
 const IconTool = () => (
@@ -13,8 +14,10 @@ const IconBox = () => (
   </svg>
 )
 
-export function VehiculoMiniatura({ marca, fotoUrl: foto, color = '#1e3a5f' }) {
-  if (foto) return <img src={foto} alt={marca} className={styles.miniaturaImg} />
+/** Si la foto no carga ni con un enlace nuevo, cada miniatura cae a su ícono. */
+export function VehiculoMiniatura({ marca, fotoUrl: foto, color = '#1e3a5f', alExpirar }) {
+  const { fallida, alFallar } = useFotoFirmada(foto, alExpirar)
+  if (foto && !fallida) return <img src={foto} alt={marca} className={styles.miniaturaImg} onError={alFallar} />
   const inicial = marca?.[0]?.toUpperCase() ?? 'V'
   return (
     <div className={styles.miniatura} style={{ background: color + '18', borderColor: color + '30' }}>
@@ -32,8 +35,9 @@ export function VehiculoMiniatura({ marca, fotoUrl: foto, color = '#1e3a5f' }) {
   )
 }
 
-export function HerramientaMiniatura({ tipo, foto }) {
-  if (foto) return <img src={foto} alt={tipo} className={styles.miniaturaImg} />
+export function HerramientaMiniatura({ tipo, foto, alExpirar }) {
+  const { fallida, alFallar } = useFotoFirmada(foto, alExpirar)
+  if (foto && !fallida) return <img src={foto} alt={tipo} className={styles.miniaturaImg} onError={alFallar} />
   return (
     <div className={styles.miniatura} style={{ background: 'var(--color-primary-light)', borderColor: 'var(--color-primary-dark)30' }}>
       <span style={{ color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center' }}><IconTool /></span>
@@ -41,8 +45,9 @@ export function HerramientaMiniatura({ tipo, foto }) {
   )
 }
 
-export function MaterialMiniatura({ tipo, foto }) {
-  if (foto) return <img src={foto} alt={tipo} className={styles.miniaturaImg} />
+export function MaterialMiniatura({ tipo, foto, alExpirar }) {
+  const { fallida, alFallar } = useFotoFirmada(foto, alExpirar)
+  if (foto && !fallida) return <img src={foto} alt={tipo} className={styles.miniaturaImg} onError={alFallar} />
   return (
     <div className={styles.miniatura} style={{ background: 'var(--color-success-light)', borderColor: 'var(--color-success-dark)30' }}>
       <span style={{ color: 'var(--color-success-dark)', display: 'flex', alignItems: 'center' }}><IconBox /></span>

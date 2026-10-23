@@ -14,11 +14,12 @@ import { useCallback, useState, useEffect } from 'react'
 import PageState from '../components/ui/PageState'
 import styles from './EquipoPage.module.css'
 
-// La resolución de rutas /static vive en api/client (urlArchivo): tenerla
+// La resolución del enlace firmado vive en api/client (urlArchivo): tenerla
 // duplicada aquí obligaba a acordarse de tocar dos sitios cada vez que cambia
 // la URL del backend.
 import { urlArchivo } from '../api/client'
 import { getMiEquipo } from '../api/equipoService'
+import { useFotoFirmada, useRenovarEnlaces } from '../hooks/useFotoFirmada'
 
 /* ─── ICONOS ─────────────────────────────────────────────────────────────── */
 const IconCar = () => (
@@ -71,6 +72,20 @@ function VehiculoIlustracion({ color = '#1e3a5f' }) {
   )
 }
 
+/** Foto del vehículo; si no carga ni con un enlace nuevo, queda la ilustración. */
+function FotoVehiculo({ src, alt, alExpirar }) {
+  const { fallida, alFallar } = useFotoFirmada(src, alExpirar)
+  if (!src || fallida) return <VehiculoIlustracion color="#1e3a5f" />
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={alFallar}
+      style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}
+    />
+  )
+}
+
 /* ─── COMPONENTE PRINCIPAL ───────────────────────────────────────────────── */
 export default function EquipoPage() {
   const [vehiculo,     setVehiculo]     = useState(null)
@@ -78,19 +93,25 @@ export default function EquipoPage() {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
 
+  const cargarEquipo = useCallback(async () => {
+    const { vehiculo: v, herramientas: h } = await getMiEquipo()
+    setVehiculo(v)
+    setHerramientas(h)
+  }, [])
+
   const fetchEquipo = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const { vehiculo: v, herramientas: h } = await getMiEquipo()
-      setVehiculo(v)
-      setHerramientas(h)
+      await cargarEquipo()
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'No se pudo cargar tu equipo.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [cargarEquipo])
+
+  const renovarEnlaces = useRenovarEnlaces(cargarEquipo)
 
   useEffect(() => {
     fetchEquipo()
@@ -140,10 +161,11 @@ export default function EquipoPage() {
           <div className={styles.vehiculoCard}>
             {/* Imagen / ilustración grande */}
             <div className={styles.vehiculoImagen}>
-              {urlArchivo(vehiculo.foto_url)
-                ? <img src={urlArchivo(vehiculo.foto_url)} alt={vehiculo.nombre_activo} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'inherit'}}/>
-                : <VehiculoIlustracion color="#1e3a5f" />
-              }
+              <FotoVehiculo
+                src={urlArchivo(vehiculo.foto_url)}
+                alt={vehiculo.nombre_activo}
+                alExpirar={renovarEnlaces}
+              />
             </div>
 
             {/* Info principal */}

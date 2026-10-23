@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCarros, getHerramientas, getMateriales } from '../api/inventarioService'
+import { useRenovarEnlaces } from '../hooks/useFotoFirmada'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import TablaVehiculos from '../components/inventario/TablaVehiculos'
@@ -153,20 +154,26 @@ export default function InventarioPage() {
 
   const tabInfo = TABS.find(t => t.id === tabActiva)
 
+  const cargarInventario = useCallback(async () => {
+    const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
+    setVehiculos(v)
+    setHerramientas(h)
+    setMateriales(m)
+  }, [])
+
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     setErrorCarga(null)
     try {
-      const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
-      setVehiculos(v)
-      setHerramientas(h)
-      setMateriales(m)
+      await cargarInventario()
     } catch (err) {
       setErrorCarga(err?.response?.data?.detail || 'No se pudo cargar el inventario.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [cargarInventario])
+
+  const renovarEnlaces = useRenovarEnlaces(cargarInventario)
 
   useEffect(() => {
     cargarDatos()
@@ -336,6 +343,7 @@ export default function InventarioPage() {
           onAsignarTecnico={v => setModalAsignarTecnico(v)}
           onEditar={v => setModalEditar(v)}
           onEliminar={v => setModalEliminar(v)}
+          alExpirar={renovarEnlaces}
         />
       )}
 
@@ -348,6 +356,7 @@ export default function InventarioPage() {
           onAsignarCarro={h => setModalAsignarHerramienta(h)}
           onEditar={h => setModalEditar(h)}
           onEliminar={h => setModalEliminar(h)}
+          alExpirar={renovarEnlaces}
         />
       )}
 
@@ -359,6 +368,7 @@ export default function InventarioPage() {
           onSort={handleSort}
           onEditar={m => setModalEditar(m)}
           onEliminar={m => setModalEliminar(m)}
+          alExpirar={renovarEnlaces}
         />
       )}
 

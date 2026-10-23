@@ -128,7 +128,7 @@ describe('ModalFinalizarTarea', () => {
   it('envía descripción y foto cuando todo es válido', async () => {
     finalizarTareaConEvidencia.mockResolvedValue({
       id_incidencia: 1,
-      foto_evidencia: '/static/incidencias/x.jpg',
+      foto_evidencia: '/archivos/incidencias/x.jpg?exp=1&firma=f',
     })
     const onFinalizada = vi.fn()
     const { container } = renderizar({ onFinalizada })

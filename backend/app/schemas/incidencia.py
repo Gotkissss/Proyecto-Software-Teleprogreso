@@ -12,6 +12,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.archivos_firmados import UrlArchivo
+
 
 class IncidenciaCreate(BaseModel):
     """Body de POST /tareas/{id}/incidencias."""
@@ -48,7 +50,7 @@ class IncidenciaResponse(BaseModel):
     id_incidencia: int
     id_tarea: int
     descripcion: Optional[str] = None
-    foto_evidencia: Optional[str] = None
+    foto_evidencia: UrlArchivo = None
     fecha_reporte: datetime
 
     class Config:
@@ -60,4 +62,4 @@ class FotoEvidenciaResponse(BaseModel):
 
     detail: str
     id_incidencia: int
-    foto_evidencia: str
+    foto_evidencia: UrlArchivo

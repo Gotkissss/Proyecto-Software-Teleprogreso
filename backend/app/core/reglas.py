@@ -281,3 +281,11 @@ MAX_FILAS_EXPORTAR_BITACORA = 50_000
 METRICAS_SERIE = ("horas", "tareas", "pausas")
 AGRUPACIONES_SERIE = ("dia", "semana")
 MAX_DIAS_SERIE = {"dia": 366, "semana": 731}
+
+
+# ── Fotos subidas (HU-S10-02) ────────────────────────────────────────────────
+
+# Vigencia de un enlace firmado a una foto (app/core/archivos_firmados.py).
+# Corta a propósito: un enlace copiado o reenviado deja de abrir la foto en
+# unos minutos, y la pantalla que la muestra pide uno nuevo al recargar.
+MINUTOS_URL_FIRMADA = 10

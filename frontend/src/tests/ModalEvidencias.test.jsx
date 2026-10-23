@@ -8,7 +8,7 @@
  * ---------------------------------------------------------------------------
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToastProvider } from '../components/ui/Toast'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
@@ -27,12 +27,16 @@ vi.mock('../api/client', () => ({
 
 const TAREA = { id_tarea: 7, titulo: 'Ampliación de red' }
 
+// Enlace firmado tal como lo entrega la API (HU-S10-02).
+const FOTO_FIRMADA =
+  '/archivos/incidencias/incidencia_2_ab12.jpg?exp=1790000600&firma=' + 'a'.repeat(64)
+
 const EVIDENCIAS = [
   {
     id_incidencia: 2,
     id_tarea: 7,
     descripcion: 'Se certificaron los 5 puntos de red.',
-    foto_evidencia: '/static/incidencias/incidencia_2_ab12.jpg',
+    foto_evidencia: FOTO_FIRMADA,
     fecha_reporte: '2026-07-27T16:30:00',
   },
   {
@@ -66,15 +70,37 @@ describe('ModalEvidencias', () => {
     expect(getIncidencias).toHaveBeenCalledWith(7)
   })
 
-  it('apunta la foto al backend, no al dominio del frontend', async () => {
+  it('pinta la foto con el enlace firmado de la API, antepuesto con BASE_URL', async () => {
     getIncidencias.mockResolvedValue(EVIDENCIAS)
     renderizar()
 
     const img = await screen.findByAltText('Evidencia de la tarea')
-    expect(img).toHaveAttribute(
-      'src',
-      'http://backend.test/static/incidencias/incidencia_2_ab12.jpg',
-    )
+    expect(img).toHaveAttribute('src', `http://backend.test${FOTO_FIRMADA}`)
+    expect(img.closest('a')).toHaveAttribute('href', `http://backend.test${FOTO_FIRMADA}`)
+  })
+
+  it('si el enlace venció, pide las evidencias de nuevo sin volver al spinner', async () => {
+    getIncidencias.mockResolvedValue(EVIDENCIAS)
+    renderizar()
+
+    const img = await screen.findByAltText('Evidencia de la tarea')
+    fireEvent.error(img)
+
+    await waitFor(() => expect(getIncidencias).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(/Cargando evidencias/i)).not.toBeInTheDocument()
+    expect(screen.getByAltText('Evidencia de la tarea')).toBeInTheDocument()
+  })
+
+  it('si la recarga de enlaces falla, la foto queda como no disponible', async () => {
+    getIncidencias.mockResolvedValueOnce(EVIDENCIAS)
+    getIncidencias.mockRejectedValueOnce(new Error('sin red'))
+    renderizar()
+
+    fireEvent.error(await screen.findByAltText('Evidencia de la tarea'))
+
+    expect(await screen.findByText(/No se pudo cargar la foto/i)).toBeInTheDocument()
+    expect(screen.queryByAltText('Evidencia de la tarea')).not.toBeInTheDocument()
+    expect(getIncidencias).toHaveBeenCalledTimes(2)
   })
 
   it('indica cuando una evidencia no trae foto', async () => {

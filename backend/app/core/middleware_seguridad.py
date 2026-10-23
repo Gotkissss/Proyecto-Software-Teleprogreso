@@ -126,10 +126,11 @@ def _sandbox_para(ruta: str) -> str:
 
     `allow-same-origin` devuelve el origen real y nada más: sin
     `allow-scripts`, `allow-forms` ni `allow-popups`, un HTML que se colara
-    entre las subidas sigue sin poder ejecutar nada. Se aplica solo a /static,
-    que es donde viven los archivos que un usuario puede llegar a abrir.
+    entre las subidas sigue sin poder ejecutar nada. Se aplica solo a
+    /archivos, que es donde se sirven los archivos que un usuario puede llegar
+    a abrir.
     """
-    if ruta.startswith("/static"):
+    if ruta.startswith("/archivos"):
         return "sandbox allow-same-origin"
     return "sandbox"
 
@@ -138,7 +139,7 @@ class CabecerasSeguridad(BaseHTTPMiddleware):
     """
     Añade cabeceras de seguridad a todas las respuestas.
 
-    Importan sobre todo por /static: ahí se sirven imágenes subidas por los
+    Importan sobre todo por /archivos: ahí se sirven imágenes subidas por los
     usuarios. Sin `X-Content-Type-Options: nosniff`, un navegador puede
     interpretar como HTML un archivo que se subió con extensión de imagen, y
     ejecutarlo en el dominio de la API; con el token de sesión al alcance, eso

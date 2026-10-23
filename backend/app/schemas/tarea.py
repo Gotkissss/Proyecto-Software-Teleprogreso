@@ -3,6 +3,8 @@ from typing import List, Optional
 from datetime import date, datetime
 from enum import Enum
 
+from app.core.archivos_firmados import UrlArchivo
+
 
 # 🔹 ENUMS
 class EstadoServicio(str, Enum):
@@ -167,7 +169,7 @@ class EvidenciaResumen(BaseModel):
 
     id_incidencia:  int
     descripcion:    Optional[str] = None
-    foto_evidencia: Optional[str] = None
+    foto_evidencia: UrlArchivo = None
     fecha_reporte:  datetime
 
     class Config:

@@ -47,6 +47,7 @@ export default function TablaVehiculos({
   onAsignarTecnico,
   onEditar,
   onEliminar,
+  alExpirar,
 }) {
   const columns = [
     {
@@ -54,7 +55,7 @@ export default function TablaVehiculos({
       label: 'Vehículo',
       render: v => (
         <div className={styles.activoCell}>
-          <VehiculoMiniatura marca={v.marca} fotoUrl={urlArchivo(v.foto_url)} color="#1e3a5f" />
+          <VehiculoMiniatura marca={v.marca} fotoUrl={urlArchivo(v.foto_url)} color="#1e3a5f" alExpirar={alExpirar} />
           {/* El nombre lleva a la ficha del vehículo. Antes esa pantalla
               existía pero no se enlazaba desde ningún sitio: solo se llegaba
               escribiendo /supervisor/carros/{id} a mano. */}

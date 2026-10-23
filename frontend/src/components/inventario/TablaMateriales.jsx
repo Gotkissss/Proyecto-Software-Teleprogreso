@@ -19,6 +19,7 @@ export default function TablaMateriales({
   onSort,
   onEditar,
   onEliminar,
+  alExpirar,
 }) {
   const columns = [
     {
@@ -26,7 +27,7 @@ export default function TablaMateriales({
       label: 'Material',
       render: m => (
         <div className={styles.activoCell}>
-          <MaterialMiniatura tipo={m.tipo_material} foto={urlArchivo(m.foto_url)} />
+          <MaterialMiniatura tipo={m.tipo_material} foto={urlArchivo(m.foto_url)} alExpirar={alExpirar} />
           <span className={styles.activoNombre}>{m.nombre_activo}</span>
         </div>
       ),
