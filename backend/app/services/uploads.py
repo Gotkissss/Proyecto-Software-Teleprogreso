@@ -6,8 +6,10 @@ Centraliza la validación (extensión, tamaño y firma del archivo) y la escritu
 vivía duplicada en el endpoint de imagen de activos, para que el upload de
 fotos de evidencia use exactamente las mismas reglas.
 
-Los archivos se guardan bajo `<STATIC_DIR>/<subcarpeta>/` y se sirven desde
-la ruta pública `/static/<subcarpeta>/<archivo>` que monta main.py.
+Los archivos se guardan bajo `<STATIC_DIR>/<subcarpeta>/` con un nombre de
+128 bits al azar, y en la base queda la ruta `/static/<subcarpeta>/<archivo>`.
+Esa ruta ya no es pública: la API la convierte en un enlace firmado al
+responder (core/archivos_firmados.py) y solo GET /archivos/... sirve el archivo.
 
 Dónde cae `STATIC_DIR` es lo que decide si las fotos sobreviven a un deploy.
 El disco del contenedor es efímero: en Railway cada deploy y cada reinicio
@@ -47,7 +49,7 @@ def formato_real(contenido: bytes) -> str | None:
     ninguno de los admitidos.
 
     La extensión sola no dice nada: un HTML o un ejecutable renombrado a
-    .jpg pasaba la validación y quedaba publicado en /static. Se comparan los
+    .jpg pasaba la validación y quedaba publicado. Se comparan los
     "magic bytes" a mano (sin dependencias nuevas; `imghdr` ya no existe en
     Python 3.13).
     """
@@ -72,7 +74,7 @@ def resolver_static_root(configurado: str | None) -> str:
     return os.path.abspath(configurado or _STATIC_POR_DEFECTO)
 
 
-# Mismo directorio que monta main.py en /static. Se resuelve una sola vez aquí
+# Mismo directorio que lee routers/archivos.py. Se resuelve una sola vez aquí
 # para que el que escribe los archivos y el que los sirve no puedan
 # desincronizarse: apuntando a carpetas distintas, la subida responde 200 y la
 # imagen sale rota, que es de los fallos más difíciles de ver.
@@ -107,7 +109,7 @@ async def guardar_imagen(
     url_anterior: str | None = None,
 ) -> str:
     """
-    Valida y guarda una imagen subida, devolviendo su URL pública.
+    Valida y guarda una imagen subida, devolviendo la ruta que se guarda en la base.
 
     Args:
         file:         archivo recibido en el multipart/form-data.
@@ -121,8 +123,7 @@ async def guardar_imagen(
         imagen JPEG, PNG, WEBP o GIF.
 
     Si el contenido es una imagen válida pero de otro formato que el que dice
-    su extensión (un PNG llamado .jpg), se guarda con la extensión real: así
-    /static lo sirve con el tipo correcto.
+    su extensión (un PNG llamado .jpg), se guarda con la extensión real.
     """
     extension = os.path.splitext(file.filename or "")[1].lower()
     if extension not in ALLOWED_EXTENSIONS:
@@ -163,7 +164,7 @@ async def guardar_imagen(
     destino = os.path.join(STATIC_ROOT, subcarpeta)
     os.makedirs(destino, exist_ok=True)
 
-    nombre_archivo = f"{prefijo}_{uuid.uuid4().hex[:8]}{extension}"
+    nombre_archivo = f"{prefijo}_{uuid.uuid4().hex}{extension}"
     with open(os.path.join(destino, nombre_archivo), "wb") as salida:
         salida.write(contenido)
 
