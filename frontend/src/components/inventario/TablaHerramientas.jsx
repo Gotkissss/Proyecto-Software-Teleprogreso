@@ -33,6 +33,7 @@ export default function TablaHerramientas({
   onAsignarCarro,
   onEditar,
   onEliminar,
+  alExpirar,
 }) {
   const columns = [
     {
@@ -40,7 +41,7 @@ export default function TablaHerramientas({
       label: 'Herramienta',
       render: h => (
         <div className={styles.activoCell}>
-          <HerramientaMiniatura tipo={h.tipo_herramienta} foto={urlArchivo(h.foto_url)} />
+          <HerramientaMiniatura tipo={h.tipo_herramienta} foto={urlArchivo(h.foto_url)} alExpirar={alExpirar} />
           <span className={styles.activoNombre}>{h.nombre_activo}</span>
         </div>
       ),

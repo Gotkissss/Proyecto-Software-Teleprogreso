@@ -28,9 +28,9 @@ export const BASE_URL =
     : 'https://backend-production-6d60.up.railway.app')
 
 /**
- * Convierte una ruta de archivo del backend (`/static/...`) en URL absoluta.
- * El backend guarda las fotos de activos y de evidencias como rutas relativas;
- * sin esto las imágenes apuntarían al dominio del frontend y saldrían rotas.
+ * Convierte el enlace firmado que entrega la API (`/archivos/...?exp=&firma=`)
+ * en URL absoluta. Las pantallas usan ese enlace tal cual y no arman la ruta
+ * del archivo; sin esto las imágenes apuntarían al dominio del frontend.
  *
  * @param {string|null|undefined} ruta
  * @returns {string|null}

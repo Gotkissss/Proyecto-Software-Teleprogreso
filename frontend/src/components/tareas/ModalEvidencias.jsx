@@ -80,6 +80,17 @@ export default function ModalEvidencias({
     }
   }, [idTarea])
 
+  // Sin spinner: desmontar la lista reiniciaría el intento de cada foto y una
+  // foto borrada pediría enlaces nuevos sin fin.
+  const renovarEnlaces = useCallback(async () => {
+    if (!idTarea) return
+    try {
+      setEvidencias(await getIncidencias(idTarea))
+    } catch (err) {
+      console.error('Error al renovar los enlaces de las fotos:', err)
+    }
+  }, [idTarea])
+
   useEffect(() => {
     if (open) fetchEvidencias()
   }, [open, fetchEvidencias])
@@ -136,6 +147,7 @@ export default function ModalEvidencias({
                     src={foto}
                     alt="Evidencia de la tarea"
                     imgClassName={styles.foto}
+                    alExpirar={renovarEnlaces}
                     envolver={(img) => (
                       <a
                         href={foto}

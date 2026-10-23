@@ -168,6 +168,18 @@ export default function InventarioPage() {
     }
   }, [])
 
+  // Sin spinner: desmontar la tabla reiniciaría el intento de cada miniatura.
+  const renovarEnlaces = useCallback(async () => {
+    try {
+      const [v, h, m] = await Promise.all([getCarros(), getHerramientas(), getMateriales()])
+      setVehiculos(v)
+      setHerramientas(h)
+      setMateriales(m)
+    } catch (err) {
+      console.error('Error al renovar los enlaces de las fotos:', err)
+    }
+  }, [])
+
   useEffect(() => {
     cargarDatos()
   }, [cargarDatos])
@@ -336,6 +348,7 @@ export default function InventarioPage() {
           onAsignarTecnico={v => setModalAsignarTecnico(v)}
           onEditar={v => setModalEditar(v)}
           onEliminar={v => setModalEliminar(v)}
+          alExpirar={renovarEnlaces}
         />
       )}
 
@@ -348,6 +361,7 @@ export default function InventarioPage() {
           onAsignarCarro={h => setModalAsignarHerramienta(h)}
           onEditar={h => setModalEditar(h)}
           onEliminar={h => setModalEliminar(h)}
+          alExpirar={renovarEnlaces}
         />
       )}
 
@@ -359,6 +373,7 @@ export default function InventarioPage() {
           onSort={handleSort}
           onEditar={m => setModalEditar(m)}
           onEliminar={m => setModalEliminar(m)}
+          alExpirar={renovarEnlaces}
         />
       )}
 

@@ -80,8 +80,12 @@ function horaDe(isoDateTime) {
 
 /* ── Tarjeta de una tarea cerrada ─────────────────────────────────────────── */
 
-function TareaCompletadaCard({ tarea, mostrarTecnico }) {
-  const [fotoAmpliada, setFotoAmpliada] = useState(null)
+function TareaCompletadaCard({ tarea, mostrarTecnico, alExpirar }) {
+  const [idAmpliada, setIdAmpliada] = useState(null)
+  // Se busca por id para que el visor use el enlace renovado, no el del clic.
+  const fotoAmpliada = urlArchivo(
+    tarea.evidencias?.find((ev) => ev.id_incidencia === idAmpliada)?.foto_evidencia
+  )
 
   return (
     <article className={styles.card}>
@@ -121,11 +125,12 @@ function TareaCompletadaCard({ tarea, mostrarTecnico }) {
                 <FotoEvidencia
                   src={urlArchivo(ev.foto_evidencia)}
                   alt={`Evidencia de ${tarea.titulo}`}
+                  alExpirar={alExpirar}
                   envolver={(img) => (
                     <button
                       type="button"
                       className={styles.fotoBtn}
-                      onClick={() => setFotoAmpliada(urlArchivo(ev.foto_evidencia))}
+                      onClick={() => setIdAmpliada(ev.id_incidencia)}
                       title="Ver la foto en grande"
                     >
                       {img}
@@ -146,9 +151,9 @@ function TareaCompletadaCard({ tarea, mostrarTecnico }) {
         <div
           className={styles.lightbox}
           role="presentation"
-          onClick={() => setFotoAmpliada(null)}
+          onClick={() => setIdAmpliada(null)}
         >
-          <img src={fotoAmpliada} alt="Evidencia ampliada" />
+          <FotoEvidencia src={fotoAmpliada} alt="Evidencia ampliada" alExpirar={alExpirar} />
         </div>
       )}
     </article>
@@ -170,16 +175,21 @@ export default function HistorialTareasPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const pedirHistorial = useCallback(
+    () =>
+      getTareasCompletadas({
+        fecha_desde: desde,
+        fecha_hasta: hasta,
+        id_tecnico: esSupervision && idTecnico ? Number(idTecnico) : undefined,
+      }),
+    [desde, hasta, idTecnico, esSupervision]
+  )
+
   const fetchHistorial = useCallback(async () => {
     setLoading(true)
     try {
       setError(null)
-      const data = await getTareasCompletadas({
-        fecha_desde: desde,
-        fecha_hasta: hasta,
-        id_tecnico: esSupervision && idTecnico ? Number(idTecnico) : undefined,
-      })
-      setHistorial(data)
+      setHistorial(await pedirHistorial())
     } catch (err) {
       setError(
         err?.response?.data?.detail || 'No se pudo cargar el historial de tareas.'
@@ -187,7 +197,16 @@ export default function HistorialTareasPage() {
     } finally {
       setLoading(false)
     }
-  }, [desde, hasta, idTecnico, esSupervision])
+  }, [pedirHistorial])
+
+  // Sin spinner: desmontar las tarjetas reiniciaría el intento de cada foto.
+  const renovarEnlaces = useCallback(async () => {
+    try {
+      setHistorial(await pedirHistorial())
+    } catch (err) {
+      console.error('Error al renovar los enlaces de las fotos:', err)
+    }
+  }, [pedirHistorial])
 
   useEffect(() => {
     fetchHistorial()
@@ -322,6 +341,7 @@ export default function HistorialTareasPage() {
                     key={tarea.id_tarea}
                     tarea={tarea}
                     mostrarTecnico={esSupervision}
+                    alExpirar={renovarEnlaces}
                   />
                 ))}
               </div>
