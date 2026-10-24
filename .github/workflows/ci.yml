@@ -58,16 +58,12 @@ jobs:
       - run: python -m pytest tests/ -v
 
   dependencias:
-    name: Auditoría de dependencias (informativa)
+    name: Auditoría de dependencias
     runs-on: ubuntu-latest
-    # T1 del Sprint 9: pip-audit y npm audit en cada PR. Primera vuelta
-    # INFORMATIVA: si encuentra avisos el job sale en rojo pero no bloquea el
-    # PR. Pendientes conocidos al cerrar el Sprint 9 (ver SEGURIDAD.md):
-    # python-jose/ecdsa/pyasn1, python-dotenv y pytest en el backend; axios,
-    # form-data y react-router (producción) y las herramientas de build y
-    # pruebas en el frontend. Cuando se resuelvan, se quita
-    # `continue-on-error` y pasa a ser bloqueante.
-    continue-on-error: true
+    # Obligatoria desde la HU-S10-03: un aviso conocido rompe el job y el PR
+    # no se puede mergear. Lo que se acepta sin corregir está en la tabla de
+    # excepciones de SEGURIDAD.md ("Cadena de suministro"), con motivo y fecha
+    # de revisión; aquí no se silencia nada con `|| true`.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,13 +71,17 @@ jobs:
           python-version: '3.11'
       - name: pip-audit (backend)
         run: |
-          pip install pip-audit
+          pip install pip-audit==2.10.1
           pip-audit -r backend/requirements.txt --desc
       - uses: actions/setup-node@v4
+        # always(): si pip-audit falla, npm audit corre igual para que el PR
+        # muestre los dos resultados de una vez.
         if: always()
         with:
           node-version: 20
-      - name: npm audit (frontend, severidad alta o mayor)
+      - name: npm audit (frontend en producción, severidad alta o mayor)
         if: always()
         working-directory: frontend
-        run: npm audit --audit-level=high
+        # --omit=dev: las herramientas de build y pruebas no llegan al
+        # navegador; sus avisos se aceptan en SEGURIDAD.md.
+        run: npm audit --omit=dev --audit-level=high

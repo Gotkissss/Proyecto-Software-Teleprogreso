@@ -362,6 +362,32 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
    `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
    `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
 
+## Cadena de suministro
+
+Una dependencia vulnerable es código ajeno corriendo con los permisos de la
+aplicación, así que el CI no deja entrar una (HU-S10-03).
+
+**Auditoría obligatoria.** El job "Auditoría de dependencias" corre en cada
+push y PR y ya no es informativo: si falla, el PR no se puede mergear.
+
+- `pip-audit` sobre `backend/requirements.txt`, sin excepciones: cualquier
+  aviso conocido rompe el job.
+- `npm audit --omit=dev --audit-level=high` sobre el frontend: lo que se
+  empaqueta y llega al navegador, desde severidad alta.
+
+En el Sprint 10 se dejó en cero: `python-jose` (con `ecdsa` y `pyasn1`) se
+cambió por PyJWT, `python-dotenv` pasó a 1.2.4, `pytest` a 9.0.3, y `axios`,
+`form-data`, `follow-redirects` y `@remix-run/router` subieron sin `--force`.
+
+**Excepciones aceptadas.** Lo que no bloquea queda escrito aquí con su motivo
+y una fecha de revisión, en lugar de esconderlo con un `|| true`:
+
+| Paquete | Aviso | Por qué se acepta | Revisar |
+|---|---|---|---|
+| `react-router` 6.30 (producción, moderado) | GHSA-wrjc-x8rr-h8h6: redirección abierta con `\` en `<Link>`/`useNavigate` | La app solo navega a rutas fijas o a la de cada rol; ninguna sale de un parámetro del usuario. La corrección solo existe en la v7, un cambio mayor | 2026-11-02 (retro) |
+| `react-router` 6.30 (producción, moderado) | GHSA-337j-9hxr-rhxg: inyección en `deserializeErrors()` | Afecta a la hidratación con renderizado en servidor; esta app es una SPA | 2026-11-02 (retro) |
+| Herramientas de desarrollo (`vitest`/`tinypool`, `vite`/`esbuild`, `workbox-build`, `@babel/*`, `postcss` y otras) | Varios, hasta crítico en `tinypool` | No se empaquetan ni corren en producción: viven en la máquina del desarrollador y en el CI. `npm audit fix` sin `--force` corrige varias, pero arrastra en el build del service worker una versión preliminar (`@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1`) y no se aceptó a días de la presentación. El resto exige `vite` 8 y `vitest` nuevos | 2026-11-02 (retro) |
+
 ## Lo que esto no cubre
 
 Conviene tenerlo claro para no dar por resuelto lo que no lo está:
@@ -378,19 +404,9 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
 - **Contadores en memoria.** Los límites de frecuencia viven en el proceso. Con
   un solo worker de uvicorn (el caso actual) son exactos; con varias réplicas
   cada una lleva su cuenta y habría que mover el estado a Redis.
-- **Dependencias.** En el Sprint 9 se subió el framework a `fastapi 0.133.1`,
-  `starlette 1.7.0` y `python-multipart 0.0.32`, lo que cierra los avisos de
-  denegación de servicio y de manejo de formularios que arrastraban
-  `starlette 0.37.2` y `python-multipart 0.0.9`. El CI corre `pip-audit` y
-  `npm audit --audit-level=high` en cada PR (job "Auditoría de dependencias",
-  informativo por ahora). Siguen abiertos, a resolver antes de volverlo
-  bloqueante:
-  - backend: `python-dotenv 1.0.1` (corregido en 1.2.2) y `pytest 8.1.1`
-    (solo pruebas). `python-jose` con `ecdsa` y `pyasn1` quedó resuelto al
-    migrar a PyJWT (HU-S10-03).
-  - frontend en producción: `axios` y `form-data` (alto) y `@remix-run/router`
-    (moderado); en desarrollo, `vitest`/`tinypool`, `workbox-build` y otras
-    herramientas de build y pruebas.
+- **Dependencias de desarrollo.** La auditoría que bloquea mira solo lo que
+  llega a producción; las herramientas de build y pruebas tienen avisos
+  abiertos que se aceptan con motivo (ver "Cadena de suministro").
 - **Bitácora sin rol mínimo.** Si el backend se conecta como superusuario (sin
   `APP_DB_USER`, el caso de un Railway sin configurar), la base no puede
   impedirle alterar la bitácora: queda solo la detección por la cadena. La
