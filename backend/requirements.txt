@@ -44,7 +44,7 @@ email-validator==2.3.0
 openpyxl==3.1.5
 # Base de datos de zonas horarias: las imágenes -slim de Python no la traen y
 # zoneinfo no puede resolver "America/Guatemala" sin ella.
-tzdata==2024.1
+tzdata==2026.5
 
 #  Dependencias de prueba
 # Instalar con: pip install -r requirements.txt
