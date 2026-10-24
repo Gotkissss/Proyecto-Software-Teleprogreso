@@ -276,9 +276,14 @@ async def _ubicacion(e):
 
 @caso("POST", "/ubicaciones/lote")
 async def _ubicaciones_lote(e):
+    # La hora del punto se toma DESPUÉS de abrir la jornada: la entrada se
+    # guarda truncada al segundo, y si el reloj cruzaba un segundo entre las
+    # dos líneas el punto quedaba antes de la entrada, se descartaba y no
+    # dejaba fila en la bitácora.
+    tecnico = await e.tecnico_en_jornada()
     ahora = datetime.now(timezone.utc).isoformat()
     return await e.llamar(
-        "POST", "/ubicaciones/lote", await e.tecnico_en_jornada(),
+        "POST", "/ubicaciones/lote", tecnico,
         json={"puntos": [{**UBICACION, "fecha_hora": ahora}]},
     )
 
