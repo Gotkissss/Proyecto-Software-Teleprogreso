@@ -99,6 +99,11 @@ ESTADO_EMPLEADO_ACTIVO = "activo"
 
 LONGITUD_MINIMA_CONTRASENA = 8
 
+# Tope de entrada (HU-S10-04). No hay columna que lo limite (en la base va el
+# hash, no la clave), pero sin tope se aceptaba un texto de megabytes en cada
+# login. bcrypt solo usa los primeros 72 bytes; 128 deja margen.
+LONGITUD_MAXIMA_CONTRASENA = 128
+
 # Lista de contraseñas comunes en un archivo de datos (sin dependencia nueva).
 # Se lee una sola vez al importar. Está dentro de `app/`, así que viaja con la
 # imagen de Docker sin tocar el Dockerfile.

@@ -25,8 +25,10 @@ from pydantic import (
     ValidationInfo,
     field_validator,
     model_validator,
+    Field
 )
 from app.core.reglas import validar_politica_contrasena
+from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
 
 
 # ── Enums de dominio ───────────────────────────────────────────────────────
@@ -49,13 +51,13 @@ class EstadoEmpleado(str, Enum):
 
 class EmpleadoCreate(BaseModel):
     """Datos requeridos para crear un nuevo empleado."""
-    nombre:             str
-    apellido:           str
-    correo:             EmailStr
-    contrasena:         str
+    nombre:     str = Field(..., max_length=100)
+    apellido:   str = Field(..., max_length=100)
+    correo:     EmailStr = Field(..., max_length=100)
+    contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
     rol:                RolEmpleado
     fecha_contratacion: date
-    telefono:           Optional[str] = None
+    telefono:   Optional[str] = Field(None, max_length=20)
 
     @field_validator("contrasena")
     @classmethod
@@ -86,11 +88,11 @@ class EmpleadoCreate(BaseModel):
 
 class EmpleadoUpdate(BaseModel):
     """Campos editables de un empleado existente (todos opcionales)."""
-    nombre:             Optional[str]         = None
-    apellido:           Optional[str]         = None
-    correo:             Optional[EmailStr]    = None
+    nombre:   Optional[str] = Field(None, max_length=100)
+    apellido: Optional[str] = Field(None, max_length=100)
+    correo:   Optional[EmailStr] = Field(None, max_length=100)
     rol:                Optional[RolEmpleado] = None
-    telefono:           Optional[str]         = None
+    telefono: Optional[str] = Field(None, max_length=20)
     fecha_contratacion: Optional[date]        = None
 
     @field_validator("nombre", "apellido")
@@ -143,9 +145,9 @@ class EmpleadoPasswordUpdate(BaseModel):
     la clave nueva y dejar al empleado sin poder entrar, sin que nadie sepa
     cual quedo guardada.
     """
-    contrasena:         str
-    contrasena_confirmacion: str
-
+    contrasena:              str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
+    contrasena_confirmacion: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
+    
     @field_validator("contrasena")
     @classmethod
     def validar_contrasena(cls, v: str) -> str:

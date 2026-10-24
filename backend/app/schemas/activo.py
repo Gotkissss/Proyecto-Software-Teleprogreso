@@ -136,13 +136,13 @@ from pydantic import field_validator
 class CarroCreate(BaseModel):
     """Body para POST /activos cuando tipo='carro'."""
     tipo: Literal["carro"] = "carro"
-    nombre_activo:   str
-    descripcion:     Optional[str] = None
-    placa:           str
-    marca:           Optional[str] = None
-    modelo:          Optional[str] = None
+    nombre_activo:   str = Field(..., max_length=150)
+    descripcion:     Optional[str] = Field(None, max_length=2000)
+    placa:           str = Field(..., max_length=20)
+    marca:           Optional[str] = Field(None, max_length=80)
+    modelo:          Optional[str] = Field(None, max_length=80)
     capacidad:       Optional[int] = Field(None, ge=0)
-    estado_vehiculo: str = "disponible"
+    estado_vehiculo: str = Field("disponible", max_length=30)
 
     @field_validator("estado_vehiculo")
     @classmethod
@@ -153,12 +153,12 @@ class CarroCreate(BaseModel):
 class HerramientaCreate(BaseModel):
     """Body para POST /activos cuando tipo='herramienta'."""
     tipo: Literal["herramienta"] = "herramienta"
-    nombre_activo:    str
-    descripcion:      Optional[str] = None
-    tipo_herramienta: Optional[str] = None
-    marca:            Optional[str] = None
-    modelo:           Optional[str] = None
-    estado:           str = "disponible"
+    nombre_activo:    str = Field(..., max_length=150)
+    descripcion:      Optional[str] = Field(None, max_length=2000)
+    tipo_herramienta: Optional[str] = Field(None, max_length=80)
+    marca:            Optional[str] = Field(None, max_length=80)
+    modelo:           Optional[str] = Field(None, max_length=80)
+    estado:           str = Field("disponible", max_length=30)
 
     @field_validator("estado")
     @classmethod
@@ -169,14 +169,14 @@ class HerramientaCreate(BaseModel):
 class MaterialCreate(BaseModel):
     """Body para POST /activos cuando tipo='material'."""
     tipo: Literal["material"] = "material"
-    nombre_activo:       str
-    descripcion:         Optional[str] = None
+    nombre_activo: str = Field(..., max_length=150)
+    descripcion:   Optional[str] = Field(None, max_length=2000)
     # ge=0: el inventario admitía cantidades negativas. Se podía dejar un
     # material en -500 unidades, y esa fila además contaba como "bajo stock".
     cantidad_disponible: int = Field(0, ge=0)
     stock_minimo:        int = Field(0, ge=0)
-    unidad_medida:       Optional[str] = None
-    tipo_material:       Optional[str] = None
+    unidad_medida: Optional[str] = Field(None, max_length=30)
+    tipo_material: Optional[str] = Field(None, max_length=80)
 
 
 class ActivoUpdateRequest(BaseModel):
