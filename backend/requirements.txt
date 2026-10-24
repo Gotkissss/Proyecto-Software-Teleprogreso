@@ -33,7 +33,8 @@ bcrypt==4.0.1
 # Validación y configuración
 pydantic==2.7.1
 pydantic-settings==2.2.1
-python-dotenv==1.0.1
+# 1.2.2 o más (HU-S10-03): 1.0.1 tenía PYSEC-2026-2270 según pip-audit.
+python-dotenv==1.2.4
 
 # Utilidades
 python-multipart==0.0.32
@@ -47,6 +48,9 @@ tzdata==2024.1
 
 #  Dependencias de prueba
 # Instalar con: pip install -r requirements.txt
-pytest==8.1.1
-pytest-asyncio==0.23.6
+# pytest 9.0.3 corrige PYSEC-2026-1845; pytest-asyncio 0.23 no admite pytest 9,
+# por eso sube con él a 1.x. Las pruebas no usan el fixture event_loop que 1.x
+# quitó, así que no hubo que tocarlas.
+pytest==9.0.3
+pytest-asyncio==1.4.0
 httpx==0.27.0
