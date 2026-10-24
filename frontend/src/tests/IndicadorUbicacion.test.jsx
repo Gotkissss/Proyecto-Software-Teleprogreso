@@ -34,6 +34,21 @@ function montar() {
   )
 }
 
+/**
+ * Monta con jornada abierta y espera a que la jornada YA esté aplicada.
+ *
+ * No basta con esperar a que se llame a getEstadoPausas: la llamada ocurre al
+ * montar, pero su respuesta llega después. Una lectura de GPS que llegue antes
+ * se ignora a propósito (sin jornada confirmada no se reporta), y la prueba
+ * fallaba o pasaba según quién ganara esa carrera: sola casi siempre ganaba la
+ * jornada; en la suite completa, con más archivos en paralelo, no. El
+ * indicador solo aparece con la jornada abierta, así que verlo es la señal.
+ */
+async function montarConJornadaAbierta() {
+  montar()
+  await screen.findByText('Obteniendo ubicación…')
+}
+
 /** Simula que el GPS entregó una posición nueva. */
 async function emitirLectura(...args) {
   await act(async () => {
@@ -95,8 +110,7 @@ describe('IndicadorUbicacion', () => {
   it('con jornada abierta y GPS disponible, avisa que está compartiendo', async () => {
     getEstadoPausasMock.mockResolvedValue(jornada(true))
 
-    montar()
-    await waitFor(() => expect(getEstadoPausasMock).toHaveBeenCalled())
+    await montarConJornadaAbierta()
     await emitirLectura()
 
     expect(await screen.findByText('Compartiendo ubicación')).toBeInTheDocument()
@@ -118,8 +132,7 @@ describe('IndicadorUbicacion', () => {
     getEstadoPausasMock.mockResolvedValue(jornada(true))
     enviarUbicacionMock.mockRejectedValue(new Error('Network Error'))
 
-    montar()
-    await waitFor(() => expect(getEstadoPausasMock).toHaveBeenCalled())
+    await montarConJornadaAbierta()
     await emitirLectura()
 
     expect(await screen.findByText('Ubicación sin enviar')).toBeInTheDocument()
