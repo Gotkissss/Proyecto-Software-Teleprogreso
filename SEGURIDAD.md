@@ -379,6 +379,13 @@ En el Sprint 10 se dejó en cero: `python-jose` (con `ecdsa` y `pyasn1`) se
 cambió por PyJWT, `python-dotenv` pasó a 1.2.4, `pytest` a 9.0.3, y `axios`,
 `form-data`, `follow-redirects` y `@remix-run/router` subieron sin `--force`.
 
+**Dependabot.** `.github/dependabot.yml` revisa cada lunes las dependencias de
+Python y npm, las Actions de los workflows y las imágenes base de Docker, y
+abre PRs hacia `develop`. Los cambios menores van agrupados en un PR por
+ecosistema; los mayores, cada uno en el suyo. Así una versión corregida no
+depende de que alguien se acuerde de buscarla, y los PRs pasan por la misma
+auditoría y las mismas pruebas que cualquier otro.
+
 **Excepciones aceptadas.** Lo que no bloquea queda escrito aquí con su motivo
 y una fecha de revisión, en lugar de esconderlo con un `|| true`:
 
