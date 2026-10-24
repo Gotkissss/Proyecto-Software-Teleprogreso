@@ -386,6 +386,14 @@ ecosistema; los mayores, cada uno en el suyo. Así una versión corregida no
 depende de que alguien se acuerde de buscarla, y los PRs pasan por la misma
 auditoría y las mismas pruebas que cualquier otro.
 
+**Actions fijadas y token de solo lectura.** Cada `uses:` de los workflows
+apunta a un commit concreto (`actions/checkout@11d5960… # v4.4.0`), no a una
+etiqueta: una etiqueta como `v4` la puede mover cualquiera que comprometa el
+repositorio de la Action, y el CI correría ese código nuevo sin que nadie lo
+note. Dependabot actualiza el SHA y el comentario juntos. Los dos workflows
+declaran `permissions: contents: read`, así que ni una Action comprometida
+puede empujar código con el token del CI.
+
 **Excepciones aceptadas.** Lo que no bloquea queda escrito aquí con su motivo
 y una fecha de revisión, en lugar de esconderlo con un `|| true`:
 
