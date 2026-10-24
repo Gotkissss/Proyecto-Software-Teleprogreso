@@ -33,6 +33,27 @@ COLOR_ENCABEZADO = "5B9BD5"
 COLOR_TOTAL = "D9EAF7"
 
 
+# Caracteres con los que Excel interpreta una celda de texto como fórmula.
+# openpyxl guarda como fórmula cualquier cadena que empiece por "=", así que un
+# título como `=HYPERLINK(...)` se ejecutaría al abrir el archivo (HU-S10-04).
+_PREFIJOS_DE_FORMULA = ("=", "+", "-", "@", "\t", "\r")
+
+
+def texto_seguro_excel(valor):
+    """
+    Neutraliza la inyección de fórmulas: antepone `'` a todo texto que empiece
+    por =, +, -, @, tabulador o retorno de carro. Solo toca cadenas; los
+    números (incluidos los negativos), fechas y None pasan igual.
+    """
+    if isinstance(valor, str) and valor.startswith(_PREFIJOS_DE_FORMULA):
+        return "'" + valor
+    return valor
+
+
+def _fila_segura(fila) -> tuple:
+    return tuple(texto_seguro_excel(valor) for valor in fila)
+
+
 def _ajustar_columnas(hoja) -> None:
     """Ajusta anchos con un limite para evitar columnas desproporcionadas."""
     for columna in hoja.columns:
@@ -62,7 +83,7 @@ def _crear_libro(
     ultima_columna = get_column_letter(len(encabezados))
 
     hoja.merge_cells(f"A1:{ultima_columna}1")
-    hoja["A1"] = titulo
+    hoja["A1"] = texto_seguro_excel(titulo)
     hoja["A1"].font = Font(bold=True, color="FFFFFF", size=14)
     hoja["A1"].fill = PatternFill("solid", fgColor=COLOR_TITULO)
     hoja["A1"].alignment = Alignment(horizontal="center")
@@ -76,17 +97,19 @@ def _crear_libro(
 
     fila_encabezados = 4
     for columna, encabezado in enumerate(encabezados, start=1):
-        celda = hoja.cell(row=fila_encabezados, column=columna, value=encabezado)
+        celda = hoja.cell(
+            row=fila_encabezados, column=columna, value=texto_seguro_excel(encabezado)
+        )
         celda.font = Font(bold=True, color="FFFFFF")
         celda.fill = PatternFill("solid", fgColor=COLOR_ENCABEZADO)
         celda.alignment = Alignment(horizontal="center")
 
     primera_fila_datos = fila_encabezados + 1
     for fila in filas:
-        hoja.append(fila)
+        hoja.append(_fila_segura(fila))
 
     fila_fin_datos = fila_encabezados + len(filas)
-    hoja.append(fila_total)
+    hoja.append(_fila_segura(fila_total))
     fila_totales = fila_fin_datos + 1
 
     for celda in hoja[fila_totales]:
@@ -309,24 +332,26 @@ def generar_excel_tabla(
     ultima_columna = get_column_letter(len(encabezados))
 
     hoja.merge_cells(f"A1:{ultima_columna}1")
-    hoja["A1"] = titulo
+    hoja["A1"] = texto_seguro_excel(titulo)
     hoja["A1"].font = Font(bold=True, color="FFFFFF", size=14)
     hoja["A1"].fill = PatternFill("solid", fgColor=COLOR_TITULO)
     hoja["A1"].alignment = Alignment(horizontal="center")
 
     hoja.merge_cells(f"A2:{ultima_columna}2")
-    hoja["A2"] = subtitulo
+    hoja["A2"] = texto_seguro_excel(subtitulo)
     hoja["A2"].alignment = Alignment(horizontal="center")
 
     fila_encabezados = 4
     for columna, encabezado in enumerate(encabezados, start=1):
-        celda = hoja.cell(row=fila_encabezados, column=columna, value=encabezado)
+        celda = hoja.cell(
+            row=fila_encabezados, column=columna, value=texto_seguro_excel(encabezado)
+        )
         celda.font = Font(bold=True, color="FFFFFF")
         celda.fill = PatternFill("solid", fgColor=COLOR_ENCABEZADO)
         celda.alignment = Alignment(horizontal="center")
 
     for fila in filas:
-        hoja.append(fila)
+        hoja.append(_fila_segura(fila))
 
     hoja.freeze_panes = f"A{fila_encabezados + 1}"
     hoja.auto_filter.ref = (
