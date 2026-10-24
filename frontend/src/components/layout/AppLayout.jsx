@@ -10,13 +10,14 @@
  * ---------------------------------------------------------------------------
  */
 
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import LayoutHeader from './shared/LayoutHeader'
 import LayoutBottomNav from './shared/LayoutBottomNav'
 import { UbicacionProvider } from '../../context/UbicacionContext'
 import IndicadorUbicacion from './shared/IndicadorUbicacion'
 import UserMenu from './shared/UserMenu'
+import ErrorBoundary from '../ui/ErrorBoundary'
 import styles from './AppLayout.module.css'
 
 /* ── Iconos SVG inline ───────────────────────────────────────────────────── */
@@ -69,6 +70,7 @@ const NAV_ITEMS = [
 
 export default function AppLayout() {
   const { user, logoutUser } = useAuth()
+  const { pathname } = useLocation()
 
   // El backend /auth/me devuelve { nombre: "Nombre Apellido", ... }
   const primerNombre = (user?.nombre || 'Técnico').split(' ')[0]
@@ -95,7 +97,9 @@ export default function AppLayout() {
         />
 
         <main className={styles.main}>
-          <Outlet />
+          <ErrorBoundary claveReinicio={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <LayoutBottomNav items={NAV_ITEMS} rol={user?.rol ?? ''} />
