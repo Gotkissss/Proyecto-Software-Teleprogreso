@@ -185,22 +185,22 @@ class ActivoUpdateRequest(BaseModel):
     Todos los campos son opcionales — solo se actualizan los enviados.
     Sirve para los tres subtipos.
     """
-    nombre_activo:       Optional[str] = None
-    descripcion:         Optional[str] = None
+    nombre_activo:       Optional[str] = Field(None, max_length=150)
+    descripcion:         Optional[str] = Field(None, max_length=2000)
     # Carro
-    placa:               Optional[str] = None
-    marca:               Optional[str] = None
-    modelo:              Optional[str] = None
+    placa:               Optional[str] = Field(None, max_length=20)
+    marca:               Optional[str] = Field(None, max_length=80)
+    modelo:              Optional[str] = Field(None, max_length=80)
     capacidad:           Optional[int] = Field(None, ge=0)
-    estado_vehiculo:     Optional[str] = None
+    estado_vehiculo:     Optional[str] = Field(None, max_length=30)
     # Herramienta
-    tipo_herramienta:    Optional[str] = None
-    estado:              Optional[str] = None
+    tipo_herramienta:    Optional[str] = Field(None, max_length=80)
+    estado:              Optional[str] = Field(None, max_length=30)
     # Material
     cantidad_disponible: Optional[int] = Field(None, ge=0)
     stock_minimo:        Optional[int] = Field(None, ge=0)
-    unidad_medida:       Optional[str] = None
-    tipo_material:       Optional[str] = None
+    unidad_medida:       Optional[str] = Field(None, max_length=30)
+    tipo_material:       Optional[str] = Field(None, max_length=80)
 
     # Estos dos campos eran texto libre. Con `{"estado": "disponible"}` sobre
     # una herramienta ya cargada en un vehículo se conseguía volver a

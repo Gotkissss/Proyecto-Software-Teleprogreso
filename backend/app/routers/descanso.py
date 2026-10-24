@@ -63,8 +63,6 @@ class DescansoIniciar(BaseModel):
     )
 
 
-
-
 def _serializar_descanso(descanso: Descanso, ahora: time, catalogo: Catalogo) -> dict:
     """
     Convierte un Descanso en el objeto que consume la pantalla de Pausas.

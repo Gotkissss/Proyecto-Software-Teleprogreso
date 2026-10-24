@@ -147,7 +147,7 @@ class EmpleadoPasswordUpdate(BaseModel):
     """
     contrasena:              str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
     contrasena_confirmacion: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
-    
+
     @field_validator("contrasena")
     @classmethod
     def validar_contrasena(cls, v: str) -> str:

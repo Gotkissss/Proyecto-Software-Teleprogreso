@@ -65,13 +65,13 @@ async def get_empleados(
         description="Filtrar por rol: admin | supervisor | tecnico | gerente",
     ),
     estado: Optional[str] = Query(
-        None, 
-        max_length=20, 
+        None,
+        max_length=20,
         description="Filtrar por estado: activo | inactivo",
     ),
     buscar: Optional[str] = Query(
-        None, 
-        max_length=100, 
+        None,
+        max_length=100,
         description="Buscar por nombre, apellido o correo (búsqueda parcial)",
     ),
 ):

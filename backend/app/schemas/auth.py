@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
 
 from app.core.reglas import validar_politica_contrasena
-from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA  
+from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
 
 
 class LoginRequest(BaseModel):
@@ -52,7 +52,7 @@ class CambiarContrasenaRequest(BaseModel):
     contrasena_actual: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
     nueva_contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
     confirmacion_contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
-    
+
     @field_validator("nueva_contrasena")
     @classmethod
     def validar_nueva_contrasena(cls, valor: str) -> str:
