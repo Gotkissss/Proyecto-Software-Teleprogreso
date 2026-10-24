@@ -38,9 +38,12 @@ jobs:
       # Valores dummy: los tests no tocan la BD real (usan dependency_overrides)
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
       DATABASE_URL_SYNC: postgresql://test:test@localhost:5432/test
-      SECRET_KEY: ci-secret-key-solo-para-tests
+      # Pública por estar en el repositorio: solo sirve para la suite. Tiene 32
+      # bytes o más porque PyJWT avisa (InsecureKeyLengthWarning) con llaves
+      # HS256 más cortas, y ese aviso se repetía en cada prueba que firma.
+      SECRET_KEY: ci-secret-key-solo-para-tests-no-produccion
       # En cualquier otro entorno la app se niega a arrancar con una SECRET_KEY
-      # tan corta como la de arriba. ENVIRONMENT=test es la única excepción, y
+      # de menos de 32 caracteres. ENVIRONMENT=test es la única excepción, y
       # existe justamente para esto: que la suite pueda usar llaves de juguete
       # sin que eso abra la puerta a desplegar con una.
       ENVIRONMENT: test

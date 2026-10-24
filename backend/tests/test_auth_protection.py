@@ -100,11 +100,11 @@ def test_token_invalido():
 # 3. TOKEN EXPIRADO = 401
 
 def test_token_expirado():
+    # Firmado con la llave real: si se firmara con otra, el 401 saldría por la
+    # firma y la prueba pasaría aunque nadie comprobara la expiración.
     from unittest.mock import patch
-    with patch("app.core.security.settings") as mock_settings:
-        mock_settings.ACCESS_TOKEN_EXPIRE_MINUTES = -1
-        mock_settings.SECRET_KEY = "test"
-        mock_settings.ALGORITHM = "HS256"
+    from app.core.config import settings
+    with patch.object(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", -1):
         expired_token = create_access_token(subject=1, rol="tecnico")
 
     res = client.get("/auth/me", headers=auth(expired_token))
