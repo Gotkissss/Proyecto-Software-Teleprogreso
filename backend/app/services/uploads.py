@@ -30,6 +30,8 @@ from app.core.config import settings
 # Extensiones y tamaño máximo permitidos para cualquier imagen del sistema.
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_FILE_SIZE_MB = 5
+# Se lee el archivo por bloques para no cargar en memoria uno desmesurado.
+TAMANO_BLOQUE = 64 * 1024
 
 # Formato real de cada extensión admitida. La extensión la escribe quien sube
 # el archivo; el formato se lee de sus primeros bytes (ver formato_real).
@@ -135,18 +137,29 @@ async def guardar_imagen(
             ),
         )
 
-    contenido = await file.read()
+    # Lectura por bloques: se corta en cuanto se pasa del tope (MAX + 1 bytes
+    # como mucho), en vez de `await file.read()` del archivo completo y medir
+    # después (HU-S10-04, tarea 4).
+    maximo = MAX_FILE_SIZE_MB * 1024 * 1024
+    bloques: list[bytes] = []
+    leidos = 0
+    while True:
+        bloque = await file.read(min(TAMANO_BLOQUE, maximo + 1 - leidos))
+        if not bloque:
+            break
+        leidos += len(bloque)
+        if leidos > maximo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El archivo supera el límite de {MAX_FILE_SIZE_MB} MB.",
+            )
+        bloques.append(bloque)
+    contenido = b"".join(bloques)
 
     if not contenido:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El archivo está vacío.",
-        )
-
-    if len(contenido) > MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El archivo supera el límite de {MAX_FILE_SIZE_MB} MB.",
         )
 
     formato = formato_real(contenido)
