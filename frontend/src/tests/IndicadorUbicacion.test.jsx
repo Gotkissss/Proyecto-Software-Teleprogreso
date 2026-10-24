@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, cleanup } from '@testing-library/react'
 import { act } from '@testing-library/react'
 
 const { getEstadoPausasMock, enviarUbicacionMock } = vi.hoisted(() => ({
@@ -43,10 +43,16 @@ function montar() {
  * fallaba o pasaba según quién ganara esa carrera: sola casi siempre ganaba la
  * jornada; en la suite completa, con más archivos en paralelo, no. El
  * indicador solo aparece con la jornada abierta, así que verlo es la señal.
+ *
+ * Verlo no alcanza del todo: el hook copia la jornada a una referencia en un
+ * useEffect, que corre después del render, y findByText espera fuera de act.
+ * El act vacío del final deja que React termine esos efectos antes de que la
+ * prueba emita la lectura.
  */
 async function montarConJornadaAbierta() {
   montar()
   await screen.findByText('Obteniendo ubicación…')
+  await act(async () => {})
 }
 
 /** Simula que el GPS entregó una posición nueva. */
@@ -93,6 +99,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Desmontar ANTES de quitar la geolocalización falsa: al desmontarse, el
+  // hook llama a clearWatch. Desde vitest 2 los afterEach corren en orden
+  // inverso al de registro, y el cleanup global de setup.js llega al final,
+  // cuando navigator.geolocation ya no existe.
+  cleanup()
   vi.restoreAllMocks()
   delete navigator.geolocation
 })
