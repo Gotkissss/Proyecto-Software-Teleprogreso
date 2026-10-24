@@ -21,6 +21,7 @@ Los dos invariantes que se fijan aquí:
 
 import os
 
+from app.services import uploads
 from app.services.uploads import resolver_static_root
 
 
@@ -36,8 +37,11 @@ def test_sin_configurar_cae_en_backend_static():
 
     assert os.path.isabs(por_defecto)
     assert os.path.basename(por_defecto) == "static"
-    # …y es la carpeta que está junto al código, no una ruta cualquiera.
-    assert os.path.basename(os.path.dirname(por_defecto)) == "backend"
+    # …y es la carpeta que está junto al código, no una ruta cualquiera. Se
+    # compara con la raíz real del backend y no con el nombre "backend": en la
+    # imagen de Docker el código vive en /app y la prueba fallaba ahí.
+    paquete_app = os.path.dirname(os.path.dirname(os.path.abspath(uploads.__file__)))
+    assert os.path.dirname(por_defecto) == os.path.dirname(paquete_app)
 
 
 def test_none_se_trata_como_sin_configurar():
