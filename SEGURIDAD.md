@@ -394,6 +394,15 @@ note. Dependabot actualiza el SHA y el comentario juntos. Los dos workflows
 declaran `permissions: contents: read`, así que ni una Action comprometida
 puede empujar código con el token del CI.
 
+**Secretos.** El job "Detección de secretos" corre gitleaks 8.30.1 sobre los
+commits que trae cada PR o push; si encuentra una llave, un token o una
+contraseña, rompe el CI. Se descarga el binario oficial y se comprueba su
+SHA-256 antes de usarlo. `.gitleaks.toml` usa todas las reglas de gitleaks con
+una sola excepción: la regla genérica no mira las llaves inventadas de
+`backend/tests/`, pero un token de GitHub, una llave de AWS o una llave
+privada pegados ahí siguen rompiendo el CI. Al introducirlo se revisó el
+historial completo: los únicos hallazgos eran esas llaves de prueba.
+
 **Excepciones aceptadas.** Lo que no bloquea queda escrito aquí con su motivo
 y una fecha de revisión, en lugar de esconderlo con un `|| true`:
 

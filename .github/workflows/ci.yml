@@ -90,3 +90,45 @@ jobs:
         # --omit=dev: las herramientas de build y pruebas no llegan al
         # navegador; sus avisos se aceptan en SEGURIDAD.md.
         run: npm audit --omit=dev --audit-level=high
+
+  secretos:
+    name: Detección de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Historial completo: gitleaks recorre los commits del rango, no
+          # solo el último.
+          fetch-depth: 0
+      # El binario oficial, con versión fija y su SHA-256 comprobado, en lugar
+      # de una Action más que habría que fijar y vigilar. Al subir de versión
+      # se cambian los dos valores juntos (gitleaks_<versión>_checksums.txt).
+      - name: Instalar gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -fsSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          rm gitleaks.tar.gz
+      # Solo los commits que trae el PR (o el push): el historial viejo ya se
+      # revisó al introducir esta comprobación. Las excepciones viven en
+      # .gitleaks.toml.
+      - name: Buscar secretos en los commits nuevos
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_PR: ${{ github.event.pull_request.base.sha }}
+          CABEZA_PR: ${{ github.event.pull_request.head.sha }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          if [ "$EVENTO" = "pull_request" ]; then
+            rango="$BASE_PR..$CABEZA_PR"
+          elif git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            rango="$ANTES..$GITHUB_SHA"
+          else
+            # Rama nueva o push forzado: no hay un "antes" en el historial.
+            rango="-1 $GITHUB_SHA"
+          fi
+          echo "Rango revisado: $rango"
+          ./gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="$rango" .
