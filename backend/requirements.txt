@@ -22,12 +22,11 @@ alembic==1.13.1
 geoalchemy2==0.15.1
 
 # Autenticación JWT
-# 3.4.0 y no 3.3.0: la versión anterior arrastra CVE-2024-33663 (confusión de
-# algoritmo: un token firmado con una clave pública se podía hacer pasar por
-# válido) y CVE-2024-33664 ("JWT bomb": un token comprimido tumba el proceso
-# al descomprimirse). Cualquiera de las dos convierte un token falso en una
-# sesión legítima, y con ella se llega a todos los datos.
-python-jose[cryptography]==3.4.0
+# PyJWT en lugar de python-jose (HU-S10-03): python-jose arrastraba `ecdsa`,
+# con un aviso sin versión corregida, y `pyasn1`. Para HS256 PyJWT no necesita
+# el extra [crypto]. Mismo algoritmo y misma llave, así que los tokens
+# emitidos con python-jose siguen validando hasta que vencen.
+PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 

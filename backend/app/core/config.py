@@ -159,7 +159,8 @@ class Settings(BaseSettings):
     @classmethod
     def strip_str(cls, v):
         # Los .env editados en Windows pueden dejar \r al final de cada
-        # valor (CRLF); python-jose rechaza un SECRET_KEY con \r.
+        # valor (CRLF); con el \r dentro, la llave de firma dejaría de ser la
+        # misma que la de los demás entornos.
         return v.strip() if isinstance(v, str) else v
 
     @field_validator("RETENCION_BITACORA_DIAS", "RETENCION_UBICACIONES_DIAS")

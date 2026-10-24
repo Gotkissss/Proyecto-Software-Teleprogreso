@@ -11,8 +11,9 @@ Se ejecutan con: pytest tests/ -v
 """
 
 import pytest
+import jwt
 from fastapi.testclient import TestClient
-from jose import JWTError, jwt
+from jwt import InvalidTokenError
 
 from app.core.config import Settings
 from app.core.rate_limit import VentanaDeslizante
@@ -115,7 +116,7 @@ def test_token_sin_expiracion_rechazado():
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM,
     )
-    with pytest.raises(JWTError):
+    with pytest.raises(InvalidTokenError):
         decode_access_token(token)
 
 
@@ -125,7 +126,7 @@ def test_token_firmado_con_otra_llave_rechazado():
         "llave-del-atacante",
         algorithm="HS256",
     )
-    with pytest.raises(JWTError):
+    with pytest.raises(InvalidTokenError):
         decode_access_token(token)
 
 

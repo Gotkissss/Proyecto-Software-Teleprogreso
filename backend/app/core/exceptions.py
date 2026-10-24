@@ -21,7 +21,7 @@ import logging
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from jose import ExpiredSignatureError, JWTError
+from jwt import ExpiredSignatureError, InvalidTokenError
 
 logger = logging.getLogger(__name__)
 
@@ -163,11 +163,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     )
 
 # Captura errores de JWT no manejados explicitamente (token malformado, etc.)
-async def jwt_error_handler(request: Request, exc: JWTError) -> JSONResponse:
+async def jwt_error_handler(request: Request, exc: InvalidTokenError) -> JSONResponse:
     """
     Captura errores de JWT no manejados explicitamente (token malformado, etc.)
     """
-    logger.warning("JWTError en %s: %s", request.url.path, str(exc))
+    logger.warning("Token JWT inválido en %s: %s", request.url.path, str(exc))
 
     return error_response(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -247,7 +247,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         register_exception_handlers(app)
     """
     app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(JWTError, jwt_error_handler)
+    app.add_exception_handler(InvalidTokenError, jwt_error_handler)
     app.add_exception_handler(ExpiredSignatureError, expired_token_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

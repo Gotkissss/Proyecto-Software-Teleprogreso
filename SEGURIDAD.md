@@ -137,8 +137,9 @@ correos están dados de alta, que es el primer paso de un ataque dirigido.
 
 **JWT.** Lista blanca de algoritmos al decodificar (cierra el ataque de
 `alg: none` y la confusión HS/RS), rechazo de tokens sin expiración o sin
-sujeto, y `python-jose` actualizado a 3.4.0 para dejar atrás CVE-2024-33663 y
-CVE-2024-33664.
+sujeto. La librería es PyJWT desde el Sprint 10 (HU-S10-03): `python-jose`,
+aun en 3.4.0, arrastraba `ecdsa` y `pyasn1` con avisos abiertos. El cambio no
+invalida sesiones: mismo HS256 y misma llave.
 
 **Frenos de tráfico.** Tope de 240 peticiones por minuto y por IP, y corte de
 cualquier cuerpo de petición mayor de 10 MB antes siquiera de leerlo.
@@ -384,9 +385,9 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   `npm audit --audit-level=high` en cada PR (job "Auditoría de dependencias",
   informativo por ahora). Siguen abiertos, a resolver antes de volverlo
   bloqueante:
-  - backend: `python-jose 3.4.0` y sus dependencias `ecdsa` (sin versión
-    corregida) y `pyasn1 0.4.8`; la salida es migrar a PyJWT. También
-    `python-dotenv 1.0.1` (corregido en 1.2.2) y `pytest 8.1.1` (solo pruebas).
+  - backend: `python-dotenv 1.0.1` (corregido en 1.2.2) y `pytest 8.1.1`
+    (solo pruebas). `python-jose` con `ecdsa` y `pyasn1` quedó resuelto al
+    migrar a PyJWT (HU-S10-03).
   - frontend en producción: `axios` y `form-data` (alto) y `@remix-run/router`
     (moderado); en desarrollo, `vitest`/`tinypool`, `workbox-build` y otras
     herramientas de build y pruebas.
