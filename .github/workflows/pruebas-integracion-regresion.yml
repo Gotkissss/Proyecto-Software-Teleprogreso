@@ -20,7 +20,10 @@ jobs:
         working-directory: backend
     services:
       postgres:
-        image: postgis/postgis:16-3.4
+        # Mismo digest que el servicio db de docker-compose.yml: las pruebas
+        # corren contra la misma base que se despliega. Si Dependabot mueve
+        # uno, se copia al otro.
+        image: postgis/postgis:16-3.4@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

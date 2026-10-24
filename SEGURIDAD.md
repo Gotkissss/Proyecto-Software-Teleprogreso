@@ -394,6 +394,14 @@ note. Dependabot actualiza el SHA y el comentario juntos. Los dos workflows
 declaran `permissions: contents: read`, así que ni una Action comprometida
 puede empujar código con el token del CI.
 
+**Imágenes base fijadas.** Los Dockerfile, `docker-compose.yml` y el
+servicio de PostGIS del CI usan `etiqueta@sha256:…` (por ejemplo
+`python:3.11-slim@sha256:b7a9…`). La etiqueta queda para leerla; quien manda
+es el digest, así que construir hoy o dentro de un mes da la misma imagen
+aunque alguien publique otra con la misma etiqueta. Dependabot propone el
+digest nuevo cuando hay versión. El de PostGIS del CI se mantiene igual al de
+`docker-compose.yml` a mano.
+
 **Secretos.** El job "Detección de secretos" corre gitleaks 8.30.1 sobre los
 commits que trae cada PR o push; si encuentra una llave, un token o una
 contraseña, rompe el CI. Se descarga el binario oficial y se comprueba su
