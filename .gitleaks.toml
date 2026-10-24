@@ -1,0 +1,17 @@
+# gitleaks — Teleprogreso S.A. (HU-S10-03)
+# Usa todas las reglas que trae gitleaks y solo agrega una excepción.
+
+title = "gitleaks Teleprogreso"
+
+[extend]
+useDefault = true
+
+# Las pruebas del backend construyen Settings con llaves inventadas de 32
+# caracteres o más (las que la app exige) y la regla genérica las toma por
+# secretos reales. La excepción vale solo para esa regla y solo en
+# backend/tests: un token de GitHub, una llave de AWS o una llave privada
+# pegados en una prueba siguen rompiendo el CI.
+[[allowlists]]
+description = "Llaves inventadas en las pruebas del backend"
+targetRules = ["generic-api-key"]
+paths = ['''^backend/tests/.*\.py$''']

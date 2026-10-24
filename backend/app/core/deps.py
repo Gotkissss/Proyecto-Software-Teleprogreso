@@ -23,7 +23,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
+from jwt import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,7 +80,7 @@ async def get_current_empleado(
         id_empleado: str | None = payload.get("sub")
         if id_empleado is None:
             raise credentials_exception
-    except JWTError:
+    except InvalidTokenError:
         raise credentials_exception
 
     # La revocación se consulta en la BD (tabla token_revocado) y no en memoria

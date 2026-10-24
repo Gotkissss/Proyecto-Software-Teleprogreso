@@ -15,7 +15,7 @@ services:
   #     de solo lectura: scram-sha-256 obligatorio y `reject` para todo lo que
   #     venga de fuera de la red del contenedor.
   db:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.4@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
     container_name: teleprogreso_db
     restart: unless-stopped
     # Sin `env_file: .env` a propósito. Antes el contenedor de la base recibía

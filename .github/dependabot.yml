@@ -1,0 +1,68 @@
+# Dependabot — Teleprogreso S.A. (HU-S10-03)
+# Una vez por semana revisa cada ecosistema y abre PRs hacia develop. Los
+# cambios menores y de parche van agrupados en un solo PR por ecosistema para
+# no llenar la lista; los cambios mayores salen cada uno en su PR porque son
+# los que pueden romper algo y hay que revisarlos aparte. Las alertas de
+# seguridad no esperan al lunes: Dependabot las abre en cuanto se publican.
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Guatemala
+    open-pull-requests-limit: 5
+    groups:
+      backend-menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Guatemala
+    open-pull-requests-limit: 5
+    groups:
+      frontend-produccion:
+        dependency-type: production
+        update-types: [minor, patch]
+      frontend-desarrollo:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Guatemala
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Imágenes base: los Dockerfile y el docker-compose las fijan por digest, y
+  # Dependabot es quien las mueve cuando sale una versión nueva.
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Guatemala
+    groups:
+      imagenes:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Guatemala

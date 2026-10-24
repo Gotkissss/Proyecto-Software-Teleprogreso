@@ -80,6 +80,11 @@ docker compose up --build
 | Backend API | http://localhost:8000 |
 | Docs (Swagger) | http://localhost:8000/docs |
  
+Cuando cambian las dependencias del frontend (`package-lock.json`), levanta con
+`docker compose up --build -V`. El contenedor guarda `node_modules` en un
+volumen aparte y, sin `-V`, sigue usando los paquetes de antes aunque la
+imagen ya traiga los nuevos.
+
 ### Cuentas de demostración
 
 El seed automático crea estas cuentas para poder probar cada rol:

@@ -9,6 +9,11 @@ on:
   pull_request:
     branches: [main, develop]
 
+# El token del CI solo puede leer el repositorio. Ningún job necesita escribir,
+# y así una Action comprometida no puede empujar código ni tocar releases.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend (lint + build)
@@ -17,8 +22,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: npm
@@ -38,15 +43,18 @@ jobs:
       # Valores dummy: los tests no tocan la BD real (usan dependency_overrides)
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
       DATABASE_URL_SYNC: postgresql://test:test@localhost:5432/test
-      SECRET_KEY: ci-secret-key-solo-para-tests
+      # Pública por estar en el repositorio: solo sirve para la suite. Tiene 32
+      # bytes o más porque PyJWT avisa (InsecureKeyLengthWarning) con llaves
+      # HS256 más cortas, y ese aviso se repetía en cada prueba que firma.
+      SECRET_KEY: ci-secret-key-solo-para-tests-no-produccion
       # En cualquier otro entorno la app se niega a arrancar con una SECRET_KEY
-      # tan corta como la de arriba. ENVIRONMENT=test es la única excepción, y
+      # de menos de 32 caracteres. ENVIRONMENT=test es la única excepción, y
       # existe justamente para esto: que la suite pueda usar llaves de juguete
       # sin que eso abra la puerta a desplegar con una.
       ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.10'
           cache: pip
@@ -55,30 +63,72 @@ jobs:
       - run: python -m pytest tests/ -v
 
   dependencias:
-    name: Auditoría de dependencias (informativa)
+    name: Auditoría de dependencias
     runs-on: ubuntu-latest
-    # T1 del Sprint 9: pip-audit y npm audit en cada PR. Primera vuelta
-    # INFORMATIVA: si encuentra avisos el job sale en rojo pero no bloquea el
-    # PR. Pendientes conocidos al cerrar el Sprint 9 (ver SEGURIDAD.md):
-    # python-jose/ecdsa/pyasn1, python-dotenv y pytest en el backend; axios,
-    # form-data y react-router (producción) y las herramientas de build y
-    # pruebas en el frontend. Cuando se resuelvan, se quita
-    # `continue-on-error` y pasa a ser bloqueante.
-    continue-on-error: true
+    # Obligatoria desde la HU-S10-03: un aviso conocido rompe el job y el PR
+    # no se puede mergear. Lo que se acepta sin corregir está en la tabla de
+    # excepciones de SEGURIDAD.md ("Cadena de suministro"), con motivo y fecha
+    # de revisión; aquí no se silencia nada con `|| true`.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
       - name: pip-audit (backend)
         run: |
-          pip install pip-audit
+          pip install pip-audit==2.10.1
           pip-audit -r backend/requirements.txt --desc
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        # always(): si pip-audit falla, npm audit corre igual para que el PR
+        # muestre los dos resultados de una vez.
         if: always()
         with:
           node-version: 20
-      - name: npm audit (frontend, severidad alta o mayor)
+      - name: npm audit (frontend en producción, severidad alta o mayor)
         if: always()
         working-directory: frontend
-        run: npm audit --audit-level=high
+        # --omit=dev: las herramientas de build y pruebas no llegan al
+        # navegador; sus avisos se aceptan en SEGURIDAD.md.
+        run: npm audit --omit=dev --audit-level=high
+
+  secretos:
+    name: Detección de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Historial completo: gitleaks recorre los commits del rango, no
+          # solo el último.
+          fetch-depth: 0
+      # El binario oficial, con versión fija y su SHA-256 comprobado, en lugar
+      # de una Action más que habría que fijar y vigilar. Al subir de versión
+      # se cambian los dos valores juntos (gitleaks_<versión>_checksums.txt).
+      - name: Instalar gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -fsSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          rm gitleaks.tar.gz
+      # Solo los commits que trae el PR (o el push): el historial viejo ya se
+      # revisó al introducir esta comprobación. Las excepciones viven en
+      # .gitleaks.toml.
+      - name: Buscar secretos en los commits nuevos
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_PR: ${{ github.event.pull_request.base.sha }}
+          CABEZA_PR: ${{ github.event.pull_request.head.sha }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          if [ "$EVENTO" = "pull_request" ]; then
+            rango="$BASE_PR..$CABEZA_PR"
+          elif git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            rango="$ANTES..$GITHUB_SHA"
+          else
+            # Rama nueva o push forzado: no hay un "antes" en el historial.
+            rango="-1 $GITHUB_SHA"
+          fi
+          echo "Rango revisado: $rango"
+          ./gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="$rango" .

@@ -17,7 +17,7 @@
  * ---------------------------------------------------------------------------
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act, waitFor, cleanup } from '@testing-library/react'
 
 const { enviarUbicacionMock } = vi.hoisted(() => ({
   enviarUbicacionMock: vi.fn(),
@@ -87,6 +87,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Desmontar antes de quitar la geolocalización falsa (ver el mismo
+  // comentario en IndicadorUbicacion.test.jsx).
+  cleanup()
   vi.restoreAllMocks()
   delete navigator.geolocation
 })

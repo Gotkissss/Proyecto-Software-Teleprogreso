@@ -22,19 +22,19 @@ alembic==1.13.1
 geoalchemy2==0.15.1
 
 # Autenticación JWT
-# 3.4.0 y no 3.3.0: la versión anterior arrastra CVE-2024-33663 (confusión de
-# algoritmo: un token firmado con una clave pública se podía hacer pasar por
-# válido) y CVE-2024-33664 ("JWT bomb": un token comprimido tumba el proceso
-# al descomprimirse). Cualquiera de las dos convierte un token falso en una
-# sesión legítima, y con ella se llega a todos los datos.
-python-jose[cryptography]==3.4.0
+# PyJWT en lugar de python-jose (HU-S10-03): python-jose arrastraba `ecdsa`,
+# con un aviso sin versión corregida, y `pyasn1`. Para HS256 PyJWT no necesita
+# el extra [crypto]. Mismo algoritmo y misma llave, así que los tokens
+# emitidos con python-jose siguen validando hasta que vencen.
+PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
 # Validación y configuración
 pydantic==2.7.1
 pydantic-settings==2.2.1
-python-dotenv==1.0.1
+# 1.2.2 o más (HU-S10-03): 1.0.1 tenía PYSEC-2026-2270 según pip-audit.
+python-dotenv==1.2.4
 
 # Utilidades
 python-multipart==0.0.32
@@ -48,6 +48,9 @@ tzdata==2024.1
 
 #  Dependencias de prueba
 # Instalar con: pip install -r requirements.txt
-pytest==8.1.1
-pytest-asyncio==0.23.6
+# pytest 9.0.3 corrige PYSEC-2026-1845; pytest-asyncio 0.23 no admite pytest 9,
+# por eso sube con él a 1.x. Las pruebas no usan el fixture event_loop que 1.x
+# quitó, así que no hubo que tocarlas.
+pytest==9.0.3
+pytest-asyncio==1.4.0
 httpx==0.27.0

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +87,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
     """
     Decodifica y valida la firma y la vigencia del JWT.
 
-    Lanza JWTError si el token es inválido o está expirado. La revocación NO
+    Lanza jwt.InvalidTokenError si el token es inválido o está expirado. La revocación NO
     se comprueba aquí: vive en la base de datos y esta función es síncrona.
     Para validar un token de una petición real usa `token_esta_revocado`, que
     es lo que hace la dependencia `get_current_empleado`.
@@ -95,8 +95,8 @@ def decode_access_token(token: str) -> dict[str, Any]:
     `algorithms` se pasa siempre como lista blanca de un solo elemento: es lo
     que impide el ataque clásico de mandar un token con `alg: none` (o cambiar
     HS256 por RS256) para que la librería lo dé por bueno sin comprobar la
-    firma. Las opciones `require_*` rechazan además tokens sin expiración o sin
-    sujeto, que de otro modo serían válidos para siempre.
+    firma. `require` rechaza además tokens sin expiración o sin sujeto, que de
+    otro modo serían válidos para siempre.
     """
     return jwt.decode(
         token,
@@ -105,8 +105,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         options={
             "verify_signature": True,
             "verify_exp": True,
-            "require_exp": True,
-            "require_sub": True,
+            "require": ["exp", "sub"],
         },
     )
 

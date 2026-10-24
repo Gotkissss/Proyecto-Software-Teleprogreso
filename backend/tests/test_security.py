@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from jose import JWTError
+from jwt import InvalidTokenError
 
 from app.core.security import (
     create_access_token,
@@ -88,8 +88,8 @@ def test_token_conserva_la_version_de_sesion():
 
 
 def test_decode_token_invalido_lanza_error():
-    """Un token malformado debe lanzar JWTError."""
-    with pytest.raises(JWTError):
+    """Un token malformado debe lanzar InvalidTokenError."""
+    with pytest.raises(InvalidTokenError):
         decode_access_token("esto.no.es_un_jwt")
 
 

@@ -137,8 +137,9 @@ correos están dados de alta, que es el primer paso de un ataque dirigido.
 
 **JWT.** Lista blanca de algoritmos al decodificar (cierra el ataque de
 `alg: none` y la confusión HS/RS), rechazo de tokens sin expiración o sin
-sujeto, y `python-jose` actualizado a 3.4.0 para dejar atrás CVE-2024-33663 y
-CVE-2024-33664.
+sujeto. La librería es PyJWT desde el Sprint 10 (HU-S10-03): `python-jose`,
+aun en 3.4.0, arrastraba `ecdsa` y `pyasn1` con avisos abiertos. El cambio no
+invalida sesiones: mismo HS256 y misma llave.
 
 **Frenos de tráfico.** Tope de 240 peticiones por minuto y por IP, y corte de
 cualquier cuerpo de petición mayor de 10 MB antes siquiera de leerlo.
@@ -361,6 +362,68 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
    `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
    `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
 
+## Cadena de suministro
+
+Una dependencia vulnerable es código ajeno corriendo con los permisos de la
+aplicación, así que el CI no deja entrar una (HU-S10-03).
+
+**Auditoría obligatoria.** El job "Auditoría de dependencias" corre en cada
+push y PR y ya no es informativo: si falla, el PR no se puede mergear.
+
+- `pip-audit` sobre `backend/requirements.txt`, sin excepciones: cualquier
+  aviso conocido rompe el job.
+- `npm audit --omit=dev --audit-level=high` sobre el frontend: lo que se
+  empaqueta y llega al navegador, desde severidad alta.
+
+En el Sprint 10 se dejó en cero: `python-jose` (con `ecdsa` y `pyasn1`) se
+cambió por PyJWT, `python-dotenv` pasó a 1.2.4, `pytest` a 9.0.3, y `axios`,
+`form-data`, `follow-redirects` y `@remix-run/router` subieron sin `--force`.
+Las herramientas de build y pruebas también quedaron limpias aunque el job no
+las exija: `vite` 8, `vitest` 5, `vite-plugin-pwa` 2 y `@vitejs/plugin-react`
+5. Con eso `workbox-build` 7.4.1 trae `@trickfilm400/rollup-plugin-off-main-thread`,
+una versión preliminar de un fork; se acepta porque es la que exige la versión
+oficial de Workbox, no una dependencia elegida por el proyecto.
+
+**Dependabot.** `.github/dependabot.yml` revisa cada lunes las dependencias de
+Python y npm, las Actions de los workflows y las imágenes base de Docker, y
+abre PRs hacia `develop`. Los cambios menores van agrupados en un PR por
+ecosistema; los mayores, cada uno en el suyo. Así una versión corregida no
+depende de que alguien se acuerde de buscarla, y los PRs pasan por la misma
+auditoría y las mismas pruebas que cualquier otro.
+
+**Actions fijadas y token de solo lectura.** Cada `uses:` de los workflows
+apunta a un commit concreto (`actions/checkout@11d5960… # v4.4.0`), no a una
+etiqueta: una etiqueta como `v4` la puede mover cualquiera que comprometa el
+repositorio de la Action, y el CI correría ese código nuevo sin que nadie lo
+note. Dependabot actualiza el SHA y el comentario juntos. Los dos workflows
+declaran `permissions: contents: read`, así que ni una Action comprometida
+puede empujar código con el token del CI.
+
+**Imágenes base fijadas.** Los Dockerfile, `docker-compose.yml` y el
+servicio de PostGIS del CI usan `etiqueta@sha256:…` (por ejemplo
+`python:3.11-slim@sha256:b7a9…`). La etiqueta queda para leerla; quien manda
+es el digest, así que construir hoy o dentro de un mes da la misma imagen
+aunque alguien publique otra con la misma etiqueta. Dependabot propone el
+digest nuevo cuando hay versión. El de PostGIS del CI se mantiene igual al de
+`docker-compose.yml` a mano.
+
+**Secretos.** El job "Detección de secretos" corre gitleaks 8.30.1 sobre los
+commits que trae cada PR o push; si encuentra una llave, un token o una
+contraseña, rompe el CI. Se descarga el binario oficial y se comprueba su
+SHA-256 antes de usarlo. `.gitleaks.toml` usa todas las reglas de gitleaks con
+una sola excepción: la regla genérica no mira las llaves inventadas de
+`backend/tests/`, pero un token de GitHub, una llave de AWS o una llave
+privada pegados ahí siguen rompiendo el CI. Al introducirlo se revisó el
+historial completo: los únicos hallazgos eran esas llaves de prueba.
+
+**Excepciones aceptadas.** Lo que no bloquea queda escrito aquí con su motivo
+y una fecha de revisión, en lugar de esconderlo con un `|| true`:
+
+| Paquete | Aviso | Por qué se acepta | Revisar |
+|---|---|---|---|
+| `react-router` 6.30 (producción, moderado) | GHSA-wrjc-x8rr-h8h6: redirección abierta con `\` en `<Link>`/`useNavigate` | La app solo navega a rutas fijas o a la de cada rol; ninguna sale de un parámetro del usuario. La corrección solo existe en la v7, un cambio mayor | 2026-11-02 (retro) |
+| `react-router` 6.30 (producción, moderado) | GHSA-337j-9hxr-rhxg: inyección en `deserializeErrors()` | Afecta a la hidratación con renderizado en servidor; esta app es una SPA | 2026-11-02 (retro) |
+
 ## Lo que esto no cubre
 
 Conviene tenerlo claro para no dar por resuelto lo que no lo está:
@@ -377,19 +440,10 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
 - **Contadores en memoria.** Los límites de frecuencia viven en el proceso. Con
   un solo worker de uvicorn (el caso actual) son exactos; con varias réplicas
   cada una lleva su cuenta y habría que mover el estado a Redis.
-- **Dependencias.** En el Sprint 9 se subió el framework a `fastapi 0.133.1`,
-  `starlette 1.7.0` y `python-multipart 0.0.32`, lo que cierra los avisos de
-  denegación de servicio y de manejo de formularios que arrastraban
-  `starlette 0.37.2` y `python-multipart 0.0.9`. El CI corre `pip-audit` y
-  `npm audit --audit-level=high` en cada PR (job "Auditoría de dependencias",
-  informativo por ahora). Siguen abiertos, a resolver antes de volverlo
-  bloqueante:
-  - backend: `python-jose 3.4.0` y sus dependencias `ecdsa` (sin versión
-    corregida) y `pyasn1 0.4.8`; la salida es migrar a PyJWT. También
-    `python-dotenv 1.0.1` (corregido en 1.2.2) y `pytest 8.1.1` (solo pruebas).
-  - frontend en producción: `axios` y `form-data` (alto) y `@remix-run/router`
-    (moderado); en desarrollo, `vitest`/`tinypool`, `workbox-build` y otras
-    herramientas de build y pruebas.
+- **Dependencias de desarrollo.** La auditoría que bloquea mira solo lo que
+  llega a producción (`--omit=dev`), para que un aviso en una herramienta de
+  pruebas no frene un PR urgente. Hoy están limpias, pero si aparece uno lo
+  avisa Dependabot, no el CI.
 - **Bitácora sin rol mínimo.** Si el backend se conecta como superusuario (sin
   `APP_DB_USER`, el caso de un Railway sin configurar), la base no puede
   impedirle alterar la bitácora: queda solo la detección por la cadena. La
