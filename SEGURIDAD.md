@@ -378,6 +378,11 @@ push y PR y ya no es informativo: si falla, el PR no se puede mergear.
 En el Sprint 10 se dejó en cero: `python-jose` (con `ecdsa` y `pyasn1`) se
 cambió por PyJWT, `python-dotenv` pasó a 1.2.4, `pytest` a 9.0.3, y `axios`,
 `form-data`, `follow-redirects` y `@remix-run/router` subieron sin `--force`.
+Las herramientas de build y pruebas también quedaron limpias aunque el job no
+las exija: `vite` 8, `vitest` 5, `vite-plugin-pwa` 2 y `@vitejs/plugin-react`
+5. Con eso `workbox-build` 7.4.1 trae `@trickfilm400/rollup-plugin-off-main-thread`,
+una versión preliminar de un fork; se acepta porque es la que exige la versión
+oficial de Workbox, no una dependencia elegida por el proyecto.
 
 **Dependabot.** `.github/dependabot.yml` revisa cada lunes las dependencias de
 Python y npm, las Actions de los workflows y las imágenes base de Docker, y
@@ -418,7 +423,6 @@ y una fecha de revisión, en lugar de esconderlo con un `|| true`:
 |---|---|---|---|
 | `react-router` 6.30 (producción, moderado) | GHSA-wrjc-x8rr-h8h6: redirección abierta con `\` en `<Link>`/`useNavigate` | La app solo navega a rutas fijas o a la de cada rol; ninguna sale de un parámetro del usuario. La corrección solo existe en la v7, un cambio mayor | 2026-11-02 (retro) |
 | `react-router` 6.30 (producción, moderado) | GHSA-337j-9hxr-rhxg: inyección en `deserializeErrors()` | Afecta a la hidratación con renderizado en servidor; esta app es una SPA | 2026-11-02 (retro) |
-| Herramientas de desarrollo (`vitest`/`tinypool`, `vite`/`esbuild`, `workbox-build`, `@babel/*`, `postcss` y otras) | Varios, hasta crítico en `tinypool` | No se empaquetan ni corren en producción: viven en la máquina del desarrollador y en el CI. `npm audit fix` sin `--force` corrige varias, pero arrastra en el build del service worker una versión preliminar (`@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1`) y no se aceptó a días de la presentación. El resto exige `vite` 8 y `vitest` nuevos | 2026-11-02 (retro) |
 
 ## Lo que esto no cubre
 
@@ -437,8 +441,9 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   un solo worker de uvicorn (el caso actual) son exactos; con varias réplicas
   cada una lleva su cuenta y habría que mover el estado a Redis.
 - **Dependencias de desarrollo.** La auditoría que bloquea mira solo lo que
-  llega a producción; las herramientas de build y pruebas tienen avisos
-  abiertos que se aceptan con motivo (ver "Cadena de suministro").
+  llega a producción (`--omit=dev`), para que un aviso en una herramienta de
+  pruebas no frene un PR urgente. Hoy están limpias, pero si aparece uno lo
+  avisa Dependabot, no el CI.
 - **Bitácora sin rol mínimo.** Si el backend se conecta como superusuario (sin
   `APP_DB_USER`, el caso de un Railway sin configurar), la base no puede
   impedirle alterar la bitácora: queda solo la detección por la cadena. La
