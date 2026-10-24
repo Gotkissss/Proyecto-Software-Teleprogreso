@@ -266,8 +266,22 @@ async def guardar_eventos(eventos: list[dict]) -> None:
                 await conexion.run_sync(insertar, registro)
             await sesion.commit()
     except Exception:
-        # La auditoría no tumba la respuesta, pero el fallo no pasa en silencio.
+        # La auditoría no tumba la respuesta, pero el fallo no pasa en silencio:
+        # se registra en el log y se cuenta, para que HU-S10-05 lo convierta en
+        # alerta (HU-S10-04, tarea 5).
+        _FALLOS_AUDITORIA["total"] += 1
+        _FALLOS_AUDITORIA["eventos_perdidos"] += len(eventos)
+        _FALLOS_AUDITORIA["ultimo"] = time.time()
         logger.exception("No se pudieron guardar %d eventos de auditoría", len(eventos))
+
+
+# Fallos al guardar eventos de auditoría desde que arrancó el proceso.
+_FALLOS_AUDITORIA: dict = {"total": 0, "eventos_perdidos": 0, "ultimo": None}
+
+
+def fallos_auditoria() -> dict:
+    """Copia del contador de fallos al guardar auditoría (total, eventos perdidos, último)."""
+    return dict(_FALLOS_AUDITORIA)
 
 
 _ULTIMO_AVISO: dict[str, float] = {}

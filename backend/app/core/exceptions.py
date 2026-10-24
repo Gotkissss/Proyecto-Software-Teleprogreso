@@ -84,7 +84,8 @@ def error_response(
     status_code: int,
     error_code: str,
     detail: str,
-    headers: dict[str, str] | None = None) -> JSONResponse:
+    headers: dict[str, str] | None = None,
+    request_id: str | None = None) -> JSONResponse:
     """
     Construye una respuesta JSON de error con formato consistente.
 
@@ -92,14 +93,20 @@ def error_response(
         status_code: Codigo HTTP (401, 403, 422, etc.)
         error_code:  Identificador de máquina del error (p.ej. TOKEN_EXPIRED)
         detail:      Mensaje legible para el usuario o frontend
+        request_id:  Identificador de la petición, solo en errores 500 para
+                     poder reportarlos (ver unhandled_exception_handler).
     """
+    contenido = {
+        "error": error_code,
+        "detail": detail,
+        "status_code": status_code,
+    }
+    if request_id:
+        contenido["request_id"] = request_id
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": error_code,
-            "detail": detail,
-            "status_code": status_code},
-            headers=headers,
+        content=contenido,
+        headers=headers,
     )
 
 
@@ -283,13 +290,40 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     """
     Captura cualquier excepción no manejada para evitar que el servidor
     devuelva stack traces al cliente.
+
+    El 500 deja rastro (HU-S10-04, tarea 5): el cuerpo lleva el `request_id`
+    (el mismo del header X-Request-ID, del log y de la bitácora) para que quien
+    lo vea en pantalla pueda reportarlo, y se anota un evento `error_interno`
+    con ruta, método y TIPO de excepción: nunca su mensaje, que puede traer SQL
+    o datos de la petición, ni el stack.
     """
-    logger.exception("Error no manejado en %s: %s", request.url.path, str(exc))
+    # Import diferido: la bitácora arrastra modelos y sesión de BD.
+    from app.core.contexto import contexto_actual
+    from app.services.bitacora import anotar_evento
+
+    ctx = contexto_actual()
+    request_id = ctx.request_id if ctx else None
+    tipo = type(exc).__name__
+
+    logger.exception(
+        "Error interno [request_id=%s] en %s %s: %s",
+        request_id, request.method, request.url.path, tipo,
+    )
+    anotar_evento(
+        "error_interno",
+        "peticion",
+        cambios={
+            "metodo": request.method,
+            "ruta": request.url.path,
+            "excepcion": tipo,
+        },
+    )
 
     return error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         error_code="INTERNAL_ERROR",
         detail="Error interno del servidor. Contacta al administrador.",
+        request_id=request_id,
     )
 
 

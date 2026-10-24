@@ -73,7 +73,16 @@ class ContextoPeticionMiddleware(BaseHTTPMiddleware):
         ctx = ContextoPeticion(ip=_ip(request), request_id=_request_id(request))
         token = _contexto.set(ctx)
         try:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                # Un 500 se resuelve aquí, con el contexto todavía puesto: el
+                # manejador global de Starlette corre por fuera de este
+                # middleware, donde ya no hay request_id ni lista de eventos
+                # (HU-S10-04, tarea 5).
+                from app.core.exceptions import unhandled_exception_handler
+
+                response = await unhandled_exception_handler(request, exc)
         finally:
             _contexto.reset(token)
             # La transacción de la petición ya cerró (commit o rollback): los
