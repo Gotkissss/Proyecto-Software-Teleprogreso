@@ -10,6 +10,7 @@ import {
   EVENTO_CAMBIO_OBLIGATORIO,
   esErrorCambioObligatorio,
 } from '../utils/cambioObligatorio'
+import { registrarErrorServidor } from '../utils/ultimoErrorServidor'
 
 // Resolución de la URL base del API:
 // 1. Si la build inyectó VITE_API_URL (Railway / .env.production) → usarla.
@@ -88,6 +89,10 @@ export function marcarSesionIniciada() {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    // HU-S10-04: se recuerda el request_id de los 5xx para mostrarlo en la
+    // pantalla de error y que se pueda reportar.
+    registrarErrorServidor(error)
+
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')

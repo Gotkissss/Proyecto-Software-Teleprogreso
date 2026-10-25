@@ -20,6 +20,7 @@ import { useAlertasPendientesCount } from '../../hooks/useAlertasPendientesCount
 import LayoutHeader from './shared/LayoutHeader'
 import LayoutSidebar from './shared/LayoutSidebar'
 import UserMenu from './shared/UserMenu'
+import ErrorBoundary from '../ui/ErrorBoundary'
 import styles from './SupervisorLayout.module.css'
 
 const IconDashboard = () => (
@@ -233,7 +234,9 @@ export default function SupervisorLayout() {
         />
 
         <main className={styles.main}>
-          <Outlet />
+          <ErrorBoundary claveReinicio={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -22,6 +22,9 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from jwt import ExpiredSignatureError, InvalidTokenError
+from http import HTTPStatus
+from sqlalchemy.exc import DBAPIError, DataError, IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,7 @@ ERROR_CODES = {
     status.HTTP_409_CONFLICT: "CONFLICT",
     status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
     status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
+    status.HTTP_405_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
 }
 
 
@@ -80,7 +84,8 @@ def error_response(
     status_code: int,
     error_code: str,
     detail: str,
-) -> JSONResponse:
+    headers: dict[str, str] | None = None,
+    request_id: str | None = None) -> JSONResponse:
     """
     Construye una respuesta JSON de error con formato consistente.
 
@@ -88,14 +93,20 @@ def error_response(
         status_code: Codigo HTTP (401, 403, 422, etc.)
         error_code:  Identificador de máquina del error (p.ej. TOKEN_EXPIRED)
         detail:      Mensaje legible para el usuario o frontend
+        request_id:  Identificador de la petición, solo en errores 500 para
+                     poder reportarlos (ver unhandled_exception_handler).
     """
+    contenido = {
+        "error": error_code,
+        "detail": detail,
+        "status_code": status_code,
+    }
+    if request_id:
+        contenido["request_id"] = request_id
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": error_code,
-            "detail": detail,
-            "status_code": status_code,
-        },
+        content=contenido,
+        headers=headers,
     )
 
 
@@ -103,7 +114,20 @@ def error_response(
 # Manejadores individuales
 # Cada uno captura un tipo específico de error y devuelve una respuesta con formato consistente.
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+
+_MENSAJES_DE_RUTA = {
+    status.HTTP_404_NOT_FOUND: "El recurso solicitado no existe.",
+    status.HTTP_405_METHOD_NOT_ALLOWED: "Método no permitido para este recurso.",
+}
+
+def _es_mensaje_por_defecto(exc: StarletteHTTPException) -> bool:
+    try:
+        return exc.detail == HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        return False
+
+    
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """
     Captura todos los HTTPException lanzados en la app.
 
@@ -149,6 +173,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     if not isinstance(detail, str):
         detail = str(detail)
 
+    if exc.status_code in _MENSAJES_DE_RUTA and _es_mensaje_por_defecto(exc):
+        detail = _MENSAJES_DE_RUTA[exc.status_code]
+
     logger.warning(
         "HTTPException %s en %s: %s",
         exc.status_code,
@@ -160,6 +187,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status_code=exc.status_code,
         error_code=error_code,
         detail=detail,
+        headers=getattr(exc, "headers", None)
     )
 
 # Captura errores de JWT no manejados explicitamente (token malformado, etc.)
@@ -220,18 +248,82 @@ async def validation_error_handler(
     )
  
 
+_MENSAJES_DE_INTEGRIDAD = {
+    "23505": "Ya existe un registro con esos datos.",
+    "23503": "El registro hace referencia a datos que no existen o está en uso por otros.",
+}
+_MENSAJE_INTEGRIDAD = "La operación choca con datos existentes o con una regla del sistema."
+_MENSAJE_DATO = "Alguno de los datos enviados es demasiado largo o está fuera del rango permitido."
+
+
+def _sqlstate(exc: DBAPIError) -> str | None:
+    original = getattr(exc, "orig", None)
+    codigo = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    return codigo if isinstance(codigo, str) else None
+
+
+def _clase_de_error(exc: DBAPIError) -> str | None:
+    if isinstance(exc, IntegrityError):
+        return "23"
+    if isinstance(exc, DataError):
+        return "22"
+    codigo = _sqlstate(exc)
+    return codigo[:2] if codigo else None
+
+
+async def database_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+    clase = _clase_de_error(exc)
+    if clase not in ("22", "23"):
+        return await unhandled_exception_handler(request, exc)   # conexión, timeout...
+    # Nunca str(exc): incluye el SQL y sus parámetros.
+    logger.warning("Error de base de datos en %s %s: %s (SQLSTATE %s)",
+                   request.method, request.url.path,
+                   type(getattr(exc, "orig", exc)).__name__, _sqlstate(exc))
+    if clase == "23":
+        return error_response(status.HTTP_409_CONFLICT, "CONFLICT",
+                              _MENSAJES_DE_INTEGRIDAD.get(_sqlstate(exc), _MENSAJE_INTEGRIDAD))
+    return error_response(status.HTTP_422_UNPROCESSABLE_CONTENT, "VALIDATION_ERROR", _MENSAJE_DATO)
+
+
 # Captura cualquier excepcion no manejada para evitar que el servidor devuelva stack traces al cliente.
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
     Captura cualquier excepción no manejada para evitar que el servidor
     devuelva stack traces al cliente.
+
+    El 500 deja rastro (HU-S10-04, tarea 5): el cuerpo lleva el `request_id`
+    (el mismo del header X-Request-ID, del log y de la bitácora) para que quien
+    lo vea en pantalla pueda reportarlo, y se anota un evento `error_interno`
+    con ruta, método y TIPO de excepción: nunca su mensaje, que puede traer SQL
+    o datos de la petición, ni el stack.
     """
-    logger.exception("Error no manejado en %s: %s", request.url.path, str(exc))
+    # Import diferido: la bitácora arrastra modelos y sesión de BD.
+    from app.core.contexto import contexto_actual
+    from app.services.bitacora import anotar_evento
+
+    ctx = contexto_actual()
+    request_id = ctx.request_id if ctx else None
+    tipo = type(exc).__name__
+
+    logger.exception(
+        "Error interno [request_id=%s] en %s %s: %s",
+        request_id, request.method, request.url.path, tipo,
+    )
+    anotar_evento(
+        "error_interno",
+        "peticion",
+        cambios={
+            "metodo": request.method,
+            "ruta": request.url.path,
+            "excepcion": tipo,
+        },
+    )
 
     return error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         error_code="INTERNAL_ERROR",
         detail="Error interno del servidor. Contacta al administrador.",
+        request_id=request_id,
     )
 
 
@@ -246,7 +338,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         from app.core.exceptions import register_exception_handlers
         register_exception_handlers(app)
     """
-    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(DBAPIError, database_error_handler)
     app.add_exception_handler(InvalidTokenError, jwt_error_handler)
     app.add_exception_handler(ExpiredSignatureError, expired_token_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)

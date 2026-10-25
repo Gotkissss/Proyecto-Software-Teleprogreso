@@ -30,9 +30,9 @@ async def get_alertas(
     # Lectura abierta a los tres roles administrativos: el gerente entra al
     # mismo panel que el supervisor y antes recibía 403 al abrir Alertas.
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
-    tipo: Optional[str] = Query(None),
-    severidad: Optional[str] = Query(None),
-    estado: Optional[str] = Query(None),
+    tipo: Optional[str] = Query(None, max_length=50),
+    severidad: Optional[str] = Query(None, max_length=20),
+    estado: Optional[str] = Query(None, max_length=20),
     generar: bool = Query(
         True,
         description="Si es false solo lista lo persistido, sin ejecutar la "

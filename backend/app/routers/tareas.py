@@ -61,7 +61,7 @@ ESTADOS_ACTIVOS = ESTADOS_TAREA_ACTIVOS
 async def get_tareas(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    estado: Annotated[Optional[str], Query()] = None,
+    estado: Annotated[Optional[str], Query(max_length=30)] = None,
     id_tecnico: Annotated[Optional[int], Query()] = None,
     limite: Annotated[
         int,

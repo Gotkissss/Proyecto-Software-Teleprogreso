@@ -4,7 +4,7 @@ Middlewares de seguridad HTTP — Teleprogreso S.A.
 La base de datos ya solo es alcanzable a través de este backend. Estos
 middlewares refuerzan el borde por el que sí se puede entrar:
 
-  · `LimiteTamanoBody`   — corta las peticiones desmesuradas antes de leerlas.
+  · `LimiteTamanoBody`   — corta las peticiones desmesuradas (con o sin Content-Length).
   · `LimiteFrecuencia`   — tope de peticiones por minuto y por IP.
   · `CabecerasSeguridad` — cabeceras que endurecen el navegador del usuario.
 
@@ -25,49 +25,108 @@ from app.services.bitacora import anotar_evento, primera_vez
 logger = logging.getLogger(__name__)
 
 
-class LimiteTamanoBody(BaseHTTPMiddleware):
+def _respuesta_json(status_code: int, error: str, detail: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": error, "detail": detail, "status_code": status_code},
+    )
+
+
+class LimiteTamanoBody:
     """
     Rechaza cuerpos de petición por encima de MAX_REQUEST_BODY_MB.
 
-    La validación de tamaño de app/services/uploads.py ocurre después de leer
-    el archivo completo en memoria; para entonces el daño de un envío de varios
-    gigabytes ya está hecho. Aquí se mira el Content-Length y se corta antes.
+    Es un middleware ASGI puro (no BaseHTTPMiddleware) porque tiene que mirar
+    los bytes a medida que llegan: con `Transfer-Encoding: chunked` no hay
+    Content-Length y la cabecera sola no sirve (HU-S10-04, tarea 4).
+
+      1. Con Content-Length se corta antes de leer nada.
+      2. Sin él (o si miente), se cuentan los bytes que entrega `receive` y,
+         al pasar el tope, se responde 413 y se corta la lectura.
+
+    La validación de tamaño de app/services/uploads.py ocurre después de que el
+    archivo ya está en memoria; para entonces el daño de varios gigabytes ya
+    está hecho. Aquí se corta antes.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         maximo = settings.MAX_REQUEST_BODY_MB * 1024 * 1024
+        request = Request(scope)
         declarado = request.headers.get("content-length")
 
         if declarado is not None:
             try:
-                if int(declarado) > maximo:
-                    logger.warning(
-                        "Petición rechazada por tamaño: %s bytes desde %s hacia %s",
-                        declarado, ip_cliente(request), request.url.path,
-                    )
-                    return JSONResponse(
-                        status_code=413,
-                        content={
-                            "error": "PAYLOAD_TOO_LARGE",
-                            "detail": (
-                                "El contenido enviado supera el límite de "
-                                f"{settings.MAX_REQUEST_BODY_MB} MB."
-                            ),
-                            "status_code": 413,
-                        },
-                    )
+                excede = int(declarado) > maximo
             except ValueError:
                 # Content-Length no numérico: petición malformada.
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "error": "BAD_REQUEST",
-                        "detail": "Cabecera Content-Length inválida.",
-                        "status_code": 400,
-                    },
-                )
+                await _respuesta_json(
+                    400, "BAD_REQUEST", "Cabecera Content-Length inválida."
+                )(scope, receive, send)
+                return
+            if excede:
+                self._avisar(request, declarado)
+                await self._respuesta_413(scope, receive, send)
+                return
 
-        return await call_next(request)
+        recibidos = 0
+        cortado = False
+        respuesta_iniciada = False
+
+        async def receive_contado():
+            nonlocal recibidos, cortado
+            if cortado:
+                return {"type": "http.disconnect"}
+            mensaje = await receive()
+            if mensaje["type"] == "http.request":
+                recibidos += len(mensaje.get("body", b""))
+                if recibidos > maximo:
+                    cortado = True
+                    self._avisar(request, f">{maximo}")
+                    # Responder ya, sin esperar a que la aplicación termine
+                    # de leer: el resto del cuerpo no se va a procesar.
+                    if not respuesta_iniciada:
+                        await self._respuesta_413(scope, receive, send)
+                    return {"type": "http.disconnect"}
+            return mensaje
+
+        async def send_vigilado(mensaje):
+            nonlocal respuesta_iniciada
+            if cortado:
+                return  # la 413 ya salió; se descarta lo que la app intente enviar
+            if mensaje["type"] == "http.response.start":
+                respuesta_iniciada = True
+            await send(mensaje)
+
+        try:
+            await self.app(scope, receive_contado, send_vigilado)
+        except Exception:
+            # Al cortar la lectura la aplicación ve una desconexión y falla;
+            # eso es esperado y la respuesta ya se envió. Cualquier otro
+            # error sigue su camino normal.
+            if not cortado:
+                raise
+
+    @staticmethod
+    def _avisar(request: Request, tamano) -> None:
+        logger.warning(
+            "Petición rechazada por tamaño: %s bytes desde %s hacia %s",
+            tamano, ip_cliente(request), request.url.path,
+        )
+
+    @staticmethod
+    async def _respuesta_413(scope, receive, send) -> None:
+        await _respuesta_json(
+            413,
+            "PAYLOAD_TOO_LARGE",
+            f"El contenido enviado supera el límite de {settings.MAX_REQUEST_BODY_MB} MB.",
+        )(scope, receive, send)
 
 
 class LimiteFrecuencia(BaseHTTPMiddleware):

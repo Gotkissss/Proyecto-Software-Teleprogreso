@@ -58,6 +58,7 @@ class DescansoIniciar(BaseModel):
 
     tipo: Optional[str] = Field(
         None,
+        max_length=20,
         description="almuerzo | tecnica | personal. Si se omite, se usa 'personal'.",
     )
 

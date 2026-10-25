@@ -51,9 +51,9 @@ class CoordenadasTarea(BaseModel):
 
 # 🔹 BASE
 class TareaBase(CoordenadasTarea):
-    nombre:     str
-    descripcion: Optional[str]            = None
-    direccion:   Optional[str]            = None
+    nombre:      str = Field(..., max_length=150)               # tarea.titulo
+    descripcion: Optional[str] = Field(None, max_length=2000)   # TEXT
+    direccion:   Optional[str] = Field(None, max_length=255)    # direccion_servicio
     prioridad:   Optional[PrioridadServicio] = PrioridadServicio.media
     id_tecnico:  Optional[int]            = None
     # Fecha límite de la tarea. Es la que usa el detector de alertas para
@@ -76,9 +76,9 @@ class TareaUpdate(CoordenadasTarea):
     router distingue entre "campo no enviado" y "campo enviado como null"
     usando model_dump(exclude_unset=True).
     """
-    nombre:             Optional[str]                = None
-    descripcion:        Optional[str]                = None
-    direccion:          Optional[str]                = None
+    nombre:      Optional[str] = Field(None, max_length=150)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    direccion:   Optional[str] = Field(None, max_length=255)
     prioridad:          Optional[PrioridadServicio]  = None
     estado:             Optional[EstadoServicio]     = None
     fecha_inicio:       Optional[date]               = None

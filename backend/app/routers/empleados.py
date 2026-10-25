@@ -61,14 +61,17 @@ async def get_empleados(
     _current_user: Annotated[Empleado, Depends(require_supervisor)],
     rol: Optional[str] = Query(
         None,
+        max_length=30,
         description="Filtrar por rol: admin | supervisor | tecnico | gerente",
     ),
     estado: Optional[str] = Query(
         None,
+        max_length=20,
         description="Filtrar por estado: activo | inactivo",
     ),
     buscar: Optional[str] = Query(
         None,
+        max_length=100,
         description="Buscar por nombre, apellido o correo (búsqueda parcial)",
     ),
 ):

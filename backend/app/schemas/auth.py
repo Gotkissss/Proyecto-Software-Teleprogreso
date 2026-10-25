@@ -4,14 +4,15 @@ Schemas Pydantic para el modulo de autenticación.
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
 
 from app.core.reglas import validar_politica_contrasena
+from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
 
 
 class LoginRequest(BaseModel):
-    correo: EmailStr
-    contrasena: str
+    correo: EmailStr = Field(..., max_length=100)
+    contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
 
 
 class TokenResponse(BaseModel):
@@ -48,9 +49,9 @@ class PerfilResponse(BaseModel):
 class CambiarContrasenaRequest(BaseModel):
     """Contraseña actual y confirmación de la nueva contraseña."""
 
-    contrasena_actual: str
-    nueva_contrasena: str
-    confirmacion_contrasena: str
+    contrasena_actual: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
+    nueva_contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
+    confirmacion_contrasena: str = Field(..., max_length=LONGITUD_MAXIMA_CONTRASENA)
 
     @field_validator("nueva_contrasena")
     @classmethod
