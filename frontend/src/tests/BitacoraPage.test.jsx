@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 
 const servicio = vi.hoisted(() => ({
   getBitacora: vi.fn(),
@@ -87,11 +88,15 @@ function pagina(items = FILAS) {
   return { total: items.length, page: 1, page_size: 20, total_pages: 1, items }
 }
 
-function montar() {
+// La página lee filtros de partida de la URL (HU-S10-05), así que necesita
+// un router alrededor.
+function montar(ruta = '/supervisor/bitacora') {
   return render(
-    <ToastProvider>
-      <BitacoraPage />
-    </ToastProvider>
+    <MemoryRouter initialEntries={[ruta]}>
+      <ToastProvider>
+        <BitacoraPage />
+      </ToastProvider>
+    </MemoryRouter>
   )
 }
 
@@ -198,6 +203,16 @@ describe('filtros', () => {
         expect.objectContaining({ accion: 'login_fallido' }), 1, 20
       )
     )
+  })
+
+  it('arranca con los filtros de la URL (enlace desde una alerta de seguridad)', async () => {
+    montar('/supervisor/bitacora?accion=acceso_denegado&actor=1&inventado=x')
+
+    await waitFor(() => expect(servicio.getBitacora).toHaveBeenCalled())
+    const [filtros] = servicio.getBitacora.mock.calls[0]
+    expect(filtros).toEqual(expect.objectContaining({ accion: 'acceso_denegado', actor: '1' }))
+    // Lo que la pantalla no conoce no llega al backend.
+    expect(filtros).not.toHaveProperty('inventado')
   })
 
   it('un rango al revés se bloquea antes de llamar al backend', async () => {

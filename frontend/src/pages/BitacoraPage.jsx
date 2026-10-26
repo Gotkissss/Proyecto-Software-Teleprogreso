@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
@@ -54,6 +55,21 @@ const FILTROS_INICIALES = {
   request_id: '',
   fecha_inicio: haceDias(7),
   fecha_fin: hoyISO(),
+}
+
+/**
+ * Filtros de partida: los de siempre, más los que traiga la URL. Así una
+ * alerta de seguridad (HU-S10-05) abre la bitácora ya filtrada por lo que la
+ * levantó (/supervisor/bitacora?accion=login_fallido). Solo se toman las
+ * claves que la pantalla conoce.
+ */
+function filtrosIniciales(searchParams) {
+  const filtros = { ...FILTROS_INICIALES }
+  for (const clave of Object.keys(FILTROS_INICIALES)) {
+    const valor = searchParams.get(clave)
+    if (valor) filtros[clave] = valor
+  }
+  return filtros
 }
 
 /* ── Estado de la cadena ─────────────────────────────────────────────────── */
@@ -168,7 +184,8 @@ function DetalleFila({ fila, onCerrar }) {
 /* ── Página ──────────────────────────────────────────────────────────────── */
 export default function BitacoraPage() {
   const toast = useToast()
-  const [filtros, setFiltros] = useState(FILTROS_INICIALES)
+  const [searchParams] = useSearchParams()
+  const [filtros, setFiltros] = useState(() => filtrosIniciales(searchParams))
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)

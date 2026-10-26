@@ -222,7 +222,11 @@ def _auditar_masivo(estado_ejecucion):
     resultado = estado_ejecucion.invoke_statement()
     cambios = {"masivo": True}
     devolver = resultado
-    if resultado.returns_rows:
+    # El resultado síncrono (CursorResult) dice si trae filas. El de un
+    # INSERT ... RETURNING en una AsyncSession es un Result del ORM, que no
+    # tiene `returns_rows` y siempre las trae: preguntárselo reventaba el hook
+    # y la generación de alertas de GET /alertas hacía rollback en silencio.
+    if getattr(resultado, "returns_rows", True):
         # Leer las filas consumiría el resultado de quien llamó: se congela y
         # se le entrega una copia intacta.
         congelado = resultado.freeze()

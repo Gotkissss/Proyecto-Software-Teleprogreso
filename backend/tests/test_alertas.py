@@ -29,7 +29,9 @@ async def test_get_alertas_devuelve_alertas_filtradas():
     result.scalars.return_value.all.return_value = [_alerta()]
     db.execute.return_value = result
 
-    with patch("app.routers.alertas.generar_alertas", new=AsyncMock()):
+    with patch("app.routers.alertas.generar_alertas", new=AsyncMock()), patch(
+        "app.routers.alertas.generar_alertas_seguridad", new=AsyncMock()
+    ):
         alertas = await get_alertas(
             db,
             MagicMock(),

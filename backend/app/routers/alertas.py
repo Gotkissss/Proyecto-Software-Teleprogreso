@@ -8,11 +8,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.reglas import ROL_ADMIN
 from app.db.session import get_db
 from app.models.alerta import Alerta
 from app.models.empleado import Empleado
 from app.schemas.alerta import AlertaResponse, AlertaUpdate
-from app.services.alertas import describir_referencias, generar_alertas
+from app.services.alertas import (
+    PREFIJO_SEGURIDAD,
+    describir_referencias,
+    es_alerta_seguridad,
+    generar_alertas,
+)
+from app.services.alertas_seguridad import generar_alertas_seguridad
+from app.services.bitacora import fallos_auditoria
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +37,7 @@ async def get_alertas(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     # Lectura abierta a los tres roles administrativos: el gerente entra al
     # mismo panel que el supervisor y antes recibía 403 al abrir Alertas.
-    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
     tipo: Optional[str] = Query(None, max_length=50),
     severidad: Optional[str] = Query(None, max_length=20),
     estado: Optional[str] = Query(None, max_length=20),
@@ -41,6 +49,10 @@ async def get_alertas(
     ),
 ):
     """Genera alertas nuevas y luego lista las persistidas."""
+    # Se lee antes de generar: si la generación falla y hace rollback, el
+    # empleado queda expirado y leer su rol después intentaría recargarlo.
+    es_admin = current_user.rol == ROL_ADMIN
+
     # La generación request-driven reemplaza temporalmente a un scheduler
     # mientras el proyecto no tenga un worker de tareas programadas.
     #
@@ -54,8 +66,26 @@ async def get_alertas(
         except Exception:
             logger.exception("Fallo la generación automática de alertas")
             await db.rollback()
+        # HU-S10-05: las reglas de seguridad corren aparte para que un fallo
+        # de unas no se lleve a las otras. Desde aquí, el proceso del backend,
+        # se miran además el contador de fallos de auditoría y la conexión,
+        # que el comando programado no puede ver. La cadena entera de la
+        # bitácora no: recorrerla en cada visita a la pantalla es caro y ya la
+        # revisa `mantenimiento.py alertas`.
+        try:
+            await generar_alertas_seguridad(
+                db, fallos=fallos_auditoria(), revisar_conexion=True
+            )
+        except Exception:
+            logger.exception("Fallo la generación de alertas de seguridad")
+            await db.rollback()
 
     query = select(Alerta).order_by(Alerta.fecha.desc())
+
+    # Las alertas de seguridad hablan de cuentas, IPs y la propia bitácora:
+    # solo las ve el admin, igual que la bitácora.
+    if not es_admin:
+        query = query.where(~Alerta.tipo.startswith(PREFIJO_SEGURIDAD, autoescape=True))
 
     if tipo:
         query = query.where(Alerta.tipo == tipo)
@@ -95,11 +125,16 @@ async def update_alerta(
     id: int,
     data: AlertaUpdate,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _current_user: Annotated[Empleado, Depends(require_supervisor)],
+    current_user: Annotated[Empleado, Depends(require_supervisor)],
 ):
     """Actualiza el estado de una alerta persistente."""
     result = await db.execute(select(Alerta).where(Alerta.id_alerta == id))
     alerta = result.scalar_one_or_none()
+
+    # Para quien no es admin una alerta de seguridad no existe: 404 igual que
+    # un id inventado, para no confirmar que hay una.
+    if alerta is not None and es_alerta_seguridad(alerta.tipo) and current_user.rol != ROL_ADMIN:
+        alerta = None
 
     if alerta is None:
         raise HTTPException(
