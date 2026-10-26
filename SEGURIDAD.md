@@ -208,6 +208,38 @@ queda en `bitacora_auditoria` (migraciones `0009` y `0010`):
   filtros, detalle del antes/después, exportación a Excel y aviso si la cadena
   está rota o si la conexión del backend podría alterarla.
 
+### Alertas de seguridad (HU-S10-05)
+
+Registrar no alcanza si nadie lo lee: hasta este sprint un ataque de fuerza
+bruta solo se descubría si el admin abría la bitácora y lo buscaba.
+`app/services/alertas_seguridad.py` lee la bitácora y deja alertas en la misma
+tabla y pantalla que las operativas, en la pestaña **Seguridad** de Alertas:
+
+| Alerta | Cuándo | Severidad |
+|---|---|---|
+| Intentos de acceso | 10 logins fallidos contra un correo o desde una IP en 10 minutos | Crítica |
+| Cuenta bloqueada | El límite de login bloqueó una cuenta (un ataque desde una sola IP llega aquí primero) | Advertencia |
+| Accesos denegados | 5 respuestas 403 a un mismo empleado en 10 minutos | Advertencia |
+| Cuenta de administrador | Otra persona le restableció la contraseña a un admin, subió a alguien a admin o creó un admin. Cambiarse la propia no avisa | Crítica |
+| Bitácora alterada | La cadena de hashes no cuadra | Crítica |
+| Auditoría sin guardar | El backend no pudo guardar eventos de la bitácora (contador de HU-S10-04) | Crítica |
+| Conexión privilegiada | En producción, el backend se conecta como superusuario o dueño de la bitácora | Crítica |
+
+- **Solo para el admin.** `GET /alertas` no se las devuelve a supervisores ni
+  gerentes, y `PATCH /alertas/{id}` les responde 404 sobre una de ellas, igual
+  que con un id inventado.
+- **Aunque nadie abra la pantalla.** `python mantenimiento.py alertas`,
+  programado cada 5 minutos, corre las reglas, incluida la cadena entera, que
+  no se recorre en cada visita porque es cara. Las dos últimas reglas miran el
+  proceso y la conexión del backend, así que se evalúan al abrir Alertas.
+- **Una por día.** Como las operativas, una alerta por regla, referencia y día:
+  si el problema sigue, vuelve a aparecer al día siguiente.
+- **Desde la alerta a la bitácora.** Cada tarjeta lleva a la bitácora ya
+  filtrada por lo que la levantó.
+
+Los umbrales viven en `app/core/reglas.py` (`UMBRAL_LOGIN_FALLIDO`,
+`UMBRAL_ACCESO_DENEGADO`, `MINUTOS_VENTANA_SEGURIDAD`).
+
 ## Sesión
 
 El JWT dura una hora. Antes nadie miraba su `exp`: la sesión se acababa en seco,
@@ -358,7 +390,11 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 4. Programa la purga diaria (`python mantenimiento.py purgar`, ver README) y,
    de vez en cuando, revisa la pantalla Bitácora o corre
    `python mantenimiento.py verificar-bitacora`.
-5. En un despliegue, no dejes que el seed use las contraseñas de demo: define
+5. Programa `python mantenimiento.py alertas` cada 5 minutos y
+   `python mantenimiento.py anclar` una vez al día (ver README). Guarda las
+   líneas que deja `anclar`: son las que permiten notar que alguien borró el
+   final de la bitácora.
+6. En un despliegue, no dejes que el seed use las contraseñas de demo: define
    `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
    `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
 
