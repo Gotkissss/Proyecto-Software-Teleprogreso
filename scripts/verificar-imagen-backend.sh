@@ -56,6 +56,18 @@ comprobar "uvicorn confía solo en 127.0.0.1 por defecto" \
 comprobar "FORWARDED_ALLOW_IPS cambia en quién confía" \
   "[ \"\$(correr -e FORWARDED_ALLOW_IPS=10.0.0.1 $IMAGEN python -c 'import uvicorn.config as c; print(c.Config(app=None).forwarded_allow_ips)')\" = 10.0.0.1 ]"
 
+# La primera instrucción del CMD real (antes de migrar): en Railway, sin
+# FORWARDED_ALLOW_IPS, se confía en su proxy; fuera de Railway, no.
+PREFIJO_CMD="$(docker inspect --format '{{index .Config.Cmd 2}}' "$IMAGEN")"
+PREFIJO_CMD="${PREFIJO_CMD%%alembic*}"
+proxy_con() { correr "$@" --entrypoint sh "$IMAGEN" -c "${PREFIJO_CMD} echo \"\${FORWARDED_ALLOW_IPS:-127.0.0.1}\""; }
+comprobar "en Railway, sin definirla, se confía en su proxy" \
+  "[ \"\$(proxy_con -e RAILWAY_ENVIRONMENT_NAME=production)\" = '*' ]"
+comprobar "fuera de Railway se queda en 127.0.0.1" \
+  "[ \"\$(proxy_con)\" = 127.0.0.1 ]"
+comprobar "si se define, manda la variable aunque sea Railway" \
+  "[ \"\$(proxy_con -e RAILWAY_ENVIRONMENT_NAME=production -e FORWARDED_ALLOW_IPS=10.0.0.1)\" = 10.0.0.1 ]"
+
 if [ "$fallos" -gt 0 ]; then
   echo "${fallos} comprobación(es) fallaron."
   exit 1

@@ -63,5 +63,6 @@ ENTRYPOINT ["/app/entrypoint.sh"]
 # QUIÉN se aceptan lo decide la variable FORWARDED_ALLOW_IPS, que uvicorn lee
 # sola; sin definir, solo 127.0.0.1 (HU-S10-06: antes era `*` fijo, y con el
 # backend expuesto sin proxy cualquiera falseaba su IP). En Railway el backend
-# solo es alcanzable a través de su proxy: ahí se define FORWARDED_ALLOW_IPS=*.
-CMD ["sh", "-c", "alembic upgrade head && python seed.py && (python mantenimiento.py purgar || echo '[mantenimiento] la purga falló; revisa el log') && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+# solo es alcanzable a través de su proxy, así que ahí, si nadie la definió,
+# vale `*`: Railway pone RAILWAY_ENVIRONMENT_NAME en todos sus servicios.
+CMD ["sh", "-c", "if [ -z \"$FORWARDED_ALLOW_IPS\" ] && [ -n \"$RAILWAY_ENVIRONMENT_NAME\" ]; then export FORWARDED_ALLOW_IPS='*'; fi; alembic upgrade head && python seed.py && (python mantenimiento.py purgar || echo '[mantenimiento] la purga falló; revisa el log') && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
