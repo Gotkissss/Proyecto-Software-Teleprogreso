@@ -131,22 +131,40 @@ export async function eliminarIncidencia(idTarea, idIncidencia) {
  * historia pide evitar. Por eso la incidencia se crea con
  * `finalizar_tarea: false` y el cierre viaja en el upload de la foto.
  *
+ * HU-S10-07: con `materiales` ([{id_material, cantidad}]) el cierre lo hace
+ * /finalizar junto con el descuento del inventario. Si ese último paso falla,
+ * el error lleva `evidenciaGuardada`: pasándola de vuelta, el reintento solo
+ * repite el cierre.
+ *
  * @param {number} idTarea
- * @param {{descripcion: string, foto: File}} datos
+ * @param {{descripcion: string, foto: File, posicion?: Object, materiales?: Array, evidenciaGuardada?: Object}} datos
  * @returns {Promise<Object>} la incidencia creada, ya con su foto
  */
-export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, posicion = null }) {
-  const incidencia = await crearIncidencia(idTarea, {
-    descripcion,
-    finalizarTarea: false,
-  })
+export async function finalizarTareaConEvidencia(
+  idTarea,
+  { descripcion, foto, posicion = null, materiales = [], evidenciaGuardada = null },
+) {
+  // HU-S10-07: si el cierre anterior falló DESPUÉS de guardar la evidencia (por
+  // ejemplo, faltó stock de un material), no se vuelve a crear: se reintenta
+  // solo el cierre.
+  let evidencia = evidenciaGuardada
+  if (!evidencia) {
+    const incidencia = await crearIncidencia(idTarea, {
+      descripcion,
+      finalizarTarea: false,
+    })
 
-  const { foto_evidencia } = await subirFotoEvidencia(
-    idTarea,
-    incidencia.id_incidencia,
-    foto,
-    { finalizarTarea: true },
-  )
+    // Con materiales, la foto NO cierra la tarea: el cierre y el descuento
+    // del inventario tienen que ir juntos en /finalizar, para que un 409 por
+    // falta de stock no deje una tarea completada sin descontar nada.
+    const { foto_evidencia } = await subirFotoEvidencia(
+      idTarea,
+      incidencia.id_incidencia,
+      foto,
+      { finalizarTarea: materiales.length === 0 },
+    )
+    evidencia = { ...incidencia, foto_evidencia }
+  }
 
   // Tercer paso: confirmar el cierre con una llamada explícita.
   //
@@ -161,13 +179,15 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, p
   // se avisa pero no se pierde el trabajo del técnico.
   let tarea = null
   try {
-    tarea = await finalizarTarea(idTarea, posicion)
+    tarea = await finalizarTarea(idTarea, posicion, materiales)
   } catch (err) {
     console.error('La evidencia se guardó pero no se pudo confirmar el cierre:', err)
+    // Quien llama la guarda para que el reintento no duplique la evidencia.
+    err.evidenciaGuardada = evidencia
     throw err
   }
 
-  return { ...incidencia, foto_evidencia, tarea }
+  return { ...evidencia, tarea }
 }
 
 /**
@@ -180,10 +200,16 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, p
  * @param {number} idTarea
  * @param {{lat:number, lng:number}|null} [posicion]
  */
-export async function finalizarTarea(idTarea, posicion = null) {
-  const { data } = await apiClient.patch(
-    `/tareas/${idTarea}/finalizar`,
-    cuerpoUbicacion(posicion),
-  )
+export async function finalizarTarea(idTarea, posicion = null, materiales = []) {
+  // HU-S10-07: los materiales usados viajan con el cierre ({id_material,
+  // cantidad}); sin ninguno, el cuerpo queda como antes.
+  const ubicacion = cuerpoUbicacion(posicion)
+  const cuerpo = materiales.length
+    ? {
+        ...(ubicacion ?? {}),
+        materiales: materiales.map(({ id_material, cantidad }) => ({ id_material, cantidad })),
+      }
+    : ubicacion
+  const { data } = await apiClient.patch(`/tareas/${idTarea}/finalizar`, cuerpo)
   return data
 }

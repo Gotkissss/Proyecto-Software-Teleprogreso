@@ -13,6 +13,11 @@
  * HU-5: al cerrar se envía también la posición del técnico, para que el
  * lugar del cierre quede en su recorrido. `posicionRespaldo` es la última
  * posición conocida, por si la lectura nueva del GPS no llega a tiempo.
+ *
+ * HU-S10-07: el técnico puede anotar los materiales que usó (opcional); se
+ * descuentan del inventario al cerrar. Si el cierre falla después de guardar
+ * la evidencia (por ejemplo, falta stock), la evidencia no se vuelve a crear:
+ * se corrigen los materiales y se reintenta solo el cierre.
  * ---------------------------------------------------------------------------
  */
 
@@ -27,6 +32,7 @@ import {
   finalizarTareaConEvidencia,
   validarFoto,
 } from '../../api/incidenciaService'
+import { getMaterialesParaConsumo } from '../../api/inventarioService'
 import { obtenerPosicionActual } from '../../utils/posicionActual'
 import {
   borrarBorrador,
@@ -66,6 +72,15 @@ export default function ModalFinalizarTarea({
   const [guardando, setGuardando] = useState(false)
   // Lo que había escrito antes de que se le cayera la sesión (HU-S9-05).
   const [recuperado, setRecuperado] = useState(null)
+  // HU-S10-07: materiales usados [{id_material, nombre, unidad, cantidad}].
+  const [materiales, setMateriales] = useState([])
+  const [mostrarMateriales, setMostrarMateriales] = useState(false)
+  // La lista se pide solo si el técnico abre la sección: la mayoría de los
+  // cierres no usa material y no tiene por qué pagar esa consulta.
+  const [disponibles, setDisponibles] = useState(null)
+  const [seleccion, setSeleccion] = useState({ id: '', cantidad: '1' })
+  // La evidencia que ya se guardó si el último intento falló en el cierre.
+  const [evidenciaGuardada, setEvidenciaGuardada] = useState(null)
 
   // Al abrirlo con otra tarea se limpia todo... salvo lo que el técnico ya
   // había escrito para ESTA tarea y no llegó a enviarse. El informe son varias
@@ -77,10 +92,32 @@ export default function ModalFinalizarTarea({
     const borrador = leerBorrador(servicio?.id_servicio)
     setDescripcion(borrador?.descripcion ?? '')
     setRecuperado(borrador)
+    setMateriales(borrador?.materiales ?? [])
+    setMostrarMateriales((borrador?.materiales ?? []).length > 0)
+    setSeleccion({ id: '', cantidad: '1' })
+    setEvidenciaGuardada(null)
     setFoto(null)
     setErrores({})
     setGuardando(false)
   }, [open, servicio?.id_servicio])
+
+  // La lista de materiales, la primera vez que se abre la sección.
+  useEffect(() => {
+    if (!open || !mostrarMateriales || disponibles !== null) return
+    let vigente = true
+    getMaterialesParaConsumo()
+      .then((lista) => vigente && setDisponibles(lista))
+      .catch((err) => {
+        console.error('No se pudo cargar la lista de materiales:', err)
+        if (vigente) {
+          setDisponibles([])
+          setErrores((p) => ({ ...p, materiales: 'No se pudo cargar la lista de materiales.' }))
+        }
+      })
+    return () => {
+      vigente = false
+    }
+  }, [open, mostrarMateriales, disponibles])
 
   // Se guarda en cada cambio y no al cerrar: si lo que se lleva la sesión por
   // delante es la pestaña entera, no hay ningún "al cerrar" que ejecutar.
@@ -89,8 +126,9 @@ export default function ModalFinalizarTarea({
     guardarBorrador(servicio.id_servicio, {
       descripcion,
       nombreFoto: foto?.name ?? null,
+      materiales,
     })
-  }, [open, servicio?.id_servicio, descripcion, foto])
+  }, [open, servicio?.id_servicio, descripcion, foto, materiales])
 
   // La preview usa una URL de objeto que hay que revocar para no filtrar
   // memoria cada vez que el técnico cambia de foto.
@@ -133,7 +171,49 @@ export default function ModalFinalizarTarea({
     if (inputFoto.current) inputFoto.current.value = ''
   }
 
+  const agregarMaterial = () => {
+    const material = (disponibles ?? []).find((m) => String(m.id_activo) === seleccion.id)
+    const cantidad = Number(seleccion.cantidad)
+    if (!material) {
+      setErrores((p) => ({ ...p, materiales: 'Elige un material de la lista.' }))
+      return
+    }
+    if (!Number.isInteger(cantidad) || cantidad < 1) {
+      setErrores((p) => ({ ...p, materiales: 'La cantidad tiene que ser un número entero mayor que 0.' }))
+      return
+    }
+    // El mismo material dos veces se suma en una sola línea.
+    setMateriales((prev) => {
+      const existente = prev.find((m) => m.id_material === material.id_activo)
+      if (existente) {
+        return prev.map((m) =>
+          m.id_material === material.id_activo ? { ...m, cantidad: m.cantidad + cantidad } : m
+        )
+      }
+      return [
+        ...prev,
+        {
+          id_material: material.id_activo,
+          nombre: material.nombre_activo,
+          unidad: material.unidad_medida ?? '',
+          cantidad,
+        },
+      ]
+    })
+    setSeleccion({ id: '', cantidad: '1' })
+    setErrores((p) => ({ ...p, materiales: null }))
+  }
+
+  const quitarMaterial = (idMaterial) =>
+    setMateriales((prev) => prev.filter((m) => m.id_material !== idMaterial))
+
   const validar = () => {
+    // La descripción y la foto ya se guardaron en el intento anterior.
+    if (evidenciaGuardada) {
+      setErrores({})
+      return true
+    }
+
     const nuevos = {}
     const texto = descripcion.trim()
 
@@ -162,6 +242,9 @@ export default function ModalFinalizarTarea({
         descripcion: descripcion.trim(),
         foto,
         posicion,
+        // Solo si hay: sin materiales el cierre es exactamente el de antes.
+        ...(materiales.length ? { materiales } : {}),
+        ...(evidenciaGuardada ? { evidenciaGuardada } : {}),
       })
       // Enviado: el borrador ya no sirve y reofrecerlo luego sería confuso.
       borrarBorrador(servicio.id_servicio)
@@ -172,8 +255,17 @@ export default function ModalFinalizarTarea({
     } catch (err) {
       const status = err?.response?.status
       const detail = err?.response?.data?.detail
+      if (err?.evidenciaGuardada) setEvidenciaGuardada(err.evidenciaGuardada)
 
-      if (status === 403) {
+      if (err?.evidenciaGuardada && status === 409) {
+        // Lo más probable: faltó stock de algún material. La evidencia ya
+        // quedó; basta corregir los materiales y volver a pulsar Finalizar.
+        setErrores({
+          general:
+            `${detail || 'No se pudo cerrar la tarea.'} La evidencia ya quedó guardada: ` +
+            'corrige los materiales y vuelve a pulsar Finalizar.',
+        })
+      } else if (status === 403) {
         setErrores({ general: detail || 'Solo el técnico asignado puede finalizar esta tarea.' })
       } else if (status === 400 || status === 404 || status === 409 || status === 422) {
         setErrores({ general: detail || 'No se pudo registrar la evidencia. Revisa los datos.' })
@@ -240,7 +332,7 @@ export default function ModalFinalizarTarea({
           if (errores.descripcion) setErrores((p) => ({ ...p, descripcion: null }))
         }}
         placeholder="Ej: Se instaló la acometida y se configuró la ONT. Señal medida: -18 dBm. Cliente conforme."
-        disabled={guardando}
+        disabled={guardando || Boolean(evidenciaGuardada)}
       />
       {errores.descripcion && <p className={styles.errorCampo}>{errores.descripcion}</p>}
 
@@ -288,9 +380,88 @@ export default function ModalFinalizarTarea({
         accept={ACCEPT_FOTO}
         capture="environment"
         onChange={handleFoto}
-        disabled={guardando}
+        disabled={guardando || Boolean(evidenciaGuardada)}
       />
       {errores.foto && <p className={styles.errorCampo}>{errores.foto}</p>}
+
+      {/* ── Materiales usados (HU-S10-07) ── */}
+      <div className={styles.materiales}>
+        <span className={styles.label}>Materiales usados (opcional)</span>
+        {!mostrarMateriales ? (
+          <button
+            type="button"
+            className={styles.agregarBtn}
+            onClick={() => setMostrarMateriales(true)}
+            disabled={guardando}
+          >
+            + Agregar materiales
+          </button>
+        ) : (
+          <>
+            <p className={styles.materialesHint}>
+              Se descuentan del inventario al cerrar la tarea.
+            </p>
+            <div className={styles.materialFila}>
+              <select
+                aria-label="Material"
+                className={styles.materialSelect}
+                value={seleccion.id}
+                onChange={(e) => setSeleccion((p) => ({ ...p, id: e.target.value }))}
+                disabled={guardando || disponibles === null}
+              >
+                <option value="">
+                  {disponibles === null ? 'Cargando materiales…' : 'Elige un material'}
+                </option>
+                {(disponibles ?? []).map((m) => (
+                  <option key={m.id_activo} value={String(m.id_activo)}>
+                    {m.nombre_activo}{m.unidad_medida ? ` (${m.unidad_medida})` : ''}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Cantidad"
+                className={styles.materialCantidad}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={seleccion.cantidad}
+                onChange={(e) => setSeleccion((p) => ({ ...p, cantidad: e.target.value }))}
+                disabled={guardando}
+              />
+              <button
+                type="button"
+                className={styles.agregarBtn}
+                onClick={agregarMaterial}
+                disabled={guardando || disponibles === null}
+              >
+                Agregar
+              </button>
+            </div>
+            {materiales.length > 0 && (
+              <ul className={styles.materialLista} aria-label="Materiales anotados">
+                {materiales.map((m) => (
+                  <li key={m.id_material} className={styles.materialItem}>
+                    <span>
+                      {m.nombre}: <strong>{m.cantidad}{m.unidad ? ` ${m.unidad}` : ''}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.quitarBtn}
+                      onClick={() => quitarMaterial(m.id_material)}
+                      disabled={guardando}
+                      aria-label={`Quitar ${m.nombre}`}
+                    >
+                      <IconBasura /> Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+        {errores.materiales && <p className={styles.errorCampo}>{errores.materiales}</p>}
+      </div>
 
       <ModalActions>
         <button className={styles.cancelBtn} onClick={onClose} disabled={guardando}>

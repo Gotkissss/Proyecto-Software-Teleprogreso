@@ -35,11 +35,14 @@ export const claveBorrador = (idTarea) => `${PREFIJO}${idTarea}`
  * @param {number|string} idTarea
  * @param {{descripcion?: string, nombreFoto?: string|null}} contenido
  */
-export function guardarBorrador(idTarea, { descripcion = '', nombreFoto = null } = {}) {
+export function guardarBorrador(
+  idTarea,
+  { descripcion = '', nombreFoto = null, materiales = [] } = {},
+) {
   if (idTarea === undefined || idTarea === null) return
 
   // Un borrador vacío es ruido: ocupa cupo y al volver no ofrece nada.
-  if (!descripcion.trim() && !nombreFoto) {
+  if (!descripcion.trim() && !nombreFoto && materiales.length === 0) {
     borrarBorrador(idTarea)
     return
   }
@@ -47,7 +50,7 @@ export function guardarBorrador(idTarea, { descripcion = '', nombreFoto = null }
   try {
     localStorage.setItem(
       claveBorrador(idTarea),
-      JSON.stringify({ descripcion, nombreFoto, guardadoEn: Date.now() })
+      JSON.stringify({ descripcion, nombreFoto, materiales, guardadoEn: Date.now() })
     )
   } catch {
     // Sin espacio o sin permiso de almacenamiento: se sigue sin borrador.
@@ -82,12 +85,29 @@ export function leerBorrador(idTarea, ahora = Date.now()) {
     return {
       descripcion: typeof borrador.descripcion === 'string' ? borrador.descripcion : '',
       nombreFoto: borrador.nombreFoto ?? null,
+      materiales: materialesValidos(borrador.materiales),
       guardadoEn: borrador.guardadoEn ?? null,
     }
   } catch {
     borrarBorrador(idTarea)
     return null
   }
+}
+
+/**
+ * HU-S10-07: los materiales que el técnico ya había anotado. De un borrador de
+ * otra versión o tocado a mano solo se reofrece lo que tiene la forma esperada.
+ */
+function materialesValidos(lista) {
+  if (!Array.isArray(lista)) return []
+  return lista.filter(
+    (m) =>
+      m &&
+      Number.isInteger(m.id_material) &&
+      Number.isInteger(m.cantidad) &&
+      m.cantidad > 0 &&
+      typeof m.nombre === 'string'
+  )
 }
 
 export function borrarBorrador(idTarea) {

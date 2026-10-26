@@ -252,3 +252,73 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ── Materiales usados (HU-S10-07) ────────────────────────── */
+.materiales {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.materialesHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.materialFila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.materialSelect,
+.materialCantidad {
+  padding: 8px 10px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+}
+
+.materialSelect { flex: 1 1 180px; min-width: 0; }
+.materialCantidad { width: 88px; }
+
+.agregarBtn {
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--color-primary-dark);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.agregarBtn:hover:not(:disabled) { background: var(--color-primary-light); }
+.agregarBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.materialLista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.materialItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+}

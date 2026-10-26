@@ -34,6 +34,16 @@ export async function getMaterialesBajoStock() {
   return Array.isArray(data) ? data : []
 }
 
+/**
+ * HU-S10-07: materiales que el técnico puede declarar al cerrar una tarea
+ * ({ id_activo, nombre_activo, unidad_medida }). Sin cantidades: el técnico no
+ * ve el nivel del inventario; si no alcanza, el cierre responde 409.
+ */
+export async function getMaterialesParaConsumo() {
+  const { data } = await apiClient.get('/activos/materiales/para-consumo')
+  return Array.isArray(data) ? data : []
+}
+
 /* ─── CRUD ───────────────────────────────────────────────────────────────── */
 
 export async function crearActivo(body) {
