@@ -14,14 +14,18 @@ este proceso es el UNICO camino hacia los datos, y por eso todo lo que entra
 por aqui pasa antes por los filtros de abajo.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import os
 
+from app.core.arranque import verificar_conexion_produccion
 from app.core.contexto import ContextoPeticionMiddleware
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.db.session import AsyncSessionLocal
 from app.core.middleware_seguridad import (
     CabecerasSeguridad,
     LimiteFrecuencia,
@@ -59,7 +63,16 @@ _docs = None if settings.es_produccion else "/docs"
 _redoc = None if settings.es_produccion else "/redoc"
 _openapi = None if settings.es_produccion else "/openapi.json"
 
+@asynccontextmanager
+async def ciclo_de_vida(_app: FastAPI):
+    # HU-S10-06: en producción no se atiende con una conexión que pueda
+    # alterar la bitácora (core/arranque.py).
+    await verificar_conexion_produccion(AsyncSessionLocal)
+    yield
+
+
 app = FastAPI(
+    lifespan=ciclo_de_vida,
     title="Teleprogreso S.A. — API",
     description=(
         "API REST para supervision de personal, gestion de tareas "
