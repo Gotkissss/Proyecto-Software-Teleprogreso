@@ -29,6 +29,25 @@ export const TIPO_ALERTA = {
 }
 
 /**
+ * Alertas de seguridad sobre la bitácora (services/alertas_seguridad.py,
+ * HU-S10-05). El backend solo se las entrega al admin.
+ */
+export const TIPO_ALERTA_SEGURIDAD = {
+  LOGIN_FALLIDO: 'seguridad_login_fallido',
+  LOGIN_BLOQUEADO: 'seguridad_login_bloqueado',
+  ACCESO_DENEGADO: 'seguridad_acceso_denegado',
+  CUENTA_ADMIN: 'seguridad_cuenta_admin',
+  BITACORA_ROTA: 'seguridad_bitacora_rota',
+  AUDITORIA_FALLIDA: 'seguridad_auditoria_fallida',
+  CONEXION_PRIVILEGIADA: 'seguridad_conexion_privilegiada',
+}
+
+/** Mismo prefijo que PREFIJO_SEGURIDAD en services/alertas.py. */
+export function esAlertaSeguridad(alerta) {
+  return typeof alerta?.tipo === 'string' && alerta.tipo.startsWith('seguridad_')
+}
+
+/**
  * Lista alertas persistentes desde el backend.
  * @param {Object} filtros - { tipo?, severidad?, estado?, generar? }
  *   (query params soportados por GET /alertas)

@@ -7,6 +7,9 @@
  *      tareas vencidas, técnicos sin marcar entrada, stock crítico.
  *   2. Sección "Stock crítico" con materiales bajo el mínimo definido
  *      (GET /activos/materiales/bajo-stock, vía api/inventarioService)
+ *   3. Solo para el admin, "Seguridad": las alertas que el backend levanta
+ *      leyendo la bitácora (HU-S10-05), con un enlace a la bitácora filtrada
+ *      para investigarlas. A los demás roles el backend ni se las envía.
  *
  * Ambas secciones consumen endpoints reales del backend. No hay datos mock
  * ni flags de features pendientes: las alertas se generan y persisten en el
@@ -21,14 +24,22 @@ import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
 import StockBadge from '../components/ui/StockBadge'
 import { useToast } from '../components/ui/Toast'
+import { useAuth } from '../context/AuthContext'
 import {
   ESTADO_ALERTA,
   TIPO_ALERTA,
   actualizarEstadoAlerta,
   describirErrorAlertas,
+  esAlertaSeguridad,
   getAlertas,
 } from '../api/alertaService'
 import { getMaterialesBajoStock } from '../api/inventarioService'
+import {
+  TIPO_ALERTA_SEGURIDAD_INFO,
+  describirAlertaSeguridad,
+  enlaceBitacora,
+} from '../utils/alertasSeguridad'
+import { ROLES } from '../utils/permisos'
 import { calcularPorcentajeStock, clasificarStock } from '../utils/stock'
 import styles from './AlertasPage.module.css'
 
@@ -106,6 +117,9 @@ function parseReferencia(referencia) {
  * tarjeta sin texto.
  */
 function describirAlerta(alerta) {
+  const deSeguridad = describirAlertaSeguridad(alerta)
+  if (deSeguridad) return deSeguridad
+
   const info = TIPO_ALERTA_INFO[alerta.tipo]
   if (!info) return `Alerta: ${alerta.tipo}`
 
@@ -189,6 +203,9 @@ function MaterialStockCard({ material }) {
 export default function AlertasPage() {
   const toast = useToast()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  // Solo decide si se dibuja la pestaña: quien no es admin no las recibe.
+  const esAdmin = user?.rol === ROLES.ADMIN
 
   /* Alertas operativas (persistentes, backend real) */
   const [alertas,      setAlertas]      = useState([])
@@ -202,7 +219,7 @@ export default function AlertasPage() {
   const [errorSt,      setErrorSt]      = useState(null)
 
   /*  Tab activa  */
-  const [tabActiva, setTabActiva] = useState('operativas') // 'operativas' | 'stock'
+  const [tabActiva, setTabActiva] = useState('operativas') // 'operativas' | 'seguridad' | 'stock'
 
   /*  Filtro de estado (pendiente | atendida | descartada | todas) */
   const [filtroEstado, setFiltroEstado] = useState(ESTADO_ALERTA.PENDIENTE)
@@ -274,18 +291,155 @@ export default function AlertasPage() {
   }
 
   /*  Contadores para los tabs  */
-  const alertasActivas = alertas // filtradas en el backend por el estado elegido
+  // Las dos listas salen de la misma consulta (filtrada en el backend por el
+  // estado elegido): las de seguridad van a su propia pestaña.
+  const alertasOperativas = alertas.filter((a) => !esAlertaSeguridad(a))
+  const alertasSeguridad  = alertas.filter(esAlertaSeguridad)
   const criticos       = materiales.filter((m) => m.cantidad_disponible === 0).length
   const stockBadge     = materiales.length  // total materiales bajo mínimo
 
   /* El badge del tab cuenta SIEMPRE las pendientes, no lo que devuelve el
      filtro activo. Antes mostraba el total del filtro, así que al pararse en
      "Atendidas" el badge decía "1" como si quedara una alerta por atender. */
-  const pendientes = alertas.filter((a) => a.estado === ESTADO_ALERTA.PENDIENTE).length
-  const badgeOperativas =
+  const cuentaPendientes = (lista) =>
     filtroEstado === ESTADO_ALERTA.PENDIENTE || filtroEstado === 'todas'
-      ? pendientes
+      ? lista.filter((a) => a.estado === ESTADO_ALERTA.PENDIENTE).length
       : null
+  const badgeOperativas = cuentaPendientes(alertasOperativas)
+  const badgeSeguridad  = cuentaPendientes(alertasSeguridad)
+
+  /* Filtros, estados de carga/vacío y tarjetas: iguales en las dos pestañas
+     de alertas, cambia la lista y el texto cuando no hay ninguna. */
+  const renderListado = (lista, { vacioPendientes }) => (
+    <>
+      {/* Filtro por estado: permite revisar también las ya atendidas
+          o descartadas, en vez de ver siempre una lista vacía. */}
+      <div className={styles.filtros}>
+        {FILTROS_ESTADO.map(({ value, label }) => (
+          <button
+            key={value}
+            className={`${styles.filtroBtn} ${filtroEstado === value ? styles.filtroActivo : ''}`}
+            onClick={() => setFiltroEstado(value)}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          className={styles.filtroBtn}
+          onClick={fetchAlertas}
+          disabled={loadingAl}
+          title="Volver a consultar las alertas"
+        >
+          ↻ Actualizar
+        </button>
+      </div>
+
+      {loadingAl || errorAl || lista.length === 0 ? (
+        <PageState
+          loading={loadingAl}
+          loadingLabel="Buscando alertas..."
+          error={errorAl}
+          onRetry={fetchAlertas}
+          errorTitle="No se pudieron cargar las alertas"
+          empty
+          emptyIcon={<IconCheck />}
+          emptyTitle={
+            filtroEstado === ESTADO_ALERTA.PENDIENTE
+              ? 'Todo en orden'
+              : 'No hay alertas con este estado'
+          }
+          emptyDescription={
+            filtroEstado === ESTADO_ALERTA.PENDIENTE
+              ? vacioPendientes
+              : 'Prueba con otro filtro para ver el historial de alertas.'
+          }
+        />
+      ) : (
+        <ul className={styles.alertasList}>
+          {lista.map((alerta) => {
+            const esCritica = alerta.severidad === 'critica'
+            const nivelClase = esCritica ? 'critico' : 'advertencia'
+            const info = TIPO_ALERTA_INFO[alerta.tipo] ?? TIPO_ALERTA_SEGURIDAD_INFO[alerta.tipo]
+            const enProceso = actualizando === alerta.id_alerta
+
+            return (
+              <li
+                key={alerta.id_alerta}
+                className={`${styles.alertaItem} ${styles[nivelClase] ?? ''}`}
+              >
+                <div className={styles.alertaHeader}>
+                  <Badge
+                    label={esCritica ? 'Crítico' : 'Advertencia'}
+                    variant={esCritica ? 'danger' : 'warning'}
+                  />
+                  {info && (
+                    <span className={styles.alertaTarea}>{info.label}</span>
+                  )}
+                  <span className={styles.alertaHora}>
+                    {formatHora(alerta.fecha)}
+                  </span>
+                </div>
+
+                <p className={styles.alertaMensaje}>{describirAlerta(alerta)}</p>
+
+                {/* Atender o descartar solo cambia el estado de ESTE aviso;
+                    la tarea no se entera. Sin una salida hacia ella, el
+                    supervisor descartaba el aviso creyendo que resolvia el
+                    problema y la tarea seguia igual, asignada y vencida. */}
+                {alerta.tipo === TIPO_ALERTA.TAREA_VENCIDA && (
+                  <button
+                    type="button"
+                    className={`btn btn-secondary btn-sm ${styles.irATareaBtn}`}
+                    onClick={() => navigate('/supervisor/reasignacion')}
+                  >
+                    Ir a la tarea para resolverla &rarr;
+                  </button>
+                )}
+
+                {/* Lo mismo con las de seguridad: el aviso se investiga en
+                    la bitácora, ya filtrada por lo que la levantó. */}
+                {esAlertaSeguridad(alerta) && (
+                  <button
+                    type="button"
+                    className={`btn btn-secondary btn-sm ${styles.irATareaBtn}`}
+                    onClick={() => navigate(enlaceBitacora(alerta))}
+                  >
+                    Ver en la bitácora &rarr;
+                  </button>
+                )}
+
+                {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
+                  <div className={styles.alertaAcciones}>
+                    <button
+                      className={`btn btn-secondary btn-sm ${styles.resolverBtn}`}
+                      onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
+                      disabled={enProceso}
+                    >
+                      {enProceso ? 'Guardando...' : 'Marcar aviso como atendido'}
+                    </button>
+                    <button
+                      className={`btn btn-ghost btn-sm ${styles.descartarBtn}`}
+                      onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
+                      disabled={enProceso}
+                    >
+                      Descartar aviso
+                    </button>
+                  </div>
+                ) : (
+                  <span className={styles.alertaEstado}>
+                    {alerta.estado === ESTADO_ALERTA.ATENDIDA && '✓ Atendida'}
+                    {alerta.estado === ESTADO_ALERTA.DESCARTADA && '✕ Descartada'}
+                    {alerta.estado === ESTADO_ALERTA.RESUELTA &&
+                      '✓ Resuelta sola — la causa ya no existe'}
+                  </span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </>
+  )
 
   return (
     <div className={styles.page}>
@@ -308,6 +462,23 @@ export default function AlertasPage() {
           )}
         </button>
 
+        {esAdmin && (
+          <button
+            className={`${styles.tab} ${tabActiva === 'seguridad' ? styles.tabActive : ''}`}
+            onClick={() => setTabActiva('seguridad')}
+          >
+            Seguridad
+            {badgeSeguridad > 0 && (
+              <span
+                className={`${styles.tabBadge} ${styles.tabBadgeDanger}`}
+                title={`${badgeSeguridad} alerta(s) de seguridad pendiente(s)`}
+              >
+                {badgeSeguridad}
+              </span>
+            )}
+          </button>
+        )}
+
         <button
           className={`${styles.tab} ${tabActiva === 'stock' ? styles.tabActive : ''}`}
           onClick={() => setTabActiva('stock')}
@@ -326,120 +497,21 @@ export default function AlertasPage() {
           */}
       {tabActiva === 'operativas' && (
         <section className={styles.tabPanel}>
-          {/* Filtro por estado: permite revisar también las ya atendidas
-              o descartadas, en vez de ver siempre una lista vacía. */}
-          <div className={styles.filtros}>
-            {FILTROS_ESTADO.map(({ value, label }) => (
-              <button
-                key={value}
-                className={`${styles.filtroBtn} ${filtroEstado === value ? styles.filtroActivo : ''}`}
-                onClick={() => setFiltroEstado(value)}
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              className={styles.filtroBtn}
-              onClick={fetchAlertas}
-              disabled={loadingAl}
-              title="Volver a consultar las alertas"
-            >
-              ↻ Actualizar
-            </button>
-          </div>
+          {renderListado(alertasOperativas, {
+            vacioPendientes: 'No hay alertas operativas pendientes en este momento.',
+          })}
+        </section>
+      )}
 
-          {loadingAl || errorAl || alertasActivas.length === 0 ? (
-            <PageState
-              loading={loadingAl}
-              loadingLabel="Buscando alertas..."
-              error={errorAl}
-              onRetry={fetchAlertas}
-              errorTitle="No se pudieron cargar las alertas"
-              empty
-              emptyIcon={<IconCheck />}
-              emptyTitle={
-                filtroEstado === ESTADO_ALERTA.PENDIENTE
-                  ? 'Todo en orden'
-                  : 'No hay alertas con este estado'
-              }
-              emptyDescription={
-                filtroEstado === ESTADO_ALERTA.PENDIENTE
-                  ? 'No hay alertas operativas pendientes en este momento.'
-                  : 'Prueba con otro filtro para ver el historial de alertas.'
-              }
-            />
-          ) : (
-            <ul className={styles.alertasList}>
-              {alertasActivas.map((alerta) => {
-                const esCritica = alerta.severidad === 'critica'
-                const nivelClase = esCritica ? 'critico' : 'advertencia'
-                const info = TIPO_ALERTA_INFO[alerta.tipo]
-                const enProceso = actualizando === alerta.id_alerta
-
-                return (
-                  <li
-                    key={alerta.id_alerta}
-                    className={`${styles.alertaItem} ${styles[nivelClase] ?? ''}`}
-                  >
-                    <div className={styles.alertaHeader}>
-                      <Badge
-                        label={esCritica ? 'Crítico' : 'Advertencia'}
-                        variant={esCritica ? 'danger' : 'warning'}
-                      />
-                      {info && (
-                        <span className={styles.alertaTarea}>{info.label}</span>
-                      )}
-                      <span className={styles.alertaHora}>
-                        {formatHora(alerta.fecha)}
-                      </span>
-                    </div>
-
-                    <p className={styles.alertaMensaje}>{describirAlerta(alerta)}</p>
-
-                    {/* Atender o descartar solo cambia el estado de ESTE aviso;
-                        la tarea no se entera. Sin una salida hacia ella, el
-                        supervisor descartaba el aviso creyendo que resolvia el
-                        problema y la tarea seguia igual, asignada y vencida. */}
-                    {alerta.tipo === TIPO_ALERTA.TAREA_VENCIDA && (
-                      <button
-                        type="button"
-                        className={`btn btn-secondary btn-sm ${styles.irATareaBtn}`}
-                        onClick={() => navigate('/supervisor/reasignacion')}
-                      >
-                        Ir a la tarea para resolverla &rarr;
-                      </button>
-                    )}
-
-                    {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
-                      <div className={styles.alertaAcciones}>
-                        <button
-                          className={`btn btn-secondary btn-sm ${styles.resolverBtn}`}
-                          onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.ATENDIDA)}
-                          disabled={enProceso}
-                        >
-                          {enProceso ? 'Guardando...' : 'Marcar aviso como atendido'}
-                        </button>
-                        <button
-                          className={`btn btn-ghost btn-sm ${styles.descartarBtn}`}
-                          onClick={() => handleActualizarEstado(alerta.id_alerta, ESTADO_ALERTA.DESCARTADA)}
-                          disabled={enProceso}
-                        >
-                          Descartar aviso
-                        </button>
-                      </div>
-                    ) : (
-                      <span className={styles.alertaEstado}>
-                        {alerta.estado === ESTADO_ALERTA.ATENDIDA && '✓ Atendida'}
-                        {alerta.estado === ESTADO_ALERTA.DESCARTADA && '✕ Descartada'}
-                        {alerta.estado === ESTADO_ALERTA.RESUELTA &&
-                          '✓ Resuelta sola — la causa ya no existe'}
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+      {/* 
+          TAB: Seguridad (solo admin)
+          */}
+      {esAdmin && tabActiva === 'seguridad' && (
+        <section className={styles.tabPanel}>
+          {renderListado(alertasSeguridad, {
+            vacioPendientes:
+              'Nada sospechoso en la bitácora: ni intentos de acceso repetidos ni cambios en cuentas de administrador.',
+          })}
         </section>
       )}
 
