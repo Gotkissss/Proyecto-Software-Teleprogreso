@@ -407,3 +407,27 @@ async def test_abrir_la_pantalla_de_alertas_corre_las_reglas(cliente, siembra):
 
     assert respuesta.status_code == 200
     assert any(a["referencia"] == f"correo:{correo}" for a in respuesta.json())
+
+
+# --- Comando programado (tarea 3) --------------------------------------------------------
+
+async def test_el_comando_alertas_genera_operativas_y_de_seguridad_sin_que_nadie_abra_la_pantalla(siembra, tecnico_a):
+    import asyncio
+
+    import mantenimiento
+    from app.core.tiempo import hoy
+
+    tarea = await siembra.tarea(tecnico_a, "Vencida para el comando")
+    async with engine.begin() as conexion:
+        await conexion.execute(
+            text("UPDATE tarea SET fecha_finalizacion = :ayer WHERE id_tarea = :id"),
+            {"ayer": hoy() - timedelta(days=1), "id": tarea.id_tarea},
+        )
+    correo = f"{_unico('cron')}@teleprogreso.com"
+    await _evento("login_fallido", ip=_ip_unica(), cambios={"correo": correo}, veces=UMBRAL_LOGIN_FALLIDO)
+
+    codigo = await asyncio.to_thread(mantenimiento.main, ["alertas"])
+
+    assert codigo == 0
+    assert len(await _alertas("tarea_vencida", f"tarea:{tarea.id_tarea}")) == 1
+    assert len(await _alertas(seguridad.TIPO_LOGIN_FALLIDO, f"correo:{correo}")) == 1

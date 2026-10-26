@@ -174,6 +174,7 @@ Comandos (desde `backend/`, o con `docker compose run --rm migraciones ...`):
 ```bash
 python mantenimiento.py purgar               # retención: tokens, GPS y bitácora
 python mantenimiento.py verificar-bitacora   # código 1 si la cadena está rota
+python mantenimiento.py alertas              # alertas operativas y de seguridad
 ```
 
 `purgar` corre en cada arranque. Para que la retención no dependa de los
@@ -184,6 +185,19 @@ despliegues, prográmalo una vez al día:
 - **Railway:** un servicio con la misma imagen del backend, *Cron Schedule*
   `0 9 * * *` (03:00 en Guatemala) y *Start Command*
   `python mantenimiento.py purgar`.
+
+`alertas` (HU-S10-05) genera las alertas aunque nadie abra la pantalla: las
+operativas y las de seguridad sobre la bitácora (fuerza bruta, cuentas
+bloqueadas, 403 repetidos, cuentas de admin tocadas por otra persona y cadena
+rota). Prográmalo cada 5 minutos:
+
+- **Local / servidor propio:**
+  `*/5 * * * * cd /ruta/al/proyecto && docker compose run --rm migraciones python mantenimiento.py alertas`
+- **Railway:** otro servicio con la misma imagen, *Cron Schedule* `*/5 * * * *`
+  y *Start Command* `python mantenimiento.py alertas`.
+
+Las alertas de seguridad solo las ve el admin, en la pestaña **Seguridad** de
+Alertas.
 
 Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
 defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
