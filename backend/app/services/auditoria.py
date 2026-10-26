@@ -191,6 +191,11 @@ async def _estado_proteccion(db: AsyncSession) -> tuple[bool, str]:
     )
 
 
+async def conexion_protegida(db: AsyncSession) -> tuple[bool, str]:
+    """Lo mismo que muestra la pantalla de la bitácora, para la alerta de HU-S10-05."""
+    return await _estado_proteccion(db)
+
+
 async def verificar(db: AsyncSession) -> VerificacionBitacoraResponse:
     filas, id_rota, motivo = (await db.execute(SQL_VERIFICAR)).one()
     protegida, detalle = await _estado_proteccion(db)

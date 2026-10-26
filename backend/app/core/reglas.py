@@ -294,3 +294,20 @@ MAX_DIAS_SERIE = {"dia": 366, "semana": 731}
 # Corta a propósito: un enlace copiado o reenviado deja de abrir la foto en
 # unos minutos, y la pantalla que la muestra pide uno nuevo al recargar.
 MINUTOS_URL_FIRMADA = 10
+
+
+# ── Alertas de seguridad (HU-S10-05) ─────────────────────────────────────────
+
+# Reglas que leen la bitácora y avisan al admin (services/alertas_seguridad.py).
+# Los dos umbrales cuentan dentro de una ventana deslizante: más intentos en
+# menos tiempo es un ataque, los mismos repartidos en el día es alguien que
+# olvidó su clave.
+MINUTOS_VENTANA_SEGURIDAD = 10
+UMBRAL_LOGIN_FALLIDO = 10      # por correo o por IP
+UMBRAL_ACCESO_DENEGADO = 5     # 403 de un mismo actor
+
+# Los eventos sueltos (cuenta bloqueada, cuenta admin modificada) se buscan en
+# lo que va del día y, además, en estos minutos hacia atrás: si no, lo que pasa
+# a las 23:58 se escaparía entre la última corrida del día y la primera del
+# siguiente.
+MINUTOS_SOLAPE_SEGURIDAD = 15

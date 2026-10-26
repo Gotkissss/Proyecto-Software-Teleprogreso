@@ -24,6 +24,17 @@ TIPO_STOCK_CRITICO = "stock_critico"
 # Estado que pone el propio sistema cuando la causa de la alerta desaparece.
 ESTADO_RESUELTA = "resuelta"
 
+# Las alertas de seguridad (HU-S10-05) llevan este prefijo en su tipo: así se
+# distinguen sin una columna nueva, y solo el admin las ve.
+PREFIJO_SEGURIDAD = "seguridad_"
+
+# Entidades de referencia cuyo valor ya es legible (correo:..., ip:...).
+REFERENCIAS_LITERALES = ("correo", "ip", "bitacora", "proceso", "bd")
+
+
+def es_alerta_seguridad(tipo: str | None) -> bool:
+    return bool(tipo) and tipo.startswith(PREFIJO_SEGURIDAD)
+
 
 async def generar_alertas(db: AsyncSession) -> int:
     """Detecta condiciones operativas y crea las alertas que aún no existen.
@@ -126,6 +137,28 @@ async def generar_alertas(db: AsyncSession) -> int:
             referencia=f"material:{id_material}",
         )
 
+    await insertar_alertas(db, nuevas_alertas)
+
+    # El detector solo sabía crear. Ahora también cierra lo que ya no aplica.
+    await _resolver_alertas_obsoletas(
+        db,
+        vigentes,
+        hoy=hoy,
+        # La detección de "técnico sin entrada" solo corre pasada la hora
+        # límite. Antes de esa hora `vigentes` no contiene ninguna referencia
+        # de ese tipo, y darlas por resueltas borraría cada mañana los avisos
+        # legítimos del día anterior.
+        evaluar_sin_entrada=hora_local() >= _hora_limite(),
+    )
+
+    return len(nuevas_alertas)
+
+
+async def insertar_alertas(db: AsyncSession, nuevas_alertas: list[Alerta]) -> None:
+    """
+    Guarda las alertas detectadas. La comparten la detección operativa y la de
+    seguridad (services/alertas_seguridad.py).
+    """
     if nuevas_alertas:
         # ON CONFLICT DO NOTHING en lugar de add_all(): la detección corre
         # dentro de un GET, así que dos supervisores abriendo la pantalla a la
@@ -162,20 +195,6 @@ async def generar_alertas(db: AsyncSession) -> int:
         # El flush deja los registros preparados dentro de la transacción
         # actual; el commit continúa siendo responsabilidad de get_db().
         await db.flush()
-
-    # El detector solo sabía crear. Ahora también cierra lo que ya no aplica.
-    await _resolver_alertas_obsoletas(
-        db,
-        vigentes,
-        hoy=hoy,
-        # La detección de "técnico sin entrada" solo corre pasada la hora
-        # límite. Antes de esa hora `vigentes` no contiene ninguna referencia
-        # de ese tipo, y darlas por resueltas borraría cada mañana los avisos
-        # legítimos del día anterior.
-        evaluar_sin_entrada=hora_local() >= _hora_limite(),
-    )
-
-    return len(nuevas_alertas)
 
 
 async def describir_referencias(
@@ -229,6 +248,13 @@ async def describir_referencias(
         )
         for id_activo, nombre in result.all():
             etiquetas[f"material:{id_activo}"] = nombre
+
+    # Las alertas de seguridad apuntan a cosas que no son filas (un correo que
+    # intentaron adivinar, una IP): su etiqueta es el propio valor.
+    for alerta in alertas:
+        entidad, _, valor = (alerta.referencia or "").partition(":")
+        if entidad in REFERENCIAS_LITERALES and valor:
+            etiquetas[alerta.referencia] = valor
 
     return etiquetas
 
