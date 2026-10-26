@@ -44,32 +44,26 @@ FROM nginx:stable-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee1
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Configuración en frontend/nginx/ (HU-S10-06): cabeceras de seguridad y
+# caché. Son plantillas porque el puerto y el origen de la API se conocen al
+# arrancar, no al construir.
 RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx/default.conf.tpl nginx/seguridad.conf.tpl /etc/nginx/plantillas/
 
-RUN cat > /etc/nginx/conf.d/default.conf.tpl << 'EOF'
-server {
-    listen __PORT__;
-    server_name _;
+# Sin root (HU-S10-06): el proceso maestro de nginx también corre como el
+# usuario `nginx`. Para eso el pid va a /tmp, nginx puede escribir su caché y
+# la carpeta donde el arranque genera la configuración, y el puerto por
+# defecto es uno que no exige privilegios (Railway pone el suyo en $PORT).
+RUN sed -i '/^user /d' /etc/nginx/nginx.conf \
+    && sed -i 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
+    && chown -R nginx:nginx /var/cache/nginx /etc/nginx/conf.d
+USER nginx
 
-    root /usr/share/nginx/html;
-    index index.html;
+ENV PORT=8080
+EXPOSE 8080
 
-    location /assets/ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files $uri =404;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-}
-EOF
-
-ENV PORT=80
-EXPOSE 80
-
-CMD sh -c "sed \"s/__PORT__/$PORT/g\" /etc/nginx/conf.d/default.conf.tpl > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+# __API__: el origen de la API que la CSP deja llamar y del que deja cargar
+# fotos. Es la misma VITE_API_URL de la build (en Railway la variable existe al
+# construir y al correr); sin ella, el backend de Railway, igual que el
+# respaldo de api/client.js.
+CMD ["sh", "-c", "API=${VITE_API_URL:-https://backend-production-6d60.up.railway.app}; API=${API%/}; CABECERA=Content-Security-Policy; [ \"$CSP_SOLO_REPORTE\" = true ] && CABECERA=Content-Security-Policy-Report-Only; sed \"s/__PORT__/$PORT/g\" /etc/nginx/plantillas/default.conf.tpl > /etc/nginx/conf.d/default.conf && sed -e \"s#__API__#$API#g\" -e \"s#__CSP_HEADER__#$CABECERA#g\" /etc/nginx/plantillas/seguridad.conf.tpl > /etc/nginx/conf.d/seguridad.inc && exec nginx -g 'daemon off;'"]
