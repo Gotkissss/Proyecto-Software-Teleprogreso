@@ -43,6 +43,7 @@ from app.core.tiempo import ahora, hoy
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Incidencia, Tarea
 from app.schemas.ubicacion import UbicacionCreate
+from app.services import kardex
 from app.services.ubicaciones import exigir_jornada_abierta, registrar_evento_tarea
 from app.schemas.tarea import (
     DiaCompletadas,
@@ -833,12 +834,19 @@ async def finalizar_tarea(
     id_tarea: int,
     current_user: Empleado,
     ubicacion: Optional[UbicacionCreate] = None,
+    *,
+    materiales=(),
 ) -> TareaResponse:
     """
     Finaliza una tarea en curso que ya cuenta con evidencia.
 
     HU-5: el técnico necesita la jornada abierta, y si envía su ubicación, el
     lugar del cierre queda en su recorrido (una sola vez por tarea).
+
+    HU-S10-07: `materiales` se descuenta del inventario antes de marcarla
+    completada, en la misma transacción: si falta stock de uno, el 409 deshace
+    también el cierre. Se descuenta una sola vez por tarea (si ya tiene
+    consumos, un reintento del cierre no vuelve a restar).
     """
     result = await db.execute(select(Tarea).where(Tarea.id_tarea == id_tarea))
     tarea = result.scalar_one_or_none()
@@ -869,6 +877,14 @@ async def finalizar_tarea(
                 "Registra la evidencia (descripción y foto) antes de finalizar "
                 "la tarea."
             )
+        )
+
+    if materiales and not await kardex.tarea_tiene_consumos(db, id_tarea):
+        await kardex.consumir_en_tarea(
+            db,
+            id_tarea,
+            [kardex.Consumo(m.id_material, m.cantidad) for m in materiales],
+            id_empleado=current_user.id_empleado,
         )
 
     marcar_completada(tarea)

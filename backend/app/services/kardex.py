@@ -118,6 +118,19 @@ async def registrar_movimiento(
     return movimiento
 
 
+async def tarea_tiene_consumos(db: AsyncSession, id_tarea: int) -> bool:
+    """¿Ya se descontó material para esta tarea? (el cierre se puede reintentar)"""
+    resultado = await db.execute(
+        select(MovimientoMaterial.id_movimiento)
+        .where(
+            MovimientoMaterial.id_tarea == id_tarea,
+            MovimientoMaterial.tipo == TIPO_CONSUMO,
+        )
+        .limit(1)
+    )
+    return resultado.scalar_one_or_none() is not None
+
+
 async def consumir_en_tarea(
     db: AsyncSession,
     id_tarea: int,

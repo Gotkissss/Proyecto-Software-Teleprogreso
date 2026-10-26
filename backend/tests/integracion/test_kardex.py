@@ -210,3 +210,106 @@ async def test_dos_consumos_a_la_vez_no_dejan_el_stock_negativo(cliente, siembra
     stock, movimientos = await _estado(id_material)
     assert stock == 2
     assert [m.tipo for m in movimientos] == ["entrada", "consumo"]
+
+
+# --- Consumo al finalizar (tarea 3) ----------------------------------------------------
+
+async def _tarea_lista_para_cerrar(cliente, siembra, tecnico):
+    tarea = await siembra.tarea(tecnico, "Instalación con materiales", estado="en_progreso")
+    respuesta = await cliente.post(
+        f"/tareas/{tarea.id_tarea}/incidencias",
+        json={"descripcion": "Se instaló la acometida", "finalizar_tarea": False},
+        headers=encabezado(token_de(tecnico)),
+    )
+    assert respuesta.status_code == 201, respuesta.text
+    return tarea
+
+
+async def test_finalizar_con_materiales_los_descuenta_una_sola_vez(
+    cliente, siembra, supervisor, tecnico_a, jornada_abierta_a
+):
+    id_material = await _material(cliente, supervisor, 10)
+    tarea = await _tarea_lista_para_cerrar(cliente, siembra, tecnico_a)
+    cuerpo = {"lat": 14.6, "lng": -90.5, "materiales": [{"id_material": id_material, "cantidad": 3}]}
+    cabeceras = encabezado(token_de(tecnico_a))
+
+    primera = await cliente.patch(f"/tareas/{tarea.id_tarea}/finalizar", json=cuerpo, headers=cabeceras)
+    # El frontend reintenta el cierre si se pierde la respuesta.
+    reintento = await cliente.patch(f"/tareas/{tarea.id_tarea}/finalizar", json=cuerpo, headers=cabeceras)
+
+    assert primera.status_code == 200, primera.text
+    assert primera.json()["estado_tarea"] == "completado"
+    assert reintento.status_code == 200
+    stock, movimientos = await _estado(id_material)
+    assert stock == 7
+    consumos = [m for m in movimientos if m.tipo == "consumo"]
+    assert [(m.cantidad, m.id_tarea, m.id_empleado) for m in consumos] == [
+        (-3, tarea.id_tarea, tecnico_a.id_empleado)
+    ]
+
+
+async def test_sin_stock_suficiente_la_tarea_no_se_cierra(
+    cliente, siembra, supervisor, tecnico_a, jornada_abierta_a
+):
+    id_material = await _material(cliente, supervisor, 2)
+    tarea = await _tarea_lista_para_cerrar(cliente, siembra, tecnico_a)
+
+    respuesta = await cliente.patch(
+        f"/tareas/{tarea.id_tarea}/finalizar",
+        json={"materiales": [{"id_material": id_material, "cantidad": 5}]},
+        headers=encabezado(token_de(tecnico_a)),
+    )
+
+    assert respuesta.status_code == 409
+    assert "quedan 2" in respuesta.json()["detail"]
+    tareas = await cliente.get("/tareas", headers=encabezado(token_de(tecnico_a)))
+    estado = next(t["estado_tarea"] for t in tareas.json() if t["id_tarea"] == tarea.id_tarea)
+    assert estado == "en_progreso"
+    assert (await _estado(id_material))[0] == 2
+
+
+async def test_finalizar_sin_cuerpo_sigue_funcionando(cliente, siembra, tecnico_a, jornada_abierta_a):
+    tarea = await _tarea_lista_para_cerrar(cliente, siembra, tecnico_a)
+
+    respuesta = await cliente.patch(
+        f"/tareas/{tarea.id_tarea}/finalizar", headers=encabezado(token_de(tecnico_a))
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+
+
+@pytest.mark.parametrize(
+    "cuerpo",
+    [
+        {"lat": 14.6},                                          # ubicación a medias
+        {"materiales": [{"id_material": 1, "cantidad": 0}]},    # cantidad 0
+        {"materiales": [{"id_material": 1, "cantidad": 1}] * 31},  # demasiados
+    ],
+)
+async def test_un_cuerpo_invalido_es_422(cliente, siembra, tecnico_a, jornada_abierta_a, cuerpo):
+    tarea = await _tarea_lista_para_cerrar(cliente, siembra, tecnico_a)
+
+    respuesta = await cliente.patch(
+        f"/tareas/{tarea.id_tarea}/finalizar", json=cuerpo, headers=encabezado(token_de(tecnico_a))
+    )
+
+    assert respuesta.status_code == 422
+
+
+async def test_el_tecnico_ve_que_materiales_declarar_sin_ver_el_stock(cliente, supervisor, tecnico_a):
+    con_stock = await _material(cliente, supervisor, 4, unidad="u")
+    agotado = await _material(cliente, supervisor, 0)
+
+    respuesta = await cliente.get("/activos/materiales/para-consumo", headers=encabezado(token_de(tecnico_a)))
+
+    assert respuesta.status_code == 200
+    por_id = {m["id_activo"]: m for m in respuesta.json()}
+    assert set(por_id[con_stock]) == {"id_activo", "nombre_activo", "unidad_medida"}
+    assert por_id[con_stock]["unidad_medida"] == "u"
+    assert agotado not in por_id
+
+
+async def test_el_gerente_no_lista_materiales_para_consumo(cliente, gerente):
+    respuesta = await cliente.get("/activos/materiales/para-consumo", headers=encabezado(token_de(gerente)))
+
+    assert respuesta.status_code == 403

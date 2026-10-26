@@ -58,6 +58,17 @@ class MaterialResponse(ActivoBase):
     tipo_material:       Optional[str] = None
 
 
+class MaterialParaConsumoResponse(BaseModel):
+    """
+    Lo que el técnico necesita para declarar qué usó al cerrar una tarea
+    (HU-S10-07): cuál es y en qué se mide. Sin cantidades: el técnico no ve
+    el nivel del inventario, y si no alcanza el cierre se lo dice (409).
+    """
+    id_activo:     int
+    nombre_activo: str
+    unidad_medida: Optional[str] = None
+
+
 # ── Herramienta ────────────────────────────────────────────────────────────
 
 class HerramientaResponse(ActivoBase):

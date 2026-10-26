@@ -4,6 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 
 from app.core.archivos_firmados import UrlArchivo
+from app.core.reglas import MAX_CANTIDAD_MOVIMIENTO, MAX_MATERIALES_POR_CIERRE
 
 
 # 🔹 ENUMS
@@ -203,3 +204,35 @@ class HistorialTareasResponse(BaseModel):
     desde: date
     hasta: date
     dias:  List[DiaCompletadas]
+
+
+# ─── HU-S10-07: materiales usados al cerrar la tarea ─────────────────────────
+
+class ConsumoMaterialRequest(BaseModel):
+    """Un material que se usó en la tarea y cuánto (en su unidad de medida)."""
+
+    id_material: int = Field(..., ge=1)
+    cantidad: int = Field(..., ge=1, le=MAX_CANTIDAD_MOVIMIENTO)
+
+
+class FinalizarTareaRequest(BaseModel):
+    """
+    Cuerpo opcional de PATCH /tareas/{id}/finalizar.
+
+    `lat` y `lng` son los mismos de siempre (HU-5, el lugar del cierre) y van
+    juntos o no van. `materiales` (HU-S10-07) es lo que se usó: se descuenta
+    del inventario en la misma transacción que cierra la tarea, y una sola vez
+    aunque el cierre se reintente.
+    """
+
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lng: Optional[float] = Field(None, ge=-180, le=180)
+    materiales: List[ConsumoMaterialRequest] = Field(
+        default_factory=list, max_length=MAX_MATERIALES_POR_CIERRE
+    )
+
+    @model_validator(mode="after")
+    def ubicacion_completa(self) -> "FinalizarTareaRequest":
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("La ubicación necesita lat y lng juntas.")
+        return self

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.deps import require_admin_supervisor_gerente, require_supervisor, require_tecnico
 from app.db.session import get_db
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
 from app.models.empleado import Empleado, EmpleadoCarro
@@ -16,6 +16,7 @@ from app.schemas.activo import (
     CarroResponse,
     HerramientaEnCarroResponse,
     HerramientaResponse,
+    MaterialParaConsumoResponse,
     MaterialResponse,
 )
 
@@ -109,6 +110,36 @@ async def get_materiales(
             tipo_material=material.tipo_material,
         )
         for activo, material in rows
+    ]
+
+
+# ─── GET /activos/materiales/para-consumo ─────────────────────────────
+@router.get(
+    "/materiales/para-consumo",
+    response_model=List[MaterialParaConsumoResponse],
+    summary="Materiales que se pueden declarar al cerrar una tarea",
+    status_code=status.HTTP_200_OK,
+)
+async def get_materiales_para_consumo(
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    _current_user: Annotated[Empleado, Depends(require_tecnico)],
+):
+    """
+    HU-S10-07: la lista con la que el técnico elige qué materiales usó al
+    finalizar una tarea. Solo los que tienen existencias, y solo su nombre y
+    unidad: el técnico sigue sin ver el nivel del inventario.
+
+    Roles: técnico, supervisor y admin (los que pueden finalizar tareas).
+    """
+    result = await db.execute(
+        select(Activo.id_activo, Activo.nombre_activo, Material.unidad_medida)
+        .join(Material, Material.id_activo == Activo.id_activo)
+        .where(Material.cantidad_disponible > 0)
+        .order_by(Activo.nombre_activo)
+    )
+    return [
+        MaterialParaConsumoResponse(id_activo=i, nombre_activo=n, unidad_medida=u)
+        for i, n, u in result.all()
     ]
 
 

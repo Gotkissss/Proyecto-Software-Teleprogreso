@@ -311,3 +311,11 @@ UMBRAL_ACCESO_DENEGADO = 5     # 403 de un mismo actor
 # a las 23:58 se escaparía entre la última corrida del día y la primera del
 # siguiente.
 MINUTOS_SOLAPE_SEGURIDAD = 15
+
+
+# ── Kardex de materiales (HU-S10-07) ─────────────────────────────────────────
+
+# Topes de lo que un técnico declara al cerrar una tarea: que una lista
+# inventada no pueda tumbar el cierre ni vaciar el inventario de un plumazo.
+MAX_MATERIALES_POR_CIERRE = 30
+MAX_CANTIDAD_MOVIMIENTO = 100_000

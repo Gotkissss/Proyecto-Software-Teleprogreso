@@ -33,6 +33,7 @@ from app.core.reglas import ESTADOS_TAREA_ACTIVOS, LIMITE_TAREAS_ACTIVAS
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.tarea import (
+    FinalizarTareaRequest,
     HistorialTareasResponse,
     TareaCreate,
     TareaMapaSupervisorResponse,
@@ -295,7 +296,7 @@ async def finalizar_tarea(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    cuerpo: Optional[FinalizarTareaRequest] = None,
 ):
     """
     Cierra una tarea y deja marcado el momento exacto del cierre.
@@ -314,10 +315,21 @@ async def finalizar_tarea(
     - HU-5: el técnico necesita la jornada abierta (409 si no la tiene).
     - HU-5: el cuerpo `{lat, lng}` es opcional; si llega, el lugar del cierre
       queda en el recorrido del técnico (una sola vez por tarea).
+    - HU-S10-07: `materiales` (opcional) es lo que se usó; se descuenta del
+      inventario en la misma transacción del cierre y una sola vez por tarea.
+      409 si falta stock de alguno (y entonces la tarea no se cierra).
 
     Roles: técnico asignado, admin, supervisor.
     """
-    return await tareas_service.finalizar_tarea(db, id, current_user, ubicacion)
+    ubicacion = None
+    materiales = []
+    if cuerpo is not None:
+        if cuerpo.lat is not None:
+            ubicacion = UbicacionCreate(lat=cuerpo.lat, lng=cuerpo.lng)
+        materiales = cuerpo.materiales
+    return await tareas_service.finalizar_tarea(
+        db, id, current_user, ubicacion, materiales=materiales
+    )
 
 
 @router.get(
