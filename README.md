@@ -214,12 +214,37 @@ defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
 define `DATABASE_URL_MIGRACIONES` con el propietario del esquema: con ella
 migran Alembic, el seed y la purga (la bitácora solo la puede purgar su dueño).
 
+## 🔒 Despliegue en producción
+
+Variables que importan en un despliegue (Railway), además de las de la base:
+
+| Servicio | Variable | Para qué |
+|---|---|---|
+| Backend | `ENVIRONMENT=production` | Apaga `/docs`, exige `ALLOWED_HOSTS` y orígenes `https`, y hace que el backend **no arranque** si su conexión puede alterar la bitácora (superusuario o dueña de la tabla) |
+| Backend | `CLAVE_FIRMA_ARCHIVOS` | Llave de los enlaces a las fotos; distinta de `SECRET_KEY` |
+| Backend | `FORWARDED_ALLOW_IPS` | De quién se aceptan `X-Forwarded-*`. Sin definir: `127.0.0.1`, y en Railway su proxy (`*`) |
+| Backend | `DB_SSL_MODE` | `require` o `verify-full` si la base no está en la misma red privada; vacío si lo está |
+| Frontend | `VITE_API_URL` | URL de la API: la usa la build y la CSP de nginx |
+| Frontend | `PORT` | Puerto de nginx; 8080 si no se define (nginx ya no corre como root y no puede usar el 80) |
+| Frontend | `CSP_SOLO_REPORTE=true` | Manda la CSP sin bloquear, para probar un cambio |
+
+Los dos contenedores corren sin root y la página manda CSP, HSTS y las demás
+cabeceras de seguridad (detalle en `SEGURIDAD.md`, «Despliegue endurecido», y
+cómo rotar las llaves en «Rotación de llaves»). Para comprobar las imágenes
+de producción en local (es lo mismo que corre el CI):
+
+```bash
+scripts/verificar-cabeceras-frontend.sh
+scripts/verificar-imagen-backend.sh
+```
+
 ## 📷 Fotos de evidencia: dónde se guardan
 
 Las fotos de evidencia y las imágenes de activos se escriben en disco y se
-sirven en `/static/...`. La carpeta sale de la variable `STATIC_DIR`; si no se
-define, se usa `backend/static`, que es lo correcto en local y en
-`docker compose`.
+sirven solo por `GET /archivos/...` con un enlace firmado de 10 minutos que
+la API entrega a quien puede verlas (HU-S10-02). La carpeta sale de la
+variable `STATIC_DIR`; si no se define, se usa `backend/static`, que es lo
+correcto en local y en `docker compose`.
 
 **En Railway hay que apuntarla a un volumen.** El disco del contenedor es
 efímero: cada deploy y cada reinicio arrancan un contenedor nuevo y vacío, así
@@ -235,7 +260,9 @@ Configuración, una sola vez, en el servicio del **backend**:
 3. Redesplegar.
 
 El backend crea `/data/static` al arrancar si no existe, así que no hace falta
-preparar nada dentro del volumen.
+preparar nada dentro del volumen. Railway monta los volúmenes con dueño root;
+el arranque del contenedor deja esa carpeta a nombre del usuario `app`, con el
+que corre el backend (HU-S10-06), así que tampoco hay que cambiar permisos.
 
 Las fotos subidas **antes** de montar el volumen ya no están: sus registros en
 la base siguen apuntando a archivos que se perdieron, y hay que volver a

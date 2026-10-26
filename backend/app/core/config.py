@@ -23,6 +23,9 @@ SECRETOS_PROHIBIDOS = {
 # romper por fuerza bruta fuera de línea.
 LONGITUD_MINIMA_SECRET_KEY = 32
 
+# Valores de sslmode de libpq; asyncpg acepta los mismos en `ssl`.
+MODOS_SSL_BD = ("disable", "allow", "prefer", "require", "verify-ca", "verify-full")
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,6 +85,13 @@ class Settings(BaseSettings):
     DB_STATEMENT_TIMEOUT_MS: int = 30_000
     DB_LOCK_TIMEOUT_MS: int = 10_000
     DB_IDLE_TX_TIMEOUT_MS: int = 60_000
+
+    # TLS hacia Postgres (HU-S10-06). Vacío = como venga en las URL, que es lo
+    # correcto cuando la base vive en la misma red privada que el backend
+    # (docker-compose, Railway). Si la base sale de esa red, `require` o
+    # `verify-full`: se aplica a las tres conexiones (app, sync y migraciones),
+    # así lo heredan el backend, Alembic, el seed y mantenimiento.py.
+    DB_SSL_MODE: str = ""
 
     # JWT
     SECRET_KEY: str
@@ -184,9 +194,41 @@ class Settings(BaseSettings):
             return self.DATABASE_URL
         from sqlalchemy.engine import make_url
 
-        return make_url(self.DATABASE_URL_MIGRACIONES).set(
-            drivername="postgresql+asyncpg"
-        ).render_as_string(hide_password=False)
+        url = make_url(self.DATABASE_URL_MIGRACIONES).set(drivername="postgresql+asyncpg")
+        # asyncpg no entiende `sslmode` (es de libpq): se llama `ssl`.
+        if "sslmode" in url.query:
+            modo = url.query["sslmode"]
+            url = url.difference_update_query(["sslmode"]).update_query_dict({"ssl": modo})
+        return url.render_as_string(hide_password=False)
+
+    @field_validator("DB_SSL_MODE")
+    @classmethod
+    def modo_ssl_valido(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if v and v not in MODOS_SSL_BD:
+            raise ValueError(
+                f"DB_SSL_MODE '{v}' no es válido. Usa uno de: {', '.join(MODOS_SSL_BD)}."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def aplicar_ssl_bd(self):
+        """DB_SSL_MODE se escribe en las URL: `ssl` para asyncpg, `sslmode` para libpq."""
+        if not self.DB_SSL_MODE:
+            return self
+        from sqlalchemy.engine import make_url
+
+        def con_modo(url: str, parametro: str) -> str:
+            if not url:
+                return url
+            return make_url(url).update_query_dict({parametro: self.DB_SSL_MODE}).render_as_string(
+                hide_password=False
+            )
+
+        self.DATABASE_URL = con_modo(self.DATABASE_URL, "ssl")
+        self.DATABASE_URL_SYNC = con_modo(self.DATABASE_URL_SYNC, "sslmode")
+        self.DATABASE_URL_MIGRACIONES = con_modo(self.DATABASE_URL_MIGRACIONES, "sslmode")
+        return self
 
     @field_validator("ALGORITHM")
     @classmethod

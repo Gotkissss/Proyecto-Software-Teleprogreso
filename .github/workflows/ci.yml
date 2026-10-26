@@ -132,3 +132,18 @@ jobs:
           fi
           echo "Rango revisado: $rango"
           ./gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="$rango" .
+
+  imagenes:
+    name: Imágenes de producción (cabeceras y usuario)
+    runs-on: ubuntu-latest
+    # HU-S10-06: lo que se despliega es la imagen, no el código suelto. Estas
+    # pruebas construyen las dos imágenes y comprueban lo que no se ve con las
+    # pruebas unitarias: las cabeceras de seguridad que manda nginx en cada
+    # tipo de archivo, la caché de la PWA, que ningún contenedor corre como
+    # root y en qué proxy confía uvicorn.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Frontend — cabeceras, caché y nginx sin root
+        run: scripts/verificar-cabeceras-frontend.sh
+      - name: Backend — sin compilador, sin root y proxy
+        run: scripts/verificar-imagen-backend.sh
