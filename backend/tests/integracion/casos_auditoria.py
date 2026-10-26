@@ -350,8 +350,10 @@ async def _crear_activo(e):
 async def _editar_activo(e):
     supervisor = await e.empleado("supervisor")
     id_activo = await e.activo(supervisor, "material", cantidad_disponible=5)
+    # HU-S10-07: la cantidad ya no se edita a mano (cambia con el kardex); el
+    # resto del material sí.
     return await e.llamar(
-        "PATCH", f"/activos/{id_activo}", supervisor, json={"cantidad_disponible": 3}
+        "PATCH", f"/activos/{id_activo}", supervisor, json={"stock_minimo": 3}
     )
 
 

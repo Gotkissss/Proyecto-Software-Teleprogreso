@@ -80,7 +80,7 @@ class MovimientoMaterial(Base):
     cantidad:         Mapped[int]        = mapped_column(Integer, nullable=False)
     saldo_resultante: Mapped[int]        = mapped_column(Integer, nullable=False)
     motivo:           Mapped[str | None] = mapped_column(String(255), nullable=True)
-    id_tarea:         Mapped[int | None] = mapped_column(Integer, ForeignKey("tarea.id_tarea", ondelete="SET NULL"), nullable=True)
+    id_tarea:         Mapped[int | None] = mapped_column(Integer, ForeignKey("tarea.id_tarea", ondelete="RESTRICT"), nullable=True)
     id_empleado:      Mapped[int | None] = mapped_column(Integer, ForeignKey("empleado.id_empleado", ondelete="SET NULL"), nullable=True)
     fecha_hora:       Mapped[datetime]   = mapped_column(DateTime, nullable=False, server_default=func.now())
 

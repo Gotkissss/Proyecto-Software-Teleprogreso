@@ -50,7 +50,9 @@ def upgrade() -> None:
         sa.Column(
             "id_tarea",
             sa.Integer(),
-            sa.ForeignKey("tarea.id_tarea", ondelete="SET NULL"),
+            # RESTRICT: un consumo no puede quedarse sin su tarea (el CHECK lo
+            # exige). La API nunca borra tareas, las cancela.
+            sa.ForeignKey("tarea.id_tarea", ondelete="RESTRICT"),
             nullable=True,
         ),
         sa.Column(

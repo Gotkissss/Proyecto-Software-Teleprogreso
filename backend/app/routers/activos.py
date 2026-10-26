@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_empleado, require_supervisor
 from app.core.reglas import ESTADO_DISPONIBLE
+from app.services import kardex
 from app.services.inventario import exigir_acceso_a_activo
 from app.db.session import get_db
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
@@ -190,9 +191,12 @@ async def crear_activo(
         db.add(subtipo)
 
     elif isinstance(body, MaterialCreate):
+        # HU-S10-07: el material nace en 0 y su stock inicial entra como el
+        # primer movimiento del kardex (más abajo), para que el saldo siempre
+        # se pueda reconstruir desde los movimientos.
         subtipo = Material(
             id_activo=nuevo_activo.id_activo,
-            cantidad_disponible=body.cantidad_disponible,
+            cantidad_disponible=0,
             stock_minimo=body.stock_minimo,
             unidad_medida=body.unidad_medida,
             tipo_material=body.tipo_material,
@@ -213,6 +217,14 @@ async def crear_activo(
                 if isinstance(body, CarroCreate)
                 else "El activo entra en conflicto con uno ya existente."
             ),
+        )
+
+    if isinstance(body, MaterialCreate):
+        await kardex.registrar_alta(
+            db,
+            nuevo_activo.id_activo,
+            body.cantidad_disponible,
+            id_empleado=_current_user.id_empleado,
         )
 
     return _build_detalle(nuevo_activo, subtipo)
@@ -334,7 +346,21 @@ async def actualizar_activo(
         r = await db.execute(select(Material).where(Material.id_activo == id))
         subtipo = r.scalar_one_or_none()
         if subtipo:
-            if body.cantidad_disponible is not None: subtipo.cantidad_disponible = body.cantidad_disponible
+            # HU-S10-07: el stock ya no se teclea; cambia con un movimiento del
+            # kardex. Mandar la misma cantidad que ya tiene no es un cambio, así
+            # el modal puede seguir enviando el formulario entero.
+            if (
+                body.cantidad_disponible is not None
+                and body.cantidad_disponible != subtipo.cantidad_disponible
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "La cantidad de un material ya no se edita a mano: cambia "
+                        "con un movimiento del kardex (consumo al cerrar una tarea, "
+                        "entrada o ajuste con motivo)."
+                    ),
+                )
             if body.stock_minimo        is not None: subtipo.stock_minimo        = body.stock_minimo
             if body.unidad_medida       is not None: subtipo.unidad_medida       = body.unidad_medida
             if body.tipo_material       is not None: subtipo.tipo_material       = body.tipo_material
