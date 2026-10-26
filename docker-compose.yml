@@ -110,6 +110,7 @@ services:
       # Igual que SECRET_KEY: con ENVIRONMENT=production Settings la exige al
       # importar, aunque este contenedor no firma enlaces.
       CLAVE_FIRMA_ARCHIVOS: ${CLAVE_FIRMA_ARCHIVOS:-}
+      DB_SSL_MODE: ${DB_SSL_MODE:-}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       TIMEZONE: ${TIMEZONE:-America/Guatemala}
       RETENCION_BITACORA_DIAS: ${RETENCION_BITACORA_DIAS:-90}
@@ -163,6 +164,7 @@ services:
       # Firma de los enlaces temporales a las fotos (HU-S10-02). Vacía en
       # desarrollo: se genera una al azar al arrancar.
       CLAVE_FIRMA_ARCHIVOS: ${CLAVE_FIRMA_ARCHIVOS:-}
+      DB_SSL_MODE: ${DB_SSL_MODE:-}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}

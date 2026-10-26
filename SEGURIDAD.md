@@ -460,6 +460,90 @@ y una fecha de revisión, en lugar de esconderlo con un `|| true`:
 | `react-router` 6.30 (producción, moderado) | GHSA-wrjc-x8rr-h8h6: redirección abierta con `\` en `<Link>`/`useNavigate` | La app solo navega a rutas fijas o a la de cada rol; ninguna sale de un parámetro del usuario. La corrección solo existe en la v7, un cambio mayor | 2026-11-02 (retro) |
 | `react-router` 6.30 (producción, moderado) | GHSA-337j-9hxr-rhxg: inyección en `deserializeErrors()` | Afecta a la hidratación con renderizado en servidor; esta app es una SPA | 2026-11-02 (retro) |
 
+## Despliegue endurecido (HU-S10-06)
+
+La API ya tenía sus cabeceras, su rol mínimo y sus límites. Lo que faltaba
+era lo que la rodea: la página, los contenedores y la conexión a la base.
+
+**La página tiene las mismas cabeceras que la API.** El nginx del frontend
+(`frontend/nginx/`) manda CSP, HSTS, `nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy` y `Permissions-Policy` (solo GPS y cámara) en todas las
+respuestas, también en `/assets` y en `sw.js`. La CSP es la defensa principal
+del JWT, que vive en `localStorage`: solo corren los scripts de la propia
+build, y la página solo puede hablar con la API, los mosaicos de
+OpenStreetMap, Nominatim y Google Fonts. El origen de la API sale de
+`VITE_API_URL` al arrancar. Para probar una CSP nueva sin romper nada,
+`CSP_SOLO_REPORTE=true` la manda como `Content-Security-Policy-Report-Only`:
+el navegador avisa en la consola lo que bloquearía, pero no lo bloquea.
+
+**La PWA se actualiza sola.** `index.html`, `sw.js`, `registerSW.js` y el
+manifest van con `Cache-Control: no-cache`; antes los teléfonos se quedaban
+con la versión vieja hasta recargar a mano.
+
+**Ningún contenedor de la aplicación corre como root.**
+- Frontend: nginx corre entero como el usuario `nginx`, también el proceso
+  maestro, y escucha en `$PORT` (8080 por defecto, que no exige privilegios).
+- Backend: imagen en dos etapas (el compilador solo en la que instala
+  dependencias) y la aplicación como el usuario `app`, que puede leer el
+  código pero no modificarlo. El contenedor arranca como root solo para dejar
+  la carpeta de fotos (`STATIC_DIR`) a nombre de `app` cuando es un volumen de
+  root, como en Railway, y baja a `app` antes de migrar o atender
+  (`backend/entrypoint.sh`).
+
+**El proxy en el que se confía es explícito.** Uvicorn solo acepta los
+`X-Forwarded-For` y `X-Forwarded-Proto` de quien diga `FORWARDED_ALLOW_IPS`.
+Sin definirla confía solo en `127.0.0.1`; en Railway, donde el backend solo es
+alcanzable por su proxy, confía en ese proxy (`*`). Antes era `*` fijo, y con
+el backend expuesto sin proxy cualquiera podía falsear su IP en la bitácora y
+saltarse los límites de frecuencia.
+
+**Producción no arranca sin protección.** Con `ENVIRONMENT=production`, si la
+conexión del backend es de superusuario o dueña de la bitácora (o no se puede
+comprobar), el backend se niega a arrancar y dice qué cambiar
+(`app/core/arranque.py`). Antes solo lo avisaba la pantalla de la bitácora.
+
+**TLS hacia la base cuando haga falta.** `DB_SSL_MODE` (`require`,
+`verify-full`, ...) lo exige en las tres conexiones: la del backend, la
+síncrona y la del propietario. Se deja vacío mientras la base esté en la misma
+red privada que el backend.
+
+**Cómo se comprueba.** El job "Imágenes de producción" del CI construye y
+arranca las dos imágenes con `scripts/verificar-cabeceras-frontend.sh` y
+`scripts/verificar-imagen-backend.sh`, que también se pueden correr en local.
+
+## Rotación de llaves
+
+Hay dos llaves y se rotan por separado: `SECRET_KEY` firma los JWT y
+`CLAVE_FIRMA_ARCHIVOS` firma los enlaces a las fotos. El backend no arranca si
+son iguales.
+
+**Cuándo rotarlas:**
+- en cuanto una aparezca donde no debe (el repositorio, un log, un chat, una
+  captura de pantalla);
+- cuando deje el equipo alguien que tuvo acceso a las variables de Railway;
+- y, aunque no pase nada de eso, una vez por semestre.
+
+**Cómo:**
+1. Genera el valor nuevo en tu propia terminal, no en un chat ni en un
+   documento compartido:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+   ```
+2. En Railway, servicio **Backend** → **Variables**, reemplaza el valor. Los
+   servicios Cron que la usen por referencia (`${{Backend.SECRET_KEY}}`) toman
+   el valor nuevo solos; si alguno la tiene copiada, cámbiala también ahí.
+3. Railway vuelve a desplegar el backend con el valor nuevo.
+4. Comprueba que el backend arrancó (`/health`) y que puedes iniciar sesión.
+
+**Qué se invalida:**
+
+| Llave | Efecto de rotarla | A quién avisar |
+|---|---|---|
+| `SECRET_KEY` | Todas las sesiones abiertas dejan de valer: cada usuario vuelve a la pantalla de login con el aviso de sesión vencida. Las contraseñas no cambian | A todo el equipo, y fuera de la jornada de los técnicos para no cortarles una tarea a medias |
+| `CLAVE_FIRMA_ARCHIVOS` | Los enlaces a fotos ya entregados dejan de abrir; la pantalla pide uno nuevo al recargar. Nadie pierde su sesión | A nadie: no se nota |
+
+Nunca se reutiliza un valor anterior.
+
 ## Lo que esto no cubre
 
 Conviene tenerlo claro para no dar por resuelto lo que no lo está:
@@ -467,7 +551,8 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
 - **Tráfico cifrado hacia la base.** La conexión backend↔Postgres va en claro
   dentro de la red interna de Docker. Es aceptable porque esa red no sale del
   host; en un despliegue donde la base viva en otra máquina hay que activar TLS
-  (`ssl=on` con certificados) y exigir `hostssl` en `pg_hba.conf`.
+  en Postgres (`ssl=on` con certificados), exigir `hostssl` en `pg_hba.conf` y
+  definir `DB_SSL_MODE=verify-full` en el backend.
 - **Copias de seguridad.** No hay ninguna configurada. La disponibilidad de los
   datos es parte de su seguridad: un ransomware o un `docker volume rm` a
   destiempo pesan más que cualquier intrusión.
@@ -493,7 +578,11 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   cambió. Lo que queda sin cubrir es lo escrito después del último ancla, y que
   quien tenga acceso al log también lo pueda alterar: un almacenamiento
   inmutable externo cerraría las dos cosas.
-- **IP en la bitácora.** Uvicorn arranca con `--forwarded-allow-ips=*` para
-  confiar en el proxy de Railway. Si el backend se expusiera directamente, sin
-  proxy delante, un cliente podría falsear su IP con `X-Forwarded-For`; en ese
-  caso hay que limitar esa opción a la IP del proxy.
+- **IP en la bitácora en Railway.** Ahí uvicorn confía en cualquier
+  `X-Forwarded-For` (`FORWARDED_ALLOW_IPS=*`), porque Railway no publica la IP
+  de su proxy y el backend solo es alcanzable a través de él. Si algún día se
+  expusiera el backend por otro camino, hay que fijar esa variable a la IP del
+  proxy.
+- **`'unsafe-inline'` en los estilos.** React y Leaflet ponen estilos en el
+  atributo `style`, así que la CSP los permite. Los scripts no: es lo que
+  importa para el robo de sesión.
