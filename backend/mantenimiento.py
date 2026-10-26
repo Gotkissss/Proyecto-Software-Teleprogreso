@@ -6,6 +6,8 @@ Uso (desde backend/):
     python mantenimiento.py purgar               # retención de datos
     python mantenimiento.py verificar-bitacora   # integridad de la auditoría
     python mantenimiento.py alertas              # alertas operativas y de seguridad
+    python mantenimiento.py anclar               # ancla externa del final de la bitácora
+    python mantenimiento.py verificar-bitacora --ancla <id>:<hash>
 
 `purgar` borra, cada uno en su propia transacción:
 
@@ -36,7 +38,13 @@ revisa al abrir la pantalla porque es cara. Prográmalo cada 5 minutos (ver
 README). Los fallos de auditoría y la conexión privilegiada se miran desde
 el backend, que es el proceso que los conoce.
 
-Ambos terminan con código 0 si todo fue bien y 1 si algo falló.
+`anclar` (HU-S10-05) escribe en la salida el id y el hash de la última fila
+de la bitácora. La salida queda en el log del servicio, fuera de la base, que
+es lo que la hace útil: la cadena no detecta que un superusuario borre las
+últimas filas, y `verificar-bitacora --ancla <id>:<hash>` sí, porque comprueba
+que la fila anclada sigue ahí con el mismo hash. Prográmalo una vez al día.
+
+Todos terminan con código 0 si todo fue bien y 1 si algo falló.
 -----------------------------------------------------------------------------
 """
 import asyncio
@@ -117,19 +125,81 @@ def purgar() -> int:
     return 1 if fallos else 0
 
 
-def verificar_bitacora() -> int:
+def _leer_ancla(texto: str) -> tuple[int, str] | None:
+    """'<id>:<hash>' → (id, hash), o None si no tiene esa forma."""
+    id_texto, _, hash_ancla = texto.partition(":")
+    if not id_texto.isdigit() or len(hash_ancla) != 64:
+        return None
+    try:
+        int(hash_ancla, 16)
+    except ValueError:
+        return None
+    return int(id_texto), hash_ancla.lower()
+
+
+def verificar_bitacora(ancla: str | None = None) -> int:
+    leida = None
+    if ancla is not None:
+        leida = _leer_ancla(ancla)
+        if leida is None:
+            print("[bitácora] El ancla tiene que ser <id>:<hash de 64 hex>.", file=sys.stderr)
+            return 2
+
     motor = _motor()
     try:
         with motor.connect() as conexion:
             filas, id_rota, motivo = auditoria.verificar_sync(conexion)
+            estado_ancla = auditoria.comprobar_ancla_sync(conexion, *leida) if leida else None
     finally:
         motor.dispose()
+
+    codigo = 0
     if motivo is None:
         print(f"[bitácora] Cadena íntegra: {filas} filas verificadas.")
+    else:
+        descripcion = auditoria.DESCRIPCION_MOTIVO.get(motivo, "No cuadra en la fila #{id}.")
+        print(f"[bitácora] CADENA ROTA ({motivo}): {descripcion.format(id=id_rota)}", file=sys.stderr)
+        codigo = 1
+
+    if leida:
+        id_ancla = leida[0]
+        if estado_ancla == auditoria.ANCLA_PRESENTE:
+            print(f"[bitácora] Ancla #{id_ancla} presente: no falta ninguna fila hasta ahí.")
+        elif estado_ancla == auditoria.ANCLA_PURGADA:
+            print(
+                f"[bitácora] La fila #{id_ancla} ya la quitó la purga por retención; "
+                "compara con un ancla más reciente."
+            )
+        elif estado_ancla == auditoria.ANCLA_ALTERADA:
+            print(f"[bitácora] ANCLA NO CUADRA: la fila #{id_ancla} cambió de hash.", file=sys.stderr)
+            codigo = 1
+        else:
+            print(
+                f"[bitácora] FALTAN FILAS: la fila #{id_ancla} del ancla ya no existe; "
+                "borraron el final de la bitácora.",
+                file=sys.stderr,
+            )
+            codigo = 1
+    return codigo
+
+
+def anclar() -> int:
+    motor = _motor()
+    try:
+        with motor.connect() as conexion:
+            ultima = auditoria.ultima_fila_sync(conexion)
+    finally:
+        motor.dispose()
+    if ultima is None:
+        print("[ancla-bitácora] La bitácora está vacía: no hay nada que anclar.")
         return 0
-    descripcion = auditoria.DESCRIPCION_MOTIVO.get(motivo, "No cuadra en la fila #{id}.")
-    print(f"[bitácora] CADENA ROTA ({motivo}): {descripcion.format(id=id_rota)}", file=sys.stderr)
-    return 1
+    id_bitacora, hash_fila, fecha = ultima
+    print(f"[ancla-bitácora] id={id_bitacora} hash={hash_fila} fecha={fecha.isoformat()}")
+    print(
+        "[ancla-bitácora] Para comprobarla: python mantenimiento.py "
+        f"verificar-bitacora --ancla {id_bitacora}:{hash_fila}"
+    )
+    return 0
 
 
 async def _generar_alertas() -> int:
@@ -162,14 +232,32 @@ def alertas() -> int:
     return asyncio.run(_generar_alertas())
 
 
-COMANDOS = {"purgar": purgar, "verificar-bitacora": verificar_bitacora, "alertas": alertas}
+COMANDOS = {
+    "purgar": purgar,
+    "verificar-bitacora": verificar_bitacora,
+    "alertas": alertas,
+    "anclar": anclar,
+}
 
 
 def main(argumentos: list[str]) -> int:
-    if len(argumentos) != 1 or argumentos[0] not in COMANDOS:
-        print(f"Uso: python mantenimiento.py [{' | '.join(COMANDOS)}]", file=sys.stderr)
-        return 2
-    return COMANDOS[argumentos[0]]()
+    if not argumentos or argumentos[0] not in COMANDOS:
+        return _uso()
+    comando, resto = argumentos[0], argumentos[1:]
+    if comando == "verificar-bitacora" and len(resto) == 2 and resto[0] == "--ancla":
+        return verificar_bitacora(resto[1])
+    if resto:
+        return _uso()
+    return COMANDOS[comando]()
+
+
+def _uso() -> int:
+    print(
+        f"Uso: python mantenimiento.py [{' | '.join(COMANDOS)}]\n"
+        "     python mantenimiento.py verificar-bitacora --ancla <id>:<hash>",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":

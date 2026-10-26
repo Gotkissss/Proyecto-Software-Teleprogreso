@@ -448,11 +448,15 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   `APP_DB_USER`, el caso de un Railway sin configurar), la base no puede
   impedirle alterar la bitácora: queda solo la detección por la cadena. La
   pantalla de la bitácora lo avisa.
-- **Borrado del final de la bitácora.** La cadena detecta filas alteradas,
-  filas que faltan en medio y el borrado del comienzo, pero no que alguien con
-  acceso de superusuario borre las últimas filas: para eso hace falta anclar
-  el último hash fuera de la base (firma externa o almacenamiento inmutable),
-  que quedó fuera del sprint a propósito.
+- **Borrado del final de la bitácora, entre dos anclas.** La cadena detecta
+  filas alteradas, filas que faltan en medio y el borrado del comienzo, pero no
+  que alguien con acceso de superusuario borre las últimas filas. Desde
+  HU-S10-05, `python mantenimiento.py anclar` deja una vez al día el id y el
+  hash de la última fila en el log del servicio, fuera de la base, y
+  `verificar-bitacora --ancla <id>:<hash>` dice si esa fila desapareció o
+  cambió. Lo que queda sin cubrir es lo escrito después del último ancla, y que
+  quien tenga acceso al log también lo pueda alterar: un almacenamiento
+  inmutable externo cerraría las dos cosas.
 - **IP en la bitácora.** Uvicorn arranca con `--forwarded-allow-ips=*` para
   confiar en el proxy de Railway. Si el backend se expusiera directamente, sin
   proxy delante, un cliente podría falsear su IP con `X-Forwarded-For`; en ese

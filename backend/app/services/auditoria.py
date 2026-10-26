@@ -323,3 +323,45 @@ def purgar_sync(conexion, retencion_dias: int, request_id: str | None) -> tuple[
 def verificar_sync(conexion) -> tuple[int, int | None, str | None]:
     filas, id_rota, motivo = conexion.execute(SQL_VERIFICAR).one()
     return filas, id_rota, motivo
+
+
+# --- Ancla externa del final de la cadena (HU-S10-05, tarea 4) -----------------
+# La cadena detecta filas alteradas, que faltan en medio y el comienzo borrado,
+# pero no que un superusuario borre las ÚLTIMAS: la cadena que queda sigue
+# cuadrando. `mantenimiento.py anclar` deja el id y el hash de la última fila
+# fuera de la base (en el log), y `verificar-bitacora --ancla` comprueba que
+# esa fila sigue ahí: si falta, borraron el final.
+
+ANCLA_PRESENTE = "presente"
+ANCLA_ALTERADA = "alterada"
+ANCLA_PURGADA = "purgada"
+ANCLA_FALTA = "falta"
+
+
+def ultima_fila_sync(conexion) -> tuple[int, str, datetime] | None:
+    """(id, hash, fecha_hora) de la última fila de la bitácora, o None si está vacía."""
+    fila = conexion.execute(
+        select(BitacoraAuditoria.id_bitacora, BitacoraAuditoria.hash, BitacoraAuditoria.fecha_hora)
+        .order_by(BitacoraAuditoria.id_bitacora.desc())
+        .limit(1)
+    ).first()
+    return tuple(fila) if fila else None
+
+
+def comprobar_ancla_sync(conexion, id_bitacora: int, hash_esperado: str) -> str:
+    """
+    ¿Sigue en la bitácora la fila anclada, con el mismo hash?
+
+    Devuelve ANCLA_PRESENTE, ANCLA_ALTERADA (la fila está pero su hash no es
+    el anclado), ANCLA_PURGADA (la quitó la purga por retención: no es un
+    ataque, hace falta un ancla más reciente) o ANCLA_FALTA (la borraron).
+    """
+    hash_actual = conexion.execute(
+        select(BitacoraAuditoria.hash).where(BitacoraAuditoria.id_bitacora == id_bitacora)
+    ).scalar_one_or_none()
+    if hash_actual is not None:
+        return ANCLA_PRESENTE if hash_actual == hash_esperado else ANCLA_ALTERADA
+    purgada_hasta = conexion.execute(select(func.max(BitacoraAncla.hasta_id_bitacora))).scalar()
+    if purgada_hasta is not None and id_bitacora <= purgada_hasta:
+        return ANCLA_PURGADA
+    return ANCLA_FALTA

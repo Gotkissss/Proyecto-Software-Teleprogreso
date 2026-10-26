@@ -175,6 +175,8 @@ Comandos (desde `backend/`, o con `docker compose run --rm migraciones ...`):
 python mantenimiento.py purgar               # retención: tokens, GPS y bitácora
 python mantenimiento.py verificar-bitacora   # código 1 si la cadena está rota
 python mantenimiento.py alertas              # alertas operativas y de seguridad
+python mantenimiento.py anclar               # id y hash de la última fila, al log
+python mantenimiento.py verificar-bitacora --ancla <id>:<hash>
 ```
 
 `purgar` corre en cada arranque. Para que la retención no dependa de los
@@ -198,6 +200,14 @@ rota). Prográmalo cada 5 minutos:
 
 Las alertas de seguridad solo las ve el admin, en la pestaña **Seguridad** de
 Alertas.
+
+`anclar` deja en el log el id y el hash de la última fila de la bitácora. Ese
+log vive fuera de la base, así que sirve para notar lo que la cadena no ve:
+que un superusuario borre las últimas filas. Prográmalo una vez al día
+(Railway: *Cron Schedule* `0 10 * * *` y *Start Command*
+`python mantenimiento.py anclar`) y, para comprobar, copia la línea que deja:
+`python mantenimiento.py verificar-bitacora --ancla <id>:<hash>` termina con 1
+si esa fila desapareció o cambió.
 
 Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
 defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
