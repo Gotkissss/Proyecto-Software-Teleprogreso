@@ -24,6 +24,7 @@ import TablaHerramientas from '../components/inventario/TablaHerramientas'
 import TablaMateriales from '../components/inventario/TablaMateriales'
 import ModalNuevoActivo from '../components/inventario/ModalNuevoActivo'
 import ModalEditarActivo from '../components/inventario/ModalEditarActivo'
+import ModalMovimientosMaterial from '../components/inventario/ModalMovimientosMaterial'
 import ModalEliminarActivo from '../components/inventario/ModalEliminarActivo'
 import ModalAsignarTecnico from '../components/inventario/ModalAsignarTecnico'
 import ModalAsignarHerramientaACarro from '../components/inventario/ModalAsignarHerramientaACarro'
@@ -149,6 +150,8 @@ export default function InventarioPage() {
   const [modalNuevo,              setModalNuevo]              = useState(null)
   const [modalEditar,             setModalEditar]             = useState(null)
   const [modalEliminar,           setModalEliminar]           = useState(null)
+  // HU-S10-07: la historia de stock de un material.
+  const [modalMovimientos,        setModalMovimientos]        = useState(null)
   const [modalAsignarTecnico,     setModalAsignarTecnico]     = useState(null)
   const [modalAsignarHerramienta, setModalAsignarHerramienta] = useState(null)
 
@@ -368,6 +371,7 @@ export default function InventarioPage() {
           onSort={handleSort}
           onEditar={m => setModalEditar(m)}
           onEliminar={m => setModalEliminar(m)}
+          onVerMovimientos={m => setModalMovimientos(m)}
           alExpirar={renovarEnlaces}
         />
       )}
@@ -378,6 +382,14 @@ export default function InventarioPage() {
           tipoInicial={modalNuevo}
           onCerrar={() => setModalNuevo(null)}
           onCreado={handleCreado}
+        />
+      )}
+
+      {modalMovimientos && (
+        <ModalMovimientosMaterial
+          material={modalMovimientos}
+          onCerrar={() => setModalMovimientos(null)}
+          onMovido={handleEditado}
         />
       )}
 

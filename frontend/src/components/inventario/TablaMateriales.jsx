@@ -1,7 +1,7 @@
 import { urlArchivo } from '../../api/client'
 import Badge from '../ui/Badge'
 import { MaterialMiniatura } from './MiniaturaActivo'
-import { IconEdit, IconTrash } from './InventarioIcons'
+import { IconEdit, IconHistorial, IconTrash } from './InventarioIcons'
 import TablaFiltrable from './TablaFiltrable'
 import styles from './TablaMateriales.module.css'
 
@@ -19,6 +19,7 @@ export default function TablaMateriales({
   onSort,
   onEditar,
   onEliminar,
+  onVerMovimientos,
   alExpirar,
 }) {
   const columns = [
@@ -87,6 +88,11 @@ export default function TablaMateriales({
       align: 'right',
       render: m => (
         <div className={styles.actionBtns}>
+          {/* HU-S10-07: la historia de stock. Va primero porque es la acción
+              que se consulta a diario; editar y eliminar son excepcionales. */}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onVerMovimientos(m)} title="Ver movimientos de stock" aria-label={`Movimientos de ${m.nombre_activo}`}>
+            <IconHistorial />
+          </button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEditar(m)} title="Editar material" aria-label={`Editar ${m.nombre_activo}`}>
             <IconEdit />
           </button>

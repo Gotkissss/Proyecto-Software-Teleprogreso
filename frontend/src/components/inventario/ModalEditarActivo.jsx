@@ -17,7 +17,6 @@ export default function ModalEditarActivo({ activo, onCerrar, onEditado }) {
     estado_vehiculo:     activo?.estado_vehiculo     ?? 'disponible',
     tipo_herramienta:    activo?.tipo_herramienta    ?? '',
     estado:              activo?.estado              ?? 'disponible',
-    cantidad_disponible: activo?.cantidad_disponible ?? 0,
     stock_minimo:        activo?.stock_minimo        ?? 0,
     unidad_medida:       activo?.unidad_medida       ?? '',
     tipo_material:       activo?.tipo_material       ?? '',
@@ -63,7 +62,9 @@ export default function ModalEditarActivo({ activo, onCerrar, onEditado }) {
       } else {
         body = {
           ...body,
-          cantidad_disponible: Number(form.cantidad_disponible) || 0,
+          // `cantidad_disponible` ya no viaja aquí (HU-S10-07): el stock se
+          // mueve con un movimiento del kardex, que obliga a decir por qué.
+          // El backend tampoco lo acepta en este PATCH.
           stock_minimo:        Number(form.stock_minimo) || 0,
           unidad_medida:       form.unidad_medida.trim() || undefined,
           tipo_material:       form.tipo_material.trim() || undefined,
@@ -220,18 +221,17 @@ export default function ModalEditarActivo({ activo, onCerrar, onEditado }) {
 
         {tipo === 'material' && (
           <>
+            {/* La cantidad disponible ya no se edita aquí (HU-S10-07): era el
+                camino por el que el stock cambiaba sin dejar rastro. Se mueve
+                desde "Movimientos", registrando una entrada o un ajuste con su
+                motivo. */}
+            <p className={styles.nota}>
+              El stock ({activo.cantidad_disponible?.toLocaleString() ?? 0}
+              {activo.unidad_medida ? ` ${activo.unidad_medida}` : ''}) se
+              cambia desde <strong>Movimientos</strong>, registrando una
+              entrada o un ajuste con su motivo.
+            </p>
             <div className={styles.grid}>
-              <div className={styles.field}>
-                <label className={styles.label}>Cantidad disponible</label>
-                <input
-                  type="number"
-                  min="0"
-                  className={styles.input}
-                  value={form.cantidad_disponible}
-                  onChange={e => set('cantidad_disponible', e.target.value)}
-                  disabled={guardando}
-                />
-              </div>
               <div className={styles.field}>
                 <label className={styles.label}>Stock mínimo</label>
                 <input

@@ -13,6 +13,11 @@
  * HU-5: al cerrar se envía también la posición del técnico, para que el
  * lugar del cierre quede en su recorrido. `posicionRespaldo` es la última
  * posición conocida, por si la lectura nueva del GPS no llega a tiempo.
+ *
+ * HU-S10-07: lleva además el paso "materiales usados", opcional. Lo que se
+ * anote ahí se descuenta del stock en la misma transacción que cierra la
+ * tarea; si el almacén no alcanza, el backend responde 409 y la tarea se queda
+ * abierta para que el técnico corrija la cantidad.
  * ---------------------------------------------------------------------------
  */
 
@@ -27,6 +32,10 @@ import {
   finalizarTareaConEvidencia,
   validarFoto,
 } from '../../api/incidenciaService'
+import PasoMaterialesUsados, {
+  validarMateriales,
+} from './PasoMaterialesUsados'
+import { getMateriales } from '../../api/inventarioService'
 import { obtenerPosicionActual } from '../../utils/posicionActual'
 import {
   borrarBorrador,
@@ -60,6 +69,11 @@ export default function ModalFinalizarTarea({
   const inputFoto = useRef(null)
 
   const [descripcion, setDescripcion] = useState('')
+  const [materiales, setMateriales] = useState([])
+  // Catálogo del inventario, para poder avisar de "solo hay 3" antes de gastar
+  // una petición que el backend va a rechazar con 409.
+  const [catalogo, setCatalogo] = useState([])
+  const [erroresMateriales, setErroresMateriales] = useState({})
   const [foto, setFoto] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [errores, setErrores] = useState({})
@@ -76,11 +90,30 @@ export default function ModalFinalizarTarea({
 
     const borrador = leerBorrador(servicio?.id_servicio)
     setDescripcion(borrador?.descripcion ?? '')
+    setMateriales(borrador?.materiales ?? [])
     setRecuperado(borrador)
     setFoto(null)
     setErrores({})
+    setErroresMateriales({})
     setGuardando(false)
   }, [open, servicio?.id_servicio])
+
+  // El catálogo se pide una vez por apertura. Si falla no se bloquea nada: el
+  // paso de materiales es opcional y su propio componente lo avisa.
+  useEffect(() => {
+    if (!open) return
+    let vivo = true
+    getMateriales()
+      .then((lista) => {
+        if (vivo) setCatalogo(lista)
+      })
+      .catch(() => {
+        if (vivo) setCatalogo([])
+      })
+    return () => {
+      vivo = false
+    }
+  }, [open])
 
   // Se guarda en cada cambio y no al cerrar: si lo que se lleva la sesión por
   // delante es la pestaña entera, no hay ningún "al cerrar" que ejecutar.
@@ -89,8 +122,9 @@ export default function ModalFinalizarTarea({
     guardarBorrador(servicio.id_servicio, {
       descripcion,
       nombreFoto: foto?.name ?? null,
+      materiales,
     })
-  }, [open, servicio?.id_servicio, descripcion, foto])
+  }, [open, servicio?.id_servicio, descripcion, foto, materiales])
 
   // La preview usa una URL de objeto que hay que revocar para no filtrar
   // memoria cada vez que el técnico cambia de foto.
@@ -146,8 +180,17 @@ export default function ModalFinalizarTarea({
     const errorFoto = validarFoto(foto)
     if (errorFoto) nuevos.foto = errorFoto
 
+    // Las líneas de material se validan aquí y no en su componente para que
+    // "Finalizar" no envíe nada con una línea a medias: el backend rechazaría
+    // el cierre entero y el técnico perdería el viaje.
+    const { errores: erroresLineas } = validarMateriales(materiales, catalogo)
+    setErroresMateriales(erroresLineas)
+
     setErrores(nuevos)
-    return Object.keys(nuevos).length === 0
+    return (
+      Object.keys(nuevos).length === 0
+      && Object.keys(erroresLineas).length === 0
+    )
   }
 
   const handleGuardar = async () => {
@@ -158,10 +201,12 @@ export default function ModalFinalizarTarea({
       // HU-5: nunca bloquea el cierre; sin GPS llega null y la tarea se
       // cierra igual, solo que sin punto en el recorrido.
       const posicion = await obtenerPosicionActual({ respaldo: posicionRespaldo })
+      const { limpias } = validarMateriales(materiales, catalogo)
       const incidencia = await finalizarTareaConEvidencia(servicio.id_servicio, {
         descripcion: descripcion.trim(),
         foto,
         posicion,
+        materiales: limpias,
       })
       // Enviado: el borrador ya no sirve y reofrecerlo luego sería confuso.
       borrarBorrador(servicio.id_servicio)
@@ -291,6 +336,18 @@ export default function ModalFinalizarTarea({
         disabled={guardando}
       />
       {errores.foto && <p className={styles.errorCampo}>{errores.foto}</p>}
+
+      {/* ── Materiales usados (opcional) ── */}
+      <label className={styles.label}>Materiales usados</label>
+      <PasoMaterialesUsados
+        lineas={materiales}
+        onChange={(nuevas) => {
+          setMateriales(nuevas)
+          setErroresMateriales({})
+        }}
+        deshabilitado={guardando}
+        errores={erroresMateriales}
+      />
 
       <ModalActions>
         <button className={styles.cancelBtn} onClick={onClose} disabled={guardando}>

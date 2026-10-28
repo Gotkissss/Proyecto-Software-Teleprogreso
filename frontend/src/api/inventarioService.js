@@ -34,6 +34,45 @@ export async function getMaterialesBajoStock() {
   return Array.isArray(data) ? data : []
 }
 
+/* ─── Kardex de materiales (HU-S10-07) ───────────────────────────────────── */
+
+/**
+ * Historia de stock de un material, lo más reciente primero.
+ *
+ * Es la respuesta a "¿a dónde se fueron las 40 rosetas?", que antes no se
+ * podía contestar: `cantidad_disponible` solo guarda el último valor escrito.
+ *
+ * @param {number} id
+ * @returns {Promise<{id_material:number, nombre_material:string,
+ *   cantidad_disponible:number, stock_minimo:number, total:number,
+ *   movimientos:Array}>}
+ */
+export async function getMovimientosMaterial(id) {
+  const { data } = await apiClient.get(`/activos/materiales/${id}/movimientos`)
+  return {
+    ...data,
+    movimientos: Array.isArray(data?.movimientos) ? data.movimientos : [],
+  }
+}
+
+/**
+ * Registra una entrada o un ajuste de stock.
+ *
+ * El consumo no entra por aquí: lo registra el cierre de la tarea, porque un
+ * consumo sin trabajo que lo explique es el dato que esta historia viene a
+ * arreglar.
+ *
+ * @param {number} id
+ * @param {{tipo:'entrada'|'ajuste', cantidad:number, motivo?:string}} body
+ */
+export async function crearMovimientoMaterial(id, body) {
+  const { data } = await apiClient.post(
+    `/activos/materiales/${id}/movimientos`,
+    body,
+  )
+  return data
+}
+
 /* ─── CRUD ───────────────────────────────────────────────────────────────── */
 
 export async function crearActivo(body) {

@@ -15,6 +15,10 @@
  *     localStorage (son megas, y el cupo del navegador anda por los 5 MB), así
  *     que lo único que se puede hacer es recordarle cuál había elegido para
  *     que la vuelva a seleccionar sin dudar si era esa.
+ *   · Los materiales usados (HU-S10-07). Son unas pocas líneas de
+ *     material y cantidad que el técnico tiene que recordar de memoria si se
+ *     pierden: cuántos metros de cable y cuántas rosetas gastó en una casa no
+ *     se reconstruye al día siguiente.
  *
  * Todo pasa por try/catch: en navegación privada o con el almacenamiento
  * bloqueado, `localStorage` lanza al escribir. Perder el borrador es molesto;
@@ -33,13 +37,19 @@ export const claveBorrador = (idTarea) => `${PREFIJO}${idTarea}`
  * Guarda (o borra, si no queda nada que guardar) el borrador de una tarea.
  *
  * @param {number|string} idTarea
- * @param {{descripcion?: string, nombreFoto?: string|null}} contenido
+ * @param {{descripcion?: string, nombreFoto?: string|null,
+ *   materiales?: Array<{id_material:number, cantidad:number}>}} contenido
  */
-export function guardarBorrador(idTarea, { descripcion = '', nombreFoto = null } = {}) {
+export function guardarBorrador(
+  idTarea,
+  { descripcion = '', nombreFoto = null, materiales = [] } = {}
+) {
   if (idTarea === undefined || idTarea === null) return
 
+  const lineas = Array.isArray(materiales) ? materiales : []
+
   // Un borrador vacío es ruido: ocupa cupo y al volver no ofrece nada.
-  if (!descripcion.trim() && !nombreFoto) {
+  if (!descripcion.trim() && !nombreFoto && lineas.length === 0) {
     borrarBorrador(idTarea)
     return
   }
@@ -47,7 +57,12 @@ export function guardarBorrador(idTarea, { descripcion = '', nombreFoto = null }
   try {
     localStorage.setItem(
       claveBorrador(idTarea),
-      JSON.stringify({ descripcion, nombreFoto, guardadoEn: Date.now() })
+      JSON.stringify({
+        descripcion,
+        nombreFoto,
+        materiales: lineas,
+        guardadoEn: Date.now(),
+      })
     )
   } catch {
     // Sin espacio o sin permiso de almacenamiento: se sigue sin borrador.
@@ -82,6 +97,9 @@ export function leerBorrador(idTarea, ahora = Date.now()) {
     return {
       descripcion: typeof borrador.descripcion === 'string' ? borrador.descripcion : '',
       nombreFoto: borrador.nombreFoto ?? null,
+      // Un borrador escrito antes de la HU-S10-07 no trae el campo; `[]` deja
+      // el paso de materiales vacío en vez de romper el modal.
+      materiales: Array.isArray(borrador.materiales) ? borrador.materiales : [],
       guardadoEn: borrador.guardadoEn ?? null,
     }
   } catch {

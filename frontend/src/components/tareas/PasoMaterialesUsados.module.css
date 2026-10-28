@@ -1,0 +1,128 @@
+/**
+ * components/tareas/PasoMaterialesUsados.module.css
+ * ---------------------------------------------------------------------------
+ * Pensado para el teléfono del técnico, que es donde se usa: el selector de
+ * material ocupa el ancho y la cantidad queda a su lado, lo bastante grande
+ * para teclearla de pie y con una mano.
+ * ---------------------------------------------------------------------------
+ */
+
+.paso {
+  margin-top: 4px;
+}
+
+.ayuda {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.aviso {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff8e6;
+  border: 1px solid #f0d9a0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #6b4e00;
+}
+
+.linea {
+  display: grid;
+  grid-template-columns: 1fr 84px 36px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* El error de la línea ocupa las tres columnas, debajo de sus campos. */
+.errorLinea {
+  grid-column: 1 / -1;
+  margin: -2px 0 2px;
+  font-size: 0.78rem;
+  color: var(--color-danger, #c0392b);
+}
+
+.select,
+.cantidad {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-borde, #cbd2d9);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-texto, #1f2933);
+}
+
+.select:focus,
+.cantidad:focus {
+  outline: none;
+  border-color: var(--color-primario, #1f6feb);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
+}
+
+.select:disabled,
+.cantidad:disabled {
+  background: #f4f6f8;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.campoError,
+.campoError:focus {
+  border-color: var(--color-danger, #c0392b);
+  box-shadow: none;
+}
+
+.quitar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--color-borde, #cbd2d9);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-texto-suave, #52606d);
+  cursor: pointer;
+}
+
+.quitar:hover:not(:disabled) {
+  border-color: var(--color-danger, #c0392b);
+  color: var(--color-danger, #c0392b);
+}
+
+.quitar svg {
+  width: 16px;
+  height: 16px;
+}
+
+.agregar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-borde, #cbd2d9);
+  border-radius: 8px;
+  background: none;
+  font-size: 0.85rem;
+  color: var(--color-primario, #1f6feb);
+  cursor: pointer;
+}
+
+.agregar:hover:not(:disabled) {
+  border-color: var(--color-primario, #1f6feb);
+  background: rgba(31, 111, 235, 0.06);
+}
+
+.agregar:disabled {
+  color: var(--color-texto-suave, #52606d);
+  cursor: default;
+}
+
+.agregar svg {
+  width: 14px;
+  height: 14px;
+}
