@@ -366,6 +366,112 @@ al día (ver README):
 
 Cada purga deja su fila en la bitácora con rol `sistema`.
 
+## Modelo de amenazas (STRIDE)
+
+Las secciones anteriores cuentan *qué* defensa hay en cada capa. Esta cuenta lo
+otro: por cada flujo del sistema, qué podría intentar alguien y qué lo frena.
+Se hace por flujos y no por componentes porque un ataque no entra «por el
+backend», entra por una cosa que el sistema deja hacer.
+
+STRIDE son las seis categorías clásicas: **S**uplantación, **T**ampering
+(alteración), **R**epudio, **I**nformation disclosure (fuga), **D**enegación de
+servicio y **E**levación de privilegios. Donde una casilla queda sin cubrir, se
+dice: eso es un riesgo residual, no un olvido (ver «Lo que esto no cubre»).
+
+### Flujo 1 — Iniciar sesión (`POST /auth/login`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Suplantación | Probar contraseñas de una lista contra correos corporativos | Tres frenos independientes: por (IP, correo), por cuenta sola —para el ataque repartido entre muchas IPs— y por IP contando todos los intentos, no solo los fallidos (`core/rate_limit.py`). bcrypt a 12 rondas hace que cada prueba cueste ~250 ms |
+| Suplantación | Averiguar qué correos existen para dirigir el ataque | Mismo mensaje y **mismo tiempo** en los dos casos: cuando el correo no existe se verifica un hash señuelo (`consumir_tiempo_de_hash`) |
+| Suplantación | Entrar con una contraseña que viene en el manual | Las de demostración ya no están en el repositorio ni en el log de arranque, y en producción el seed se niega a usar las del código (HU-S10-01) |
+| Alteración | Falsificar un JWT | HS256 con lista blanca de un solo algoritmo y `require` de `exp` y `sub`: ni `alg: none` ni cambio a RS256. La `SECRET_KEY` se valida al arrancar y el proceso aborta si es adivinable |
+| Repudio | Negar los intentos | Cada fallo, cada bloqueo y cada entrada deja fila en la bitácora con IP y `request_id` |
+| Fuga | Leer la respuesta para deducir el estado de la cuenta | «Correo o contraseña incorrectos» para todo; la cuenta inactiva sí se distingue, pero solo después de acertar la contraseña |
+| Denegación | Gastar la CPU del servidor a base de verificaciones bcrypt | El tercer freno (30 peticiones por minuto y por IP) existe justamente para esto; bcrypt corre en un hilo aparte para no dejar sordo al bucle de eventos |
+| Elevación | Pedir un token con un rol que no es el suyo | El rol sale del empleado en la base, nunca del cuerpo de la petición |
+
+### Flujo 2 — Asignar y editar una tarea (`POST`/`PATCH /tareas`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Elevación | Un técnico asignándose o reasignando trabajo | `require_supervisor` en los dos endpoints; un técnico solo lee lo suyo |
+| Alteración | Cerrar una tarea sin haberla hecho | Ningún camino completa sin evidencia: los tres (`PATCH /tareas/{id}`, `/estado` y `/finalizar`) pasan por `exigir_evidencia` y responden 409 (HU-S10-08) |
+| Alteración | Dejar un estado o una prioridad fuera del catálogo | Los schemas lo rechazan, y desde la migración `0013` también la base, que es lo que cubre al seed, a un script y a la consola |
+| Repudio | Negar un cambio | El hook del ORM escribe el antes/después de cada columna en la misma transacción |
+| Denegación | Saturar a un técnico de tareas | Límite de tareas activas por técnico, comprobado también al reabrir |
+| Fuga | Ver tareas de otros técnicos | `/tareas` filtra por el actor cuando el rol es técnico |
+
+### Flujo 3 — Cerrar una tarea con evidencia (`/incidencias` + `/finalizar`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Alteración | Subir un HTML o un ejecutable renombrado a `.jpg` | El formato se lee de los primeros bytes del archivo, no de la extensión (`services/uploads.formato_real`) |
+| Fuga | Abrir la foto de la casa de un cliente con el enlace suelto | `/static` se retiró: los archivos se sirven por `/archivos/...` con URL firmada de 10 minutos, y la firma solo se emite si el actor pasa la regla de acceso (HU-S10-02) |
+| Fuga | Adivinar el nombre del archivo | 128 bits al azar en el nombre de las subidas nuevas |
+| Elevación | Cerrar la tarea de otro técnico | Solo el técnico asignado, y con la jornada abierta |
+| Denegación | Llenar el disco con subidas | Tope de cuerpo contado byte a byte (sirve también sin `Content-Length`) y lectura por bloques, más 5 MB por imagen |
+| Alteración | Descontar material que no se usó, o no descontar el que sí | El consumo va en la misma transacción que cierra la tarea y deja su movimiento con tarea, actor y saldo (HU-S10-07) |
+
+### Flujo 4 — Reportar ubicación (`POST /ubicaciones`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Suplantación | Sembrar posiciones a nombre de un compañero para fabricarle una coartada | El dueño del punto sale del token, nunca del cuerpo |
+| Alteración | Mandar una coordenada imposible | Rangos validados en el schema; sin ellos PostGIS guardaría cualquier cosa |
+| Alteración | Falsear la IP de origen para esquivar los límites | `request.client.host` y no la cabecera cruda; uvicorn solo traduce `X-Forwarded-For` desde el proxy que diga `FORWARDED_ALLOW_IPS` |
+| Fuga | Leer dónde estuvo un técnico | Las lecturas del recorrido son de admin, supervisor y gerente, y **quién consulta** queda en la bitácora |
+| Denegación | Inflar `ubicacion_empleado`, que crece sin tope | Tope por empleado en el servidor y no solo en el cliente (HU-S10-08), y purga a 90 días |
+| Fuga | Sacar el histórico de meses atrás | Retención de 90 días (`RETENCION_UBICACIONES_DIAS`) |
+
+### Flujo 5 — Reportes del gerente (`GET /reportes/*`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Elevación | Descargar un reporte sin el rol para verlo | El mismo rol para ver y para exportar: no hay una puerta de descarga más floja que la pantalla |
+| Alteración | Meter una fórmula en el Excel del gerente a través del título de una tarea | Todo texto que empiece por `=`, `+`, `-`, `@`, tabulador o retorno se escribe precedido de `'` (HU-S10-04) |
+| Fuga | Sacar la base entera en un XLSX | Tope de filas en la exportación de la bitácora; por encima se pide acotar el filtro |
+| Repudio | Negar que descargó los datos de alguien | Cada exportación queda en la bitácora con sus filtros |
+
+### Flujo 6 — Bitácora de auditoría
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Alteración | Editar o borrar una fila para tapar algo | `UPDATE` prohibido siempre; `DELETE` solo dentro de la función de purga y siendo el propietario; `TRUNCATE` prohibido incluso para el dueño |
+| Alteración | Reescribir la cadena de hashes | El hash lo calcula la base en el trigger, no el backend: ni controlando el backend se puede fabricar uno |
+| Alteración | Que el backend desactive el trigger | El rol de la aplicación no es el propietario de la tabla (`aplicar_rol_aplicacion.py`), y en producción el arranque se niega si lo fuera |
+| Alteración | Borrar las últimas filas con el superusuario | El ancla externa: `mantenimiento.py anclar` deja id y hash en el log del servicio, fuera de la base, y `verificar-bitacora --ancla` lo detecta |
+| Repudio | Actuar sin dejar rastro | `test_cobertura_auditoria.py` falla si aparece un endpoint que muta datos sin su caso en el catálogo |
+| Fuga | Leer la bitácora para saber qué se vigila | Solo admin; y la bitácora nunca copia hashes de contraseña ni coordenadas |
+
+## Matriz OWASP Top 10:2025
+
+Una fila por categoría, con **dónde está el control** y **qué prueba lo
+vigila**. La vigila a su vez `backend/tests/test_matriz_owasp.py`, que lee esta
+tabla y falla si alguno de los archivos que nombra deja de existir: una matriz
+que envejece en silencio es peor que no tenerla, porque se presenta como
+evidencia de algo que ya no se cumple.
+
+| Categoría | Control principal | Archivo | Prueba |
+|---|---|---|---|
+| A01 Control de acceso roto | Rol exigido en los 68 endpoints de dominio, técnico limitado a lo suyo, archivos subidos solo con URL firmada, 403 que no enumera roles | `backend/app/core/deps.py` | `backend/tests/test_permisos_roles.py` |
+| A02 Configuración incorrecta | `SECRET_KEY` validada al arrancar, docs apagadas en producción, CORS sin comodín, contenedores sin root, cabeceras en la página | `backend/app/core/config.py` | `backend/tests/test_arranque_produccion.py` |
+| A03 Cadena de suministro | Auditoría que bloquea el PR, Dependabot, Actions por SHA, imágenes por digest, detección de secretos | `.github/workflows/ci.yml` | `backend/tests/test_cadena_suministro.py` |
+| A04 Fallas criptográficas | bcrypt a 12 rondas, HS256 con llave validada, SCRAM en Postgres, HSTS, enlaces de archivo firmados con llave propia | `backend/app/core/security.py` | `backend/tests/test_security.py` |
+| A05 Inyección | ORM parametrizado en todo el backend, React escapa por omisión, fórmulas de Excel neutralizadas, longitudes acotadas | `backend/app/services/exportacion_reportes.py` | `backend/tests/test_formulas_excel.py` |
+| A06 Diseño inseguro | Reglas de negocio centralizadas y aplicadas por todos los caminos, jornada obligatoria, kardex como único camino al stock | `backend/app/core/reglas.py` | `backend/tests/test_reglas_no_se_saltan.py` |
+| A07 Fallas de autenticación | Tres frenos de fuerza bruta, anti-enumeración, revocación por `jti`, `version_token`, política única de contraseña, cambio obligatorio | `backend/app/routers/auth.py` | `backend/tests/test_politica_contrasena.py` |
+| A08 Integridad de software y datos | Cadena de hashes calculada por la base, ancla externa, firma de imágenes por sus bytes, `CHECK` de catálogo | `backend/alembic/versions/0010_bitacora_inmutable.py` | `backend/tests/integracion/test_integridad_catalogos.py` |
+| A09 Registro y alertas | Bitácora con actor, IP y `request_id`; alertas de seguridad sobre patrones de la propia bitácora; generación programada | `backend/app/services/alertas_seguridad.py` | `backend/tests/integracion/test_alertas_seguridad.py` |
+| A10 Condiciones excepcionales | 500 con `request_id` y sin stack, errores de base como 409/422, tope de cuerpo real, `ErrorBoundary` en el frontend | `backend/app/core/exceptions.py` | `backend/tests/test_error_interno.py` |
+
+Sobre **SSRF**, que el Top 10:2025 metió dentro de A01: el backend **no hace
+ninguna petición saliente**. Nominatim lo llama el navegador, no el servidor,
+así que hoy no hay ningún sitio donde una URL del usuario se convierta en una
+petición del servidor. Queda escrito para que, si algún día se añade una
+integración que sí salga a internet, se sepa que esa casilla estaba vacía por
+construcción y no por haberla cubierto.
+
 ## Escaneo dinámico (T2)
 
 Todo lo demás de este documento se comprueba mirando el código: las pruebas, la
