@@ -184,8 +184,9 @@ queda en `bitacora_auditoria` (migraciones `0009` y `0010`):
   los `insert/update/delete` masivos. Aparte se registran el login fallido o
   bloqueado, los bloqueos por exceso de peticiones, el logout, todo 403 y las
   lecturas de datos sensibles (reportes, recorridos y posiciones GPS, personal,
-  asistencia, evidencias y la propia bitácora; una lectura idéntica repetida se
-  registra una vez cada 5 minutos). Cada fila lleva actor, rol, IP y
+  asistencia, evidencias y la propia bitácora; una lectura repetida del mismo
+  dato por el mismo actor se registra una vez cada 5 minutos — ver «Una
+  consulta, una fila»). Cada fila lleva actor, rol, IP y
   `request_id`, el mismo que se devuelve en la cabecera `X-Request-ID`.
 - **Sin secretos.** `hash_contrasena` y `version_token` quedan como `***`. Los
   puntos GPS se registran resumidos (cuántos e ids), sin coordenadas.
@@ -471,6 +472,128 @@ endpoints son `require_supervisor`— así que cada clic terminaba en un 403: lo
 que estaba mal era prometer en pantalla algo que la API iba a rechazar. La
 tabla de acciones de `frontend/src/utils/permisos.js` lo decide ahora, y el
 backend sigue siendo quien manda.
+
+## Lo que corrigió la revisión RTF-01
+
+Una revisión externa (informe RTF-01) recorrió el sistema y reportó 32
+hallazgos. La mayoría son de interfaz y se arreglaron donde tocaba; aquí se
+documentan los que afectan a **lo que la base llega a decir** o a **lo que la
+bitácora puede probar**, que son los que pertenecen a este documento.
+
+### La IP del cliente
+
+La columna IP de la bitácora guardaba una dirección distinta en cada petición
+y ninguna era la del cliente: todas eran de la red interna de Railway. La
+causa es que el `startCommand` del despliegue arranca uvicorn **sin**
+`--proxy-headers`, así que `request.client.host` es el peer TCP —el proxy— y
+no quien hizo la petición. Una bitácora con la IP equivocada no sirve para lo
+único que se le pide: decir desde dónde se hizo algo.
+
+`ip_cliente` (`backend/app/core/rate_limit.py`) ya no depende de cómo se haya
+arrancado el servidor. Cuando el peer está en una red declarada en
+`PROXIES_CONFIABLES` lee `X-Forwarded-For` por su cuenta y toma **la última
+dirección que no sea de un proxy**, recorriendo la cabecera de derecha a
+izquierda. Esa es la que escribió el proxy y es la única que el cliente no
+puede falsear: todo lo que él añada queda a la izquierda. Fuera de esas redes
+no se cree la cabecera y se usa el peer, que es lo correcto en local.
+
+`PROXIES_CONFIABLES` se rellena sola en Railway (redes privadas y CGNAT, donde
+el backend solo es alcanzable por su proxy). En otro despliegue hay que
+declarar la red del proxy; vacía, no se confía en nadie.
+
+### Una consulta, una fila
+
+Una sola consulta de la pantalla de Reportes dejaba cinco filas «Consultó
+reporte» en el mismo segundo, porque la pantalla hace cinco llamadas en
+paralelo y la ventana de deduplicación se contaba por ruta y filtros. Una
+bitácora que se llena de ruido se deja de leer, y entonces no sirve de nada.
+
+La clave de la ventana pasó a ser **actor, entidad e id mirado**
+(`backend/app/core/deps.py`). Se eligió así y no «una fila por pantalla»
+porque lo que hay que poder auditar no es qué pantalla se abrió, sino **a
+quién se miró**: dos consultas del historial GPS de dos técnicos distintos
+siguen dejando dos filas, que es justo el dato que importa.
+
+### El login deja su propio evento
+
+Un inicio de sesión aparecía en la bitácora como «Modificó empleado #n»,
+porque lo único que escribía era `ultimo_acceso` y el hook del ORM lo
+registraba como lo que era: un UPDATE. Un login y una edición de ficha no se
+podían distinguir. Ahora `POST /auth/login` anota su propio evento `login`.
+
+### El correo de un empleado es de la empresa
+
+La lista de colaboradores tenía cuentas `@gmail.com` mezcladas con las
+corporativas. Un correo personal no es un detalle estético: no se puede dar de
+baja cuando la persona deja la empresa, y es el canal por el que llega el
+aviso de restablecimiento de contraseña — quien conserve esa cuenta conserva
+la puerta.
+
+`validar_correo_de_empleado` comprueba el dominio al crear un empleado y al
+cambiarle el correo. Los dominios admitidos están en
+`DOMINIOS_CORREO_EMPLEADO` (por omisión `teleprogreso.com`), separados por
+coma, y un subdominio de uno de ellos también vale. **Vacío = sin
+restricción**, para quien despliegue esto con otro dominio o sin dominio
+propio. Solo se comprueba al crear y al cambiar el correo, así que las cuentas
+que ya existen se siguen pudiendo editar en lo demás.
+
+### Una persona, un registro
+
+«Luis Fonzi» estaba registrado dos veces, como técnico y como supervisor. Un
+duplicado parte en dos el historial de una persona —sus tareas, sus jornadas y
+sus horas quedan repartidas entre dos ids— y los reportes del gerente la
+cuentan a medias, sin que nada en la pantalla lo delate.
+
+El alta y el renombrado se paran con un 409 que **nombra el registro con el
+que choca** (id, rol y estado), comparando nombre y apellido sin distinguir
+mayúsculas ni espacios de sobra, que es por donde entran los duplicados que no
+se ven. No se prohíbe del todo, porque los homónimos existen: la petición se
+repite con `permitir_homonimo` y entra. El 409 lleva el código
+`EMPLEADO_DUPLICADO` para que la pantalla no lo confunda con el del correo
+repetido, que se resuelve de otra forma.
+
+### Horas que significan lo que dicen
+
+Tres hallazgos distintos apuntaban al mismo sitio: el número de horas
+trabajadas, que alimenta los tres reportes del gerente.
+
+- Con una pausa en curso se podía **iniciar una tarea**. Como las horas de la
+  pausa se descuentan mientras la tarea avanza, el reporte de productividad
+  contaba trabajo hecho en tiempo que el mismo reporte restaba.
+- Se podía **cerrar la jornada con una tarea en curso**. La tarea quedaba
+  huérfana y sin forma de terminarla —finalizar exige jornada abierta—, así
+  que la única salida era marcar una entrada nueva al día siguiente y falsear
+  la asistencia.
+- Las jornadas que el sistema **cierra solo** a las 23:59:59, cuando nadie
+  marcó salida, se contaban como trabajadas: una entrada a las 19:01 aparecía
+  como 4h58 en el historial y en los tres reportes. Ahora cuentan 0 minutos y
+  la fila lo dice (`cierre_automatico`, migración `0014`).
+
+### Una marca sin ubicación explica por qué
+
+La entrada se registraba sin GPS y la fila decía «Ubicación no disponible» y
+nada más. En un control de personal de campo ese es justo el dato que no puede
+quedar en blanco: no había forma de distinguir «el GPS no enganchó» de «marqué
+desde mi casa».
+
+La marca **sigue sin bloquearse** —exigir el GPS deja al técnico sin poder
+trabajar por un permiso denegado o un sótano sin señal—, pero ahora se le
+pregunta por qué y lo que escriba queda guardado por marca
+(`motivo_sin_ubicacion_entrada` y `..._salida`, migración `0015`) y se lee en
+el historial junto al aviso. Una explicación no es una ubicación y no la
+sustituye; lo que aporta es constancia de quién dijo qué, que sí se puede
+contrastar.
+
+### Datos que se pueden buscar
+
+Los campos de nombre y apellido solo comprobaban que no estuvieran vacíos, así
+que entró el empleado «1235 Fonzi» y nombres como «@@@», que no se pueden
+buscar y salen así en los reportes y en la bitácora. El teléfono exigía siete
+dígitos y había registrados de diez, que no son un número de Guatemala y nadie
+puede marcar. `validar_nombre_persona` y `validar_telefono`
+(`backend/app/core/reglas.py`) son la regla única de los dos caminos, crear y
+editar: si editar fuera más permisivo, el agujero seguiría abierto por la otra
+puerta. El teléfono se guarda normalizado a `####-####`.
 
 ## Modelo de amenazas (STRIDE)
 
@@ -877,11 +1000,12 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   cambió. Lo que queda sin cubrir es lo escrito después del último ancla, y que
   quien tenga acceso al log también lo pueda alterar: un almacenamiento
   inmutable externo cerraría las dos cosas.
-- **IP en la bitácora en Railway.** Ahí uvicorn confía en cualquier
-  `X-Forwarded-For` (`FORWARDED_ALLOW_IPS=*`), porque Railway no publica la IP
-  de su proxy y el backend solo es alcanzable a través de él. Si algún día se
-  expusiera el backend por otro camino, hay que fijar esa variable a la IP del
-  proxy.
+- **IP en la bitácora si el backend queda expuesto.** `ip_cliente` solo cree
+  la cabecera `X-Forwarded-For` cuando el peer TCP viene de una red declarada
+  en `PROXIES_CONFIABLES` (ver «La IP del cliente»). Si algún día se expusiera
+  el backend por un camino que no pasa por el proxy pero sí entra desde una de
+  esas redes, quien llegue por ahí podría fabricar la cabecera. Hoy no ocurre:
+  en Railway el backend solo es alcanzable a través de su proxy.
 - **`'unsafe-inline'` en los estilos.** React y Leaflet ponen estilos en el
   atributo `style`, así que la CSP los permite. Los scripts no: es lo que
   importa para el robo de sesión.
