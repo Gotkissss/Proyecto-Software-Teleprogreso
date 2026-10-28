@@ -115,7 +115,10 @@ export default function ModalEditarTarea({
     } catch (err) {
       const status = err?.response?.status
       const detail = err?.response?.data?.detail
-      if (status === 400 || status === 404) {
+      // 409 desde la HU-S10-08: pasar la tarea a 'completado' sin evidencia
+      // registrada. El motivo que manda el backend es el que hay que mostrar
+      // —dice qué falta—, así que va en la misma rama que el 400.
+      if (status === 400 || status === 404 || status === 409) {
         setError(detail || 'No se pudo guardar la tarea. Revisa los datos.')
       } else if (status === 403) {
         setError(detail || 'Tu rol no tiene permiso para editar tareas.')

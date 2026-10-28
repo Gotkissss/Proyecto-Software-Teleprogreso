@@ -15,6 +15,7 @@ from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
     ESTADO_EN_USO,
+    ROL_TECNICO,
 )
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta
 from app.models.empleado import Empleado, EmpleadoCarro
@@ -234,6 +235,23 @@ async def asignar_tecnico(
                 f"El empleado '{empleado.nombre} {empleado.apellido}' "
                 f"no esta activo (estado: '{empleado.estado}'). "
                 "Solo se pueden asignar empleados activos."
+            )
+        )
+
+    # HU-S10-08: solo los técnicos llevan vehículo.
+    #
+    # El endpoint aceptaba cualquier empleado activo, así que se le podía
+    # asignar un vehículo a un supervisor o a un gerente. No es un detalle
+    # cosmético: el vehículo asignado es lo que la pantalla del técnico usa
+    # para saber qué herramientas lleva encima, el inventario cuenta ese
+    # vehículo como "en uso" y el reporte de activos lo atribuye a alguien que
+    # no sale a campo. Y al desactivar la cuenta, la liberación en cascada está
+    # escrita pensando en técnicos.
+    if empleado.rol != ROL_TECNICO:
+        raise bad_request(
+            (
+                f"El empleado '{empleado.nombre} {empleado.apellido}' tiene rol "
+                f"'{empleado.rol}' y los vehiculos solo se asignan a tecnicos."
             )
         )
 

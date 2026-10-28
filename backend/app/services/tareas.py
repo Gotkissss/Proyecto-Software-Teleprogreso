@@ -22,7 +22,7 @@ from sqlalchemy import DateTime, and_, case, cast, delete, func, null, or_, sele
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import bad_request, forbidden, not_found
+from app.core.exceptions import bad_request, conflict, forbidden, not_found
 from app.core.geo import punto_wkt
 from app.core.reglas import (
     EVENTO_FIN_TAREA,
@@ -210,6 +210,40 @@ async def _contar_incidencias(db: AsyncSession, id_tarea: int) -> int:
         .where(Incidencia.id_tarea == id_tarea)
     )
     return result.scalar() or 0
+
+
+async def exigir_evidencia(db: AsyncSession, id_tarea: int) -> None:
+    """
+    Una tarea no pasa a 'completado' sin evidencia registrada, venga de donde
+    venga la petición.
+
+    La regla existía desde el principio, pero solo la aplicaba
+    `PATCH /tareas/{id}/finalizar`, que es el camino del técnico. Un admin o un
+    supervisor cerraban la misma tarea con `PATCH /tareas/{id}` o con
+    `PATCH /tareas/{id}/estado` sin que nada la comprobara, y la tarea quedaba
+    completada sin una foto ni una línea de descripción.
+
+    Eso no es solo un hueco de permisos: el dato sale en los tres reportes del
+    gerente y en el historial, así que "trabajo hecho" acababa significando dos
+    cosas distintas según por qué pantalla se hubiera cerrado la tarea, y nadie
+    podía saber cuál mirando el reporte.
+
+    409 y no 400: lo que falla no es el cuerpo de la petición, es el estado de
+    la tarea — hay un conflicto entre lo que se pide y lo que la tarea tiene.
+    El cliente no puede arreglarlo cambiando el payload; tiene que registrar la
+    evidencia primero.
+
+    No hay cierre forzado para el admin. Se consideró (sección 6.1 del plan del
+    sprint), y no hace falta: los casos que lo justificarían —cliente ausente,
+    tarea duplicada— no son trabajo hecho, y para esos ya está el estado
+    'cancelado', que no entra en los reportes de productividad. Un cierre
+    forzado solo añadiría una puerta por la que la regla se puede saltar.
+    """
+    if await _contar_incidencias(db, id_tarea) == 0:
+        raise conflict(
+            "La tarea no se puede completar sin evidencia. Registra la "
+            "descripción y la foto antes de cerrarla."
+        )
 
 
 async def _buscar_tecnico_asignable(
@@ -628,6 +662,7 @@ async def editar_tarea(
         nuevo_estado = data.estado.value
         await _validar_limite_al_reabrir(db, tarea, nuevo_estado)
         if nuevo_estado == "completado":
+            await exigir_evidencia(db, id_tarea)
             marcar_completada(tarea)
         else:
             tarea.estado_tarea = nuevo_estado
@@ -702,6 +737,7 @@ async def actualizar_estado(
     await _validar_limite_al_reabrir(db, tarea, nuevo_estado)
 
     if nuevo_estado == "completado":
+        await exigir_evidencia(db, id_tarea)
         marcar_completada(tarea)
     else:
         tarea.estado_tarea = nuevo_estado
@@ -863,13 +899,7 @@ async def finalizar_tarea(
         await exigir_jornada_abierta(db, current_user)
 
     validar_cierre_permitido(tarea)
-    if await _contar_incidencias(db, id_tarea) == 0:
-        raise bad_request(
-            (
-                "Registra la evidencia (descripción y foto) antes de finalizar "
-                "la tarea."
-            )
-        )
+    await exigir_evidencia(db, id_tarea)
 
     marcar_completada(tarea)
     await registrar_evento_tarea(
