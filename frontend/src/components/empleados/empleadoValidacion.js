@@ -19,26 +19,70 @@ export const ROL_LABEL = {
   gerente:    'Gerente',
 }
 
+/* ── Nombre y teléfono (RTF-01 / R1-3 y R1-4) ─────────────────────────────
+ *
+ * Las mismas reglas que `app/core/reglas.py` del backend, que sigue siendo
+ * quien manda. Están aquí para avisar junto al campo en vez de devolver un
+ * 422 genérico con el formulario entero marcado.
+ *
+ * La revisión encontró al empleado «1235 Fonzi» y nombres como «@@@»: solo se
+ * comprobaba que no estuvieran vacíos. Y el teléfono exigía 7 dígitos, así que
+ * había registrados de 10 — que no son un número de Guatemala y nadie puede
+ * marcar.
+ */
+// Letras con tildes y ñ, espacios, guiones, apóstrofos y puntos: «D'León»,
+// «Pérez-Luna» y «de la Cruz» son nombres reales.
+const PATRON_NOMBRE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '\-.]*$/
+
+export const MIN_LETRAS_NOMBRE = 2
+export const DIGITOS_TELEFONO = 8
+
+/** Mensaje de error del nombre o apellido, o null si está bien. */
+export function errorNombre(valor, campo = 'nombre') {
+  const limpio = (valor ?? '').trim().replace(/\s+/g, ' ')
+  if (!limpio) return `El ${campo} es obligatorio.`
+  if (!PATRON_NOMBRE.test(limpio)) {
+    return `El ${campo} solo puede llevar letras, espacios, guiones y apóstrofos.`
+  }
+  const letras = (limpio.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g) ?? []).length
+  if (letras < MIN_LETRAS_NOMBRE) {
+    return `El ${campo} debe tener al menos ${MIN_LETRAS_NOMBRE} letras.`
+  }
+  return null
+}
+
+/** Mensaje de error del teléfono, o null. Vacío es válido: es opcional. */
+export function errorTelefono(valor) {
+  const crudo = (valor ?? '').trim()
+  if (!crudo) return null
+
+  let local = crudo
+  if (local.startsWith('+502')) local = local.slice(4)
+  const digitos = local.replace(/\D/g, '')
+
+  if (digitos.length !== DIGITOS_TELEFONO) {
+    return `El teléfono debe tener ${DIGITOS_TELEFONO} dígitos. Formato: 1234-5678.`
+  }
+  return null
+}
+
 /**
  * Valida el formulario completo de creación de empleado (incluye contraseña
  * y fecha de contratación, campos que no existen en la edición).
  */
 export function validarFormulario(form) {
   const errores = {}
-  if (!form.nombre.trim()) errores.nombre = 'El nombre es obligatorio.'
-  else if (form.nombre.trim().length < 2) errores.nombre = 'El nombre debe tener al menos 2 caracteres.'
+  const errNombre = errorNombre(form.nombre, 'nombre')
+  if (errNombre) errores.nombre = errNombre
 
-  if (!form.apellido.trim()) errores.apellido = 'El apellido es obligatorio.'
-  else if (form.apellido.trim().length < 2) errores.apellido = 'El apellido debe tener al menos 2 caracteres.'
+  const errApellido = errorNombre(form.apellido, 'apellido')
+  if (errApellido) errores.apellido = errApellido
 
   if (!form.correo.trim()) errores.correo = 'El correo electrónico es obligatorio.'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) errores.correo = 'Ingresa un correo electrónico válido.'
 
-  if (form.telefono.trim()) {
-    const digitos = form.telefono.replace(/\D/g, '')
-    if (digitos.length < 7) errores.telefono = 'El teléfono debe tener al menos 7 dígitos.'
-    else if (!/^[0-9+\-() ]+$/.test(form.telefono.trim())) errores.telefono = 'Solo se permiten dígitos, espacios, +, - y ().'
-  }
+  const errTelefono = errorTelefono(form.telefono)
+  if (errTelefono) errores.telefono = errTelefono
 
   if (!form.contrasena) errores.contrasena = 'La contraseña es obligatoria.'
   else if (form.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres.'
@@ -60,11 +104,20 @@ export function validarFormulario(form) {
  */
 export function validarFormularioEdicion(form) {
   const errores = {}
-  if (!form.nombre.trim())   errores.nombre   = 'El nombre es obligatorio.'
-  if (!form.apellido.trim()) errores.apellido = 'El apellido es obligatorio.'
+  // Las mismas reglas que al crear: si editar fuera más permisivo, el
+  // agujero seguiría abierto por la otra puerta.
+  const errNombre = errorNombre(form.nombre, 'nombre')
+  if (errNombre) errores.nombre = errNombre
+
+  const errApellido = errorNombre(form.apellido, 'apellido')
+  if (errApellido) errores.apellido = errApellido
+
   if (!form.correo.trim())   errores.correo   = 'El correo es obligatorio.'
   if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) errores.correo = 'Ingresa un correo válido.'
-  if (form.telefono && !/^[0-9+\-() ]{7,}$/.test(form.telefono.trim())) errores.telefono = 'Teléfono inválido (mín. 7 dígitos).'
+
+  const errTelefono = errorTelefono(form.telefono)
+  if (errTelefono) errores.telefono = errTelefono
+
   return errores
 }
 

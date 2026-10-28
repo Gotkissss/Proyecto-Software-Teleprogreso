@@ -355,3 +355,12 @@
     margin-left: 0;
   }
 }
+
+/* RTF-01 / R2-7: aviso de rango de fechas imposible. Ocupa toda la fila de
+   filtros para que no comprima los campos. */
+.rangoInvalido {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-danger, #c0392b);
+}

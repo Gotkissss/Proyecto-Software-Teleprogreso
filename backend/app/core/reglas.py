@@ -89,6 +89,84 @@ ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
 
+# ── Datos de una persona (RTF-01 / R1-3 y R1-4) ─────────────────────────────
+#
+# La revisión técnica encontró al empleado «1235 Fonzi» y nombres como «@@@»:
+# los campos solo comprobaban que no estuvieran vacíos. Un nombre que no es un
+# nombre no se puede buscar, sale así en los reportes y en la bitácora, y
+# convierte la lista de empleados en algo que nadie puede leer.
+#
+# Se aceptan letras (con tildes y ñ), espacios, guiones y apóstrofos, porque
+# «D'León», «Pérez-Luna» y «de la Cruz» son nombres reales. Lo que se rechaza
+# es que NO haya ninguna letra, o que aparezcan dígitos y signos que en un
+# nombre solo entran por error de tecleo.
+
+import re as _re
+
+_PATRON_NOMBRE = _re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ \'\-\.]*$")
+
+# Mínimo de letras: evita que un solo carácter pase por nombre.
+MIN_LETRAS_NOMBRE = 2
+
+
+def validar_nombre_persona(valor: str, campo: str = "nombre") -> str:
+    """
+    Comprueba que un nombre o apellido parezca uno y lo devuelve sin espacios
+    de sobra. Lanza `ValueError`, que es lo que esperan los validadores de
+    Pydantic.
+    """
+    limpio = " ".join(valor.split())
+    if not limpio:
+        raise ValueError("Este campo no puede estar vacio.")
+    if not _PATRON_NOMBRE.match(limpio):
+        raise ValueError(
+            f"El {campo} solo puede llevar letras, espacios, guiones y "
+            "apóstrofos."
+        )
+    letras = sum(1 for c in limpio if c.isalpha())
+    if letras < MIN_LETRAS_NOMBRE:
+        raise ValueError(
+            f"El {campo} tiene que tener al menos {MIN_LETRAS_NOMBRE} letras."
+        )
+    return limpio
+
+
+# Teléfono de Guatemala: 8 dígitos. El campo solo exigía 7, así que había
+# registrados de 10 (6767676767) que no son un teléfono de aquí y que nadie
+# puede marcar. Se admite el formato con guion porque es como se escriben en
+# papel, y se guarda normalizado a ####-#### para que la lista no mezcle las
+# dos formas.
+DIGITOS_TELEFONO = 8
+
+_SOLO_DIGITOS = _re.compile(r"\D")
+
+
+def validar_telefono(valor: str) -> str:
+    """
+    Normaliza un teléfono a `####-####`, o lanza `ValueError`.
+
+    Acepta lo que la gente escribe —con guion, con espacios, con el prefijo
+    +502— y guarda una sola forma.
+    """
+    crudo = valor.strip()
+    if not crudo:
+        raise ValueError("El telefono no puede estar vacio.")
+
+    # El prefijo del país es correcto pero no es parte del número local.
+    if crudo.startswith("+502"):
+        crudo = crudo[4:]
+    elif crudo.startswith("502") and len(_SOLO_DIGITOS.sub("", crudo)) == 11:
+        crudo = crudo[3:]
+
+    digitos = _SOLO_DIGITOS.sub("", crudo)
+    if len(digitos) != DIGITOS_TELEFONO:
+        raise ValueError(
+            f"El telefono tiene que tener {DIGITOS_TELEFONO} digitos "
+            f"(se recibieron {len(digitos)}). Formato: 1234-5678."
+        )
+    return f"{digitos[:4]}-{digitos[4:]}"
+
+
 # ── Política de contraseñas (HU-S9-02, HU-S10-01) ───────────────────────────
 #
 # Una sola política para todos los caminos que fijan una contraseña: crear un

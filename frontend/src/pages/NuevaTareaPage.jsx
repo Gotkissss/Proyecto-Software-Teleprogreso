@@ -18,6 +18,7 @@ import {
   getTecnicosDisponibles,
 } from '../api/tareaService'
 import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
+import { hoyISO } from '../utils/fecha'
 import Spinner from '../components/ui/Spinner'
 import styles from './NuevaTareaPage.module.css'
 
@@ -62,7 +63,41 @@ function validar(form) {
     errores.fecha_finalizacion =
       'La fecha límite no puede ser anterior a la de inicio.'
   }
+
+  // RTF-01 / R2-5: dirección y ubicación eran las dos opcionales, así que la
+  // tarea podía nacer sin saber dónde es el servicio: no aparecía en el mapa
+  // del técnico —que es por donde se trabaja— y había que preguntar por chat.
+  // Basta con una de las dos: un punto en el mapa dice dónde es igual de bien.
+  if (!form.direccion.trim() && form.lat === null) {
+    errores.direccion =
+      'Escribe la dirección o marca el punto en el mapa: sin una de las dos, ' +
+      'el técnico no sabe a dónde ir.'
+  }
+
   return errores
+}
+
+/**
+ * Avisos que NO impiden guardar: cosas que casi siempre son un error pero
+ * que a veces se quieren a propósito.
+ *
+ * RTF-01 / R2-4: se podían crear tareas con fecha límite pasada y la tarea
+ * nacía «Vencida hace 286 días» sin que nada lo dijera. Bloquearlo sin más
+ * impediría registrar una tarea que de verdad venció la semana pasada, así
+ * que se avisa y se deja decidir.
+ */
+export function avisosDeLaTarea(form, hoy = hoyISO()) {
+  const avisos = []
+  if (form.fecha_finalizacion && form.fecha_finalizacion < hoy) {
+    avisos.push(
+      'La fecha límite ya pasó: la tarea va a nacer vencida y generará una ' +
+      'alerta en cuanto se guarde.'
+    )
+  }
+  if (form.fecha_inicio && form.fecha_inicio < hoy) {
+    avisos.push('La fecha de inicio ya pasó.')
+  }
+  return avisos
 }
 
 export default function NuevaTareaPage() {
@@ -232,6 +267,9 @@ export default function NuevaTareaPage() {
     )
   }
 
+  // RTF-01 / R2-4: avisos que no impiden guardar (ver avisosDeLaTarea).
+  const avisos = avisosDeLaTarea(form)
+
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
@@ -295,16 +333,24 @@ export default function NuevaTareaPage() {
           {/* ── Dirección ── */}
           <div className={styles.field}>
             <label className={styles.label}>
-              Dirección del servicio <span className={styles.optional}>(opcional)</span>
+              Dirección del servicio{' '}
+              {/* RTF-01 / R2-5: dirección O punto en el mapa, pero una de las
+                  dos. Las dos decían «(opcional)» y la tarea nacía sin saber
+                  dónde es el servicio. */}
+              <span className={styles.optional}>(o marca el punto en el mapa)</span>
             </label>
             <input
               type="text"
-              className={styles.input}
+              className={`${styles.input} ${errores.direccion ? styles.inputError : ''}`}
               placeholder="Ej: Calle 15, Ave. Circunvalación, Zona 10"
               value={form.direccion}
               onChange={(e) => handleChange('direccion', e.target.value)}
+              onBlur={() => handleBlur('direccion')}
               disabled={cargando}
             />
+            {errores.direccion && (
+              <p className={styles.fieldError}>{errores.direccion}</p>
+            )}
           </div>
 
           {/* ── Ubicación en el mapa (SCRUM-171) ──
@@ -314,7 +360,8 @@ export default function NuevaTareaPage() {
               técnico recibe así coordenadas exactas y no solo un texto. */}
           <div className={styles.field}>
             <label className={styles.label}>
-              Ubicación en el mapa <span className={styles.optional}>(opcional)</span>
+              Ubicación en el mapa{' '}
+              <span className={styles.optional}>(o escribe la dirección)</span>
             </label>
             <SelectorUbicacionMapa
               direccion={form.direccion}
@@ -325,6 +372,17 @@ export default function NuevaTareaPage() {
               error={errores.lat || errores.lng || null}
             />
           </div>
+
+          {/* RTF-01 / R2-4: la tarea podía nacer «Vencida hace 286 días» sin
+              que nada lo dijera. Es un aviso y no un error: registrar una
+              tarea que de verdad venció la semana pasada es legítimo. */}
+          {avisos.length > 0 && (
+            <div className={styles.avisoFechas} role="status">
+              {avisos.map((aviso) => (
+                <p key={aviso}>{aviso}</p>
+              ))}
+            </div>
+          )}
 
           {/* ── Fechas ──
               La fecha límite es la que usa el sistema de alertas para marcar

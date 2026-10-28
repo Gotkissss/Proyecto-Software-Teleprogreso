@@ -24,18 +24,49 @@ from app.schemas.tarea import (
 # 1. CREACIÓN DE TAREAS
 
 def test_tarea_create_valida():
-    """Una tarea con nombre y prioridad válida se acepta."""
-    tarea = TareaCreate(nombre="Instalar router", prioridad="alta")
+    """Una tarea con nombre, prioridad y dirección válidas se acepta."""
+    # RTF-01 / R2-5: crear una tarea exige saber dónde es el servicio, una
+    # dirección o un punto en el mapa.
+    tarea = TareaCreate(
+        nombre="Instalar router", prioridad="alta", direccion="Calle 15, Fraijanes"
+    )
     assert tarea.nombre == "Instalar router"
     assert tarea.prioridad == PrioridadServicio.alta
 
 
 def test_tarea_create_prioridad_por_defecto():
     """Si no se envía prioridad, el valor por defecto es 'media'."""
-    tarea = TareaCreate(nombre="Revisión de fibra")
+    tarea = TareaCreate(nombre="Revisión de fibra", direccion="Zona 10")
     assert tarea.prioridad == PrioridadServicio.media
     assert tarea.descripcion is None
     assert tarea.id_tecnico is None
+
+
+def test_tarea_create_acepta_solo_el_punto_del_mapa():
+    """
+    La dirección y la coordenada son alternativas, no las dos obligatorias:
+    un punto marcado en el mapa dice dónde es igual de bien.
+    """
+    tarea = TareaCreate(nombre="Reparar acometida", lat=14.4728, lng=-90.4408)
+    assert tarea.direccion is None
+    assert tarea.lat == 14.4728
+
+
+def test_tarea_create_sin_direccion_ni_punto_falla():
+    """
+    RTF-01 / R2-5: los dos campos eran opcionales, así que una tarea de campo
+    nacía sin ubicación — no aparecía en el mapa del técnico, que es por donde
+    se trabaja, y había que preguntar por chat a dónde ir.
+    """
+    with pytest.raises(ValidationError) as error:
+        TareaCreate(nombre="Tarea sin sitio")
+    assert "dirección" in str(error.value) or "direccion" in str(error.value)
+
+
+def test_tarea_create_con_direccion_en_blanco_falla():
+    """Espacios no son una dirección."""
+    with pytest.raises(ValidationError):
+        TareaCreate(nombre="Tarea sin sitio", direccion="   ")
 
 
 def test_tarea_create_sin_nombre_falla():

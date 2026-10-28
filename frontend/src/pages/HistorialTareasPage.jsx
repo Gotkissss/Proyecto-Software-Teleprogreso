@@ -169,6 +169,11 @@ export default function HistorialTareasPage() {
 
   const [desde, setDesde] = useState(hace(6))
   const [hasta, setHasta] = useState(aISO(new Date()))
+  // RTF-01 / R2-7: los `min`/`max` de los inputs solo guían al calendario
+  // nativo; escribiendo la fecha a mano se podía dejar «Desde» posterior a
+  // «Hasta» y la consulta salía igual, devolviendo una lista vacía sin
+  // explicar por qué. Reportes ya lo validaba; esta pantalla no.
+  const rangoInvalido = Boolean(desde && hasta && desde > hasta)
   const [idTecnico, setIdTecnico] = useState('')
   const [tecnicos, setTecnicos] = useState([])
 
@@ -187,6 +192,14 @@ export default function HistorialTareasPage() {
   }, [desde, hasta, idTecnico, esSupervision])
 
   const fetchHistorial = useCallback(async () => {
+    // RTF-01 / R2-7: con «Desde» posterior a «Hasta» la consulta devolvía una
+    // lista vacía, que se lee como «no hay tareas» y no como «el filtro está
+    // mal». Reportes ya lo validaba; aquí se gastaba la petición igual.
+    if (rangoInvalido) {
+      setLoading(false)
+      setError(null)
+      return
+    }
     setLoading(true)
     try {
       setError(null)
@@ -198,7 +211,7 @@ export default function HistorialTareasPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarHistorial])
+  }, [cargarHistorial, rangoInvalido])
 
   const renovarEnlaces = useRenovarEnlaces(cargarHistorial)
 
@@ -260,6 +273,12 @@ export default function HistorialTareasPage() {
           <button type="button" onClick={() => aplicarRango(7)}>7 días</button>
           <button type="button" onClick={() => aplicarRango(30)}>30 días</button>
         </div>
+
+        {rangoInvalido && (
+          <p className={styles.rangoInvalido} role="alert">
+            «Desde» no puede ser posterior a «Hasta».
+          </p>
+        )}
 
         <label className={styles.filtroCampo}>
           <span>Desde</span>
