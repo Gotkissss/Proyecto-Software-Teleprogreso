@@ -366,6 +366,62 @@ al día (ver README):
 
 Cada purga deja su fila en la bitácora con rol `sistema`.
 
+## Copias de seguridad
+
+Hasta el Sprint 10 no había ninguna. Todo lo anterior va de que nadie pueda
+leer ni alterar los datos; esto va de lo otro, que es igual de definitivo y
+mucho más probable: un `DROP`, un `--reset` corrido en el entorno equivocado,
+un disco que se va. Una base cifrada y auditada que ya no existe no se
+recupera con permisos.
+
+`scripts/respaldo.sh` toma el volcado con el **propietario del esquema** y no
+con el rol de la aplicación. No es un detalle: el rol de la aplicación no puede
+leer `bitacora_auditoria` entera —es lo que la hace append-only de verdad—, así
+que un `pg_dump` hecho con él dejaría fuera justo la tabla que no se puede
+reconstruir. Para eso está `DATABASE_URL_MIGRACIONES`.
+
+El archivo va cifrado con GPG simétrico (AES-256) y la frase se pasa por
+`RESPALDO_PASSPHRASE`, nunca en la línea de comandos: ahí la vería cualquiera
+con `ps`. El cifrado no es opcional, porque el volcado contiene:
+
+- la tabla de empleados, con sus hashes de contraseña;
+- `ubicacion_empleado`: dónde estuvo cada técnico y a qué hora;
+- la bitácora completa.
+
+Es, literalmente, todo lo que el resto de este documento protege, en un archivo
+que se va a copiar a sitios con menos cuidado que la base.
+
+El volcado no se escribe nunca en claro en el disco: `pg_dump | gzip | gpg` va
+en una sola tubería. Y al terminar, el script lo vuelve a descifrar para
+comprobar que se lee; si no, borra el archivo. Un respaldo cifrado con la frase
+equivocada no se descubre hasta el día que hace falta, que es el peor día
+posible.
+
+### Prueba de restauración
+
+Un respaldo que nadie ha restaurado es una suposición: puede estar truncado,
+cifrado con otra frase o faltarle una tabla.
+
+```bash
+RESPALDO_PASSPHRASE='…' bash scripts/respaldo.sh probar backups/<archivo>
+```
+
+Crea una base temporal, restaura ahí, y comprueba cuatro cosas antes de
+borrarla: que las trece tablas del dominio existen, que la bitácora llegó con
+todas sus filas (si sale vacía con la de origen poblada, el volcado se hizo con
+el rol de la aplicación), a qué migración corresponde el esquema, y que la
+cadena de hashes de la bitácora sigue cuadrando después de restaurar — una
+bitácora restaurada con la cadena rota no vale como evidencia de nada.
+
+**Última prueba de restauración: 2026-10-28.** Resultado: correcta. Base de
+origen con el escenario del seed y 73 filas de bitácora; las 73 se restauraron
+y la cadena quedó íntegra. Esquema en la migración `0013`.
+
+Cuando se restaure sobre un despliegue hay que volver a aplicar el
+endurecimiento del rol (`python backend/db/aplicar_rol_aplicacion.py`): el
+volcado se hace con `--no-owner --no-privileges` para que se pueda restaurar
+en una base con otros nombres de rol, así que no trae los privilegios.
+
 ## Inyección SQL
 
 Se revisó el backend completo. Todas las consultas se construyen con el ORM de
@@ -397,6 +453,10 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 6. En un despliegue, no dejes que el seed use las contraseñas de demo: define
    `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
    `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
+7. Programa el respaldo diario (`bash scripts/respaldo.sh crear`, ver README) y
+   corre `scripts/respaldo.sh probar` de vez en cuando, anotando la fecha y el
+   resultado arriba. Guarda `RESPALDO_PASSPHRASE` en el gestor del equipo: sin
+   ella los respaldos no sirven para nada.
 
 ## Cadena de suministro
 
@@ -553,9 +613,11 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   host; en un despliegue donde la base viva en otra máquina hay que activar TLS
   en Postgres (`ssl=on` con certificados), exigir `hostssl` en `pg_hba.conf` y
   definir `DB_SSL_MODE=verify-full` en el backend.
-- **Copias de seguridad.** No hay ninguna configurada. La disponibilidad de los
-  datos es parte de su seguridad: un ransomware o un `docker volume rm` a
-  destiempo pesan más que cualquier intrusión.
+- **Copias de seguridad fuera del host.** Ya existe el procedimiento y está
+  probado (ver «Copias de seguridad»), pero los archivos se quedan donde los
+  deja el cron. Un ransomware o un `docker volume rm` que alcance también esa
+  carpeta se lleva la base y sus respaldos a la vez: hay que copiarlos a otro
+  sitio, y eso es un paso de operación que nadie ha montado todavía.
 - **Cifrado en reposo.** El volumen de Postgres no está cifrado. Quien tenga
   acceso físico o administrativo al host puede leerlo.
 - **Contadores en memoria.** Los límites de frecuencia viven en el proceso. Con

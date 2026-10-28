@@ -209,6 +209,41 @@ que un superusuario borre las últimas filas. Prográmalo una vez al día
 `python mantenimiento.py verificar-bitacora --ancla <id>:<hash>` termina con 1
 si esa fila desapareció o cambió.
 
+### Copias de seguridad
+
+`scripts/respaldo.sh` (T3 del Sprint 10). El volcado lo toma el **propietario
+del esquema** y va **cifrado**: lleva los hashes de las contraseñas, el
+historial de ubicaciones de cada técnico y la bitácora completa.
+
+```bash
+RESPALDO_PASSPHRASE='<frase del equipo>' bash scripts/respaldo.sh crear
+```
+
+```bash
+bash scripts/respaldo.sh listar
+```
+
+```bash
+RESPALDO_PASSPHRASE='<frase del equipo>' bash scripts/respaldo.sh probar backups/<archivo>
+```
+
+`probar` restaura en una base temporal, comprueba que las tablas están, que la
+bitácora llegó completa y que su cadena de hashes sigue cuadrando, y la borra.
+Es lo que separa «tenemos respaldos» de «tenemos respaldos que funcionan».
+
+Prográmalo a diario:
+
+- **Local / servidor propio:**
+  `0 2 * * * cd /ruta/al/proyecto && RESPALDO_PASSPHRASE='…' bash scripts/respaldo.sh crear`
+- **Railway:** un servicio con la misma imagen del backend, *Cron Schedule*
+  `0 8 * * *` (02:00 en Guatemala) y *Start Command*
+  `bash scripts/respaldo.sh crear`, con `RESPALDO_DIR` apuntando a un volumen
+  persistente —el disco del contenedor es efímero— y `RESPALDO_PASSPHRASE` en
+  las variables del servicio.
+
+Hacen falta `pg_dump` y `gpg`; la imagen del backend trae el primero, y el
+segundo se instala con `gnupg`. `backups/` está en `.gitignore`.
+
 Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
 defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
 define `DATABASE_URL_MIGRACIONES` con el propietario del esquema: con ella
