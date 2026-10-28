@@ -203,3 +203,40 @@ class HistorialTareasResponse(BaseModel):
     desde: date
     hasta: date
     dias:  List[DiaCompletadas]
+
+
+# ── Cierre de tarea con materiales (HU-S10-07) ──────────────────────────────
+
+class MaterialConsumido(BaseModel):
+    """Un material y cuántas unidades gastó la tarea."""
+
+    id_material: int = Field(..., gt=0)
+    cantidad: int = Field(..., gt=0, le=100_000)
+
+
+class FinalizarTareaRequest(BaseModel):
+    """
+    Body de PATCH /tareas/{id}/finalizar.
+
+    Los tres campos son opcionales y el cuerpo entero también: el endpoint ya
+    aceptaba `{lat, lng}` suelto para dejar el lugar del cierre en el recorrido
+    del técnico, y los clientes que mandan solo eso siguen funcionando igual
+    (este schema tiene los mismos dos campos con los mismos nombres).
+
+    `materiales` es la lista de lo que se gastó. Opcional a propósito: no todas
+    las tareas consumen material, y obligar a rellenarla lleva a que alguien
+    teclee cualquier cosa para poder cerrar la tarea, que es peor que no tener
+    el dato.
+    """
+
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lng: Optional[float] = Field(None, ge=-180, le=180)
+    materiales: Optional[list[MaterialConsumido]] = Field(None, max_length=50)
+
+    @model_validator(mode="after")
+    def coordenada_completa(self) -> "FinalizarTareaRequest":
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError(
+                "Manda lat y lng juntas, o ninguna de las dos."
+            )
+        return self

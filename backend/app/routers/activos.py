@@ -1,14 +1,15 @@
 """Activos: CRUD generico y subida de imagen (rutas /activos, /activos/{id})."""
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_empleado, require_supervisor
+from app.core.deps import auditar_lectura, get_current_empleado, require_supervisor
 from app.core.reglas import ESTADO_DISPONIBLE
+from app.services import kardex
 from app.services.inventario import exigir_acceso_a_activo
 from app.db.session import get_db
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
@@ -20,6 +21,9 @@ from app.schemas.activo import (
     HerramientaEnCarroResponse,
     HerramientaResponse,
     MaterialResponse,
+    MovimientoMaterialCreate,
+    MovimientoMaterialResponse,
+    MovimientosMaterialResponse,
 )
 
 router = APIRouter(prefix="/activos", tags=["Activos"])
@@ -334,7 +338,11 @@ async def actualizar_activo(
         r = await db.execute(select(Material).where(Material.id_activo == id))
         subtipo = r.scalar_one_or_none()
         if subtipo:
-            if body.cantidad_disponible is not None: subtipo.cantidad_disponible = body.cantidad_disponible
+            # `cantidad_disponible` ya no se edita por aquí (HU-S10-07): el
+            # stock solo se mueve con un movimiento del kardex, que obliga a
+            # decir por qué. Sin eso, el número cambiaba sin dejar rastro y no
+            # se podía saber si las unidades que faltaban se habían usado en
+            # tareas, se habían perdido o alguien se equivocó al teclear.
             if body.stock_minimo        is not None: subtipo.stock_minimo        = body.stock_minimo
             if body.unidad_medida       is not None: subtipo.unidad_medida       = body.unidad_medida
             if body.tipo_material       is not None: subtipo.tipo_material       = body.tipo_material
@@ -464,4 +472,132 @@ async def upload_imagen_activo(
     return ImagenActivoResponse(
         detail="Imagen subida correctamente.",
         foto_url=activo.foto_url,
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Kardex de materiales (HU-S10-07)
+# ══════════════════════════════════════════════════════════════════════
+#
+# Las rutas van bajo /activos/materiales/{id}/... y no bajo /activos/{id}/...
+# a propósito: así no compiten con /{id:int}, y la URL dice de qué tipo de
+# activo se está hablando. El inventario es la pantalla que las consume.
+
+
+@router.get(
+    "/materiales/{id:int}/movimientos",
+    response_model=MovimientosMaterialResponse,
+    summary="Historia de stock de un material",
+    status_code=status.HTTP_200_OK,
+    dependencies=[auditar_lectura("movimiento_material")],
+)
+async def listar_movimientos_material(
+    id: int,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    _current_user: Annotated[Empleado, Depends(require_supervisor)],
+    limite: int = Query(200, ge=1, le=1000),
+):
+    """
+    Devuelve los movimientos del material, el más reciente primero.
+
+    Cada línea trae el saldo que dejó, quién la hizo y —si fue un consumo— de
+    qué tarea salió. Es la respuesta a "¿a dónde se fueron las 40 rosetas?",
+    que antes no se podía contestar: `cantidad_disponible` solo guarda el
+    último valor escrito.
+
+    Roles: admin, supervisor. El gerente consulta reportes, no el detalle
+    operativo del almacén; el técnico ve lo que lleva en su vehículo.
+    """
+    filas = await kardex.listar_movimientos(db, id, limite=limite)
+
+    result = await db.execute(
+        select(Activo.nombre_activo, Material.cantidad_disponible, Material.stock_minimo)
+        .join(Material, Material.id_activo == Activo.id_activo)
+        .where(Activo.id_activo == id)
+    )
+    nombre, disponible, minimo = result.one()
+
+    return MovimientosMaterialResponse(
+        id_material=id,
+        nombre_material=nombre,
+        cantidad_disponible=disponible,
+        stock_minimo=minimo,
+        total=len(filas),
+        movimientos=[
+            MovimientoMaterialResponse(
+                id_movimiento=mov.id_movimiento,
+                tipo=mov.tipo,
+                cantidad=mov.cantidad,
+                saldo_resultante=mov.saldo_resultante,
+                motivo=mov.motivo,
+                fecha_hora=mov.fecha_hora,
+                id_tarea=mov.id_tarea,
+                titulo_tarea=titulo,
+                id_empleado=mov.id_empleado,
+                nombre_empleado=(
+                    f"{nombre_emp} {apellido_emp}" if nombre_emp else None
+                ),
+            )
+            for mov, nombre_emp, apellido_emp, titulo in filas
+        ],
+    )
+
+
+@router.post(
+    "/materiales/{id:int}/movimientos",
+    response_model=MovimientoMaterialResponse,
+    summary="Registrar una entrada o un ajuste de stock",
+    status_code=status.HTTP_201_CREATED,
+)
+async def crear_movimiento_material(
+    id: int,
+    body: MovimientoMaterialCreate,
+    db: Annotated[AsyncSession, Depends(get_db, scope="function")],
+    current_user: Annotated[Empleado, Depends(require_supervisor)],
+):
+    """
+    Mueve el stock de un material dejando constancia de por qué.
+
+    - `entrada`: llegó material al almacén. Suma `cantidad`.
+    - `ajuste`: se contó el almacén y hay otra cifra. FIJA el stock en
+      `cantidad` y exige motivo.
+
+    El consumo no entra por aquí: pertenece a una tarea y lo registra
+    `PATCH /tareas/{id}/finalizar` al cerrarla. Dejarlo suelto permitiría
+    apuntar consumos sin trabajo que los explique.
+
+    Es el único camino que queda para cambiar `cantidad_disponible`: el
+    `PATCH /activos/{id}` dejó de aceptar ese campo (HU-S10-07).
+
+    Roles: admin, supervisor.
+    """
+    if body.tipo == kardex.TIPO_AJUSTE:
+        movimiento = await kardex.registrar_ajuste(
+            db,
+            id_material=id,
+            nueva_cantidad=body.cantidad,
+            motivo=body.motivo,
+            id_empleado=current_user.id_empleado,
+        )
+    else:
+        movimiento = await kardex.registrar_movimiento(
+            db,
+            id_material=id,
+            tipo=kardex.TIPO_ENTRADA,
+            cantidad=body.cantidad,
+            motivo=body.motivo,
+            id_empleado=current_user.id_empleado,
+        )
+
+    return MovimientoMaterialResponse(
+        id_movimiento=movimiento.id_movimiento,
+        tipo=movimiento.tipo,
+        cantidad=movimiento.cantidad,
+        saldo_resultante=movimiento.saldo_resultante,
+        motivo=movimiento.motivo,
+        fecha_hora=movimiento.fecha_hora,
+        id_tarea=movimiento.id_tarea,
+        titulo_tarea=None,
+        id_empleado=movimiento.id_empleado,
+        nombre_empleado=f"{current_user.nombre} {current_user.apellido}",
     )

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import bad_request, conflict, forbidden, not_found
+from app.services.kardex import LineaConsumo
 from app.core.geo import punto_wkt
 from app.core.reglas import (
     EVENTO_FIN_TAREA,
@@ -869,12 +870,23 @@ async def finalizar_tarea(
     id_tarea: int,
     current_user: Empleado,
     ubicacion: Optional[UbicacionCreate] = None,
+    materiales: Optional[list["LineaConsumo"]] = None,
 ) -> TareaResponse:
     """
     Finaliza una tarea en curso que ya cuenta con evidencia.
 
     HU-5: el técnico necesita la jornada abierta, y si envía su ubicación, el
     lugar del cierre queda en su recorrido (una sola vez por tarea).
+
+    HU-S10-07: `materiales` es lo que la tarea gastó. Se descuenta del stock
+    aquí, dentro de la MISMA transacción que cierra la tarea, y no en una
+    llamada aparte: un consumo apuntado sin que la tarea se cerrara descuadra
+    el almacén, y una tarea cerrada sin apuntar el consumo deja el stock alto.
+    Si el almacén no da (409), la tarea no se cierra y el técnico puede
+    corregir la cantidad.
+
+    Es opcional porque no todas las tareas consumen material; obligar a
+    rellenarlo lleva a teclear cualquier cosa para poder cerrar la tarea.
     """
     result = await db.execute(select(Tarea).where(Tarea.id_tarea == id_tarea))
     tarea = result.scalar_one_or_none()
@@ -900,6 +912,18 @@ async def finalizar_tarea(
 
     validar_cierre_permitido(tarea)
     await exigir_evidencia(db, id_tarea)
+
+    # El consumo va ANTES de marcar la tarea completada: si el almacén no
+    # alcanza, el 409 sube sin dejar la tarea cerrada a medias.
+    if materiales:
+        from app.services.kardex import registrar_consumo_de_tarea
+
+        await registrar_consumo_de_tarea(
+            db,
+            id_tarea=id_tarea,
+            lineas=materiales,
+            id_empleado=current_user.id_empleado,
+        )
 
     marcar_completada(tarea)
     await registrar_evento_tarea(

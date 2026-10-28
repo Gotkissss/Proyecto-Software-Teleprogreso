@@ -39,6 +39,18 @@ from app.models.ubicacion import UbicacionEmpleado
 from app.routers import ubicaciones
 from app.routers.incidencias import crear_incidencia
 from app.routers.tareas import finalizar_tarea, iniciar_tarea
+from app.schemas.tarea import FinalizarTareaRequest
+
+
+def _cierre_en(lugar):
+    """
+    Cuerpo de PATCH /tareas/{id}/finalizar.
+
+    Desde la HU-S10-07 el cuerpo es `FinalizarTareaRequest` y no un
+    `UbicacionCreate`: lleva los mismos `lat`/`lng` más la lista opcional de
+    materiales consumidos.
+    """
+    return FinalizarTareaRequest(lat=lugar.lat, lng=lugar.lng)
 from app.schemas.incidencia import IncidenciaCreate
 from app.schemas.ubicacion import PuntoLote, UbicacionCreate
 
@@ -458,7 +470,7 @@ async def test_al_finalizar_guarda_el_lugar_una_sola_vez(monkeypatch):
         _res_tarea(None),                                        # técnico de la respuesta
     )
 
-    await finalizar_tarea(1, db, _tecnico(), LUGAR)
+    await finalizar_tarea(1, db, _tecnico(), _cierre_en(LUGAR))
 
     punto = db.add.call_args.args[0]
     assert punto.evento == EVENTO_FIN_TAREA
@@ -486,7 +498,7 @@ async def test_el_tecnico_no_puede_finalizar_sin_jornada(monkeypatch):
     db = _db(_res_tarea(tarea), _res_tarea(EmpleadoTarea(id_empleado=2, id_tarea=1)))
 
     with pytest.raises(HTTPException) as error:
-        await finalizar_tarea(1, db, _tecnico(), LUGAR)
+        await finalizar_tarea(1, db, _tecnico(), _cierre_en(LUGAR))
 
     assert error.value.status_code == 409
     assert tarea.estado_tarea == "en_progreso"

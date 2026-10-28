@@ -39,7 +39,8 @@ def test_el_catalogo_no_tiene_casos_de_endpoints_que_ya_no_existen():
 
 
 def test_la_cuenta_cuadra_con_el_plan_del_sprint():
-    # 31 endpoints mutantes al cierre de HU-S9-03, y 32 desde la HU-S9-05,
-    # que añade POST /auth/renovar. Si cambia, que sea a propósito: el
+    # 31 endpoints mutantes al cierre de HU-S9-03, 32 desde la HU-S9-05 (POST
+    # /auth/renovar) y 33 desde la HU-S10-07, que añade POST
+    # /activos/materiales/{id}/movimientos. Si cambia, que sea a propósito: el
     # catálogo y esta cifra se actualizan juntos.
-    assert len(_endpoints_que_mutan()) == len(CASOS) == 32
+    assert len(_endpoints_que_mutan()) == len(CASOS) == 33
