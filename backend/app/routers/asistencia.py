@@ -29,8 +29,11 @@ from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy
 from app.core.deps import auditar_lectura, get_current_empleado
 from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
+from app.core.exceptions import conflict
+from app.core.reglas import ROL_TECNICO
 from app.models.asistencia import Asistencia, Descanso
-from app.models.empleado import Empleado
+from app.models.empleado import Empleado, EmpleadoTarea
+from app.models.tarea import Tarea
 from app.schemas.asistencia import (
     DescansoResumen,
     HistorialAsistenciaResponse,
@@ -81,7 +84,12 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
     hasta la hora de salida, así que una pausa olvidada a las 10:00 pasaba a
     figurar como casi catorce horas de descanso.
     """
-    jornada.hora_salida = jornada.hora_salida or HORA_CIERRE_FORZADO
+    if jornada.hora_salida is None:
+        jornada.hora_salida = HORA_CIERRE_FORZADO
+        # RTF-01 / R3-3: queda dicho que esta salida la puso el sistema. Sin la
+        # marca, el historial contaba 19:01–23:59 como 4 h 58 de trabajo y ese
+        # número entraba en los tres reportes del gerente.
+        jornada.cierre_automatico = True
 
     result = await db.execute(
         select(Descanso).where(
@@ -234,11 +242,43 @@ async def registrar_salida(
                    "Registra la entrada primero.",
         )
 
-    # 2. Registrar la hora de salida y, si llegó, el lugar (HU-4)
+    # 2. RTF-01 / R3-2: no se cierra la jornada con trabajo a medias.
+    #
+    #    Permitirlo dejaba la tarea «En curso» y al técnico sin poder
+    #    terminarla: finalizar una tarea exige jornada abierta, así que la
+    #    única salida era registrar una entrada nueva al día siguiente —lo que
+    #    falsea la asistencia— o pedirle al supervisor que la cerrara por él.
+    #    La tarea quedaba huérfana y contando como trabajo en marcha en el
+    #    panel y en los reportes.
+    #
+    #    Solo al rol técnico: un admin o un supervisor que marque jornada no
+    #    tiene tareas asignadas en el sentido de este flujo.
+    if current_user.rol == ROL_TECNICO:
+        abiertas_en_curso = await db.execute(
+            select(Tarea.titulo)
+            .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+            .where(
+                EmpleadoTarea.id_empleado == current_user.id_empleado,
+                Tarea.estado_tarea == "en_progreso",
+            )
+            .order_by(Tarea.id_tarea)
+        )
+        titulos = list(abiertas_en_curso.scalars().all())
+        if titulos:
+            # Se nombran: «tienes tareas en curso» obliga al técnico a buscar
+            # cuáles, y desde el móvil eso son tres pantallas.
+            cuales = ", ".join(f"«{titulo}»" for titulo in titulos[:3])
+            resto = f" y {len(titulos) - 3} más" if len(titulos) > 3 else ""
+            raise conflict(
+                f"Tienes {len(titulos)} tarea(s) en curso ({cuales}{resto}). "
+                "Finalízalas o pásalas a pendiente antes de cerrar tu jornada."
+            )
+
+    # 3. Registrar la hora de salida y, si llegó, el lugar (HU-4)
     asistencia_activa.hora_salida = now.time()
     asistencia_activa.coordenada_salida = _punto_de_la_marca(ubicacion)
 
-    # 3. Cerrar también el descanso que hubiera quedado en curso: si no, la
+    # 4. Cerrar también el descanso que hubiera quedado en curso: si no, la
     #    pausa seguiría "abierta" dentro de una jornada ya cerrada y el
     #    historial la contaría hasta la hora de salida.
     result_pausas = await db.execute(

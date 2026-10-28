@@ -98,6 +98,10 @@ class ResumenJornada:
     minutos_trabajados: int = 0
     jornada_activa: bool = False
     pausas: List[ResumenPausa] = field(default_factory=list)
+    # RTF-01 / R3-3: la salida la puso el sistema, no la persona. La jornada no
+    # está activa (ya cerró) pero sus horas no son un dato: hay que mostrarla
+    # como «Sin salida» para que el supervisor la corrija.
+    sin_salida: bool = False
 
     @property
     def total_pausas(self) -> int:
@@ -163,6 +167,25 @@ def calcular_jornada(
     if descansos is None:
         descansos = getattr(asistencia, "descansos", []) or []
 
+    # RTF-01 / R3-3: una jornada que cerró el sistema a las 23:59:59 porque el
+    # técnico olvidó marcar salida no dice cuánto trabajó. Lo único cierto es
+    # la hora de entrada, así que no se reportan horas: se trata como una
+    # jornada sin cerrar. Antes, una entrada a las 19:01 aparecía como 04:58
+    # horas trabajadas, y ese número entraba en el historial y en los tres
+    # reportes del gerente.
+    if getattr(asistencia, "cierre_automatico", False):
+        pausas_cierre = calcular_minutos_pausas(
+            descansos, referencia=asistencia.hora_salida
+        )
+        return ResumenJornada(
+            minutos_brutos=0,
+            minutos_pausa=0,
+            minutos_trabajados=0,
+            jornada_activa=False,
+            pausas=pausas_cierre,
+            sin_salida=True,
+        )
+
     jornada_activa = asistencia.hora_salida is None
 
     # Hora con la que se cierra el calculo: la salida real o la referencia.
@@ -190,4 +213,5 @@ def calcular_jornada(
         minutos_trabajados=minutos_trabajados,
         jornada_activa=jornada_activa,
         pausas=pausas,
+        sin_salida=False,
     )

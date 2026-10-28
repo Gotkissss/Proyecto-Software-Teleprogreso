@@ -103,6 +103,10 @@ async def desvincular_recursos(
     for jornada in result_jornadas.scalars().all():
         cierre = ahora.time() if jornada.fecha == ahora.date() else HORA_CIERRE_FORZADO
         jornada.hora_salida = cierre
+        # RTF-01 / R3-3: esta salida la pone el sistema al desactivar la
+        # cuenta, no la persona. Marcarla es lo que impide que sus horas entren
+        # en los reportes como trabajo real.
+        jornada.cierre_automatico = True
 
         # Las pausas en curso se cierran con la jornada; si no, quedarían
         # abiertas dentro de una jornada ya cerrada e inflarían el tiempo de

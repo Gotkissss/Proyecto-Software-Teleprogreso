@@ -36,7 +36,9 @@ FRAIJANES = UbicacionCreate(lat=14.4653, lng=-90.4408)
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _empleado():
-    return SimpleNamespace(id_empleado=2, nombre="Juan", apellido="Pérez")
+    return SimpleNamespace(
+        id_empleado=2, nombre="Juan", apellido="Pérez", rol="tecnico"
+    )
 
 
 def _fijar_reloj(monkeypatch, hora):
@@ -118,7 +120,10 @@ def _jornada_abierta_de_hoy():
 async def test_la_salida_guarda_la_coordenada_recibida(monkeypatch):
     _fijar_reloj(monkeypatch, time(17, 5))
     jornada = _jornada_abierta_de_hoy()
-    db = _db(_resultado([jornada]), _resultado([]))
+    # Tres consultas en orden: las jornadas abiertas, las tareas en curso del
+    # técnico (RTF-01 / R3-2: no se cierra la jornada con trabajo a medias) y
+    # las pausas sin cerrar.
+    db = _db(_resultado([jornada]), _resultado([]), _resultado([]))
 
     respuesta = await registrar_salida(
         db=db, current_user=_empleado(), ubicacion=FRAIJANES
@@ -133,7 +138,10 @@ async def test_la_salida_guarda_la_coordenada_recibida(monkeypatch):
 async def test_la_salida_sin_ubicacion_se_registra_igual(monkeypatch):
     _fijar_reloj(monkeypatch, time(17, 5))
     jornada = _jornada_abierta_de_hoy()
-    db = _db(_resultado([jornada]), _resultado([]))
+    # Tres consultas en orden: las jornadas abiertas, las tareas en curso del
+    # técnico (RTF-01 / R3-2: no se cierra la jornada con trabajo a medias) y
+    # las pausas sin cerrar.
+    db = _db(_resultado([jornada]), _resultado([]), _resultado([]))
 
     respuesta = await registrar_salida(db=db, current_user=_empleado())
 

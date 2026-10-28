@@ -383,9 +383,21 @@ def _tarea(estado="pendiente"):
     )
 
 
-def _con_jornada(monkeypatch, jornada):
+def _con_jornada(monkeypatch, jornada, pausa=None):
+    """
+    Fija el estado de la jornada —y de la pausa— que ve
+    `exigir_jornada_abierta`.
+
+    La pausa se fija también porque desde RTF-01 / R3-1 la regla es «jornada
+    abierta y sin pausa en curso». Sin pasarla, la consulta caería en la
+    sesión simulada y un MagicMock es truthy: todas estas pruebas verían una
+    pausa que nadie abrió.
+    """
     monkeypatch.setattr(
         ubicaciones_service, "jornada_en_curso", AsyncMock(return_value=jornada)
+    )
+    monkeypatch.setattr(
+        ubicaciones_service, "pausa_en_curso", AsyncMock(return_value=pausa)
     )
 
 
@@ -448,6 +460,9 @@ async def test_el_supervisor_opera_tareas_sin_jornada_y_sin_dejar_rastro(monkeyp
     """Admin y supervisor no marcan jornada: no se les bloquea ni se les ubica."""
     consulta = AsyncMock(return_value=None)
     monkeypatch.setattr(ubicaciones_service, "jornada_en_curso", consulta)
+    monkeypatch.setattr(
+        ubicaciones_service, "pausa_en_curso", AsyncMock(return_value=None)
+    )
     tarea = _tarea()
     db = _db(_res_tarea(tarea))
 

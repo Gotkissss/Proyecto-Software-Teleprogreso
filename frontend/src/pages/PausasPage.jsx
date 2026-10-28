@@ -24,7 +24,7 @@ import {
   getTiposPausa,
   getEstadoPausas,
 } from '../api/asistenciaService'
-import Modal from '../components/ui/Modal'
+import Modal, { ModalActions } from '../components/ui/Modal'
 import Spinner from '../components/ui/Spinner'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
@@ -142,6 +142,10 @@ export default function PausasPage() {
   const [error,      setError]      = useState(null)
   const [showModal,  setShowModal]  = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  // RTF-01 / R3-9: el cierre de jornada usaba `window.confirm()`, que no se
+  // parece a ningún otro diálogo del sistema y además bloquea la
+  // automatización de pruebas. Se confirma con el modal propio.
+  const [confirmarCierre, setConfirmarCierre] = useState(false)
 
   // Segundos añadidos por el tick local desde la última respuesta del servidor.
   // Solo anima el reloj: el valor de partida siempre viene del backend, así
@@ -252,7 +256,6 @@ export default function PausasPage() {
   }
 
   const handleFinalizarJornada = async () => {
-    if (!window.confirm('¿Confirmas que deseas finalizar la jornada de hoy?')) return
     setActionLoading(true)
     try {
       const lugar = await obtenerPosicionActual({ respaldo: posicion })
@@ -261,7 +264,11 @@ export default function PausasPage() {
       refrescarJornada?.()
       toast.success('¡Jornada finalizada! Tu estado se actualizó.')
       if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
+      setConfirmarCierre(false)
     } catch (err) {
+      // RTF-01 / R3-2: el backend responde 409 con los títulos de las tareas
+      // que siguen en curso. Ese mensaje es el que hay que mostrar —dice qué
+      // falta—, y el modal se queda abierto para que se lea.
       toast.error(err?.response?.data?.detail || 'No se pudo finalizar la jornada.')
     } finally {
       setActionLoading(false)
@@ -462,7 +469,7 @@ export default function PausasPage() {
         <div className={styles.finalizarWrap}>
           <button
             className={styles.finalizarBtn}
-            onClick={handleFinalizarJornada}
+            onClick={() => setConfirmarCierre(true)}
             disabled={actionLoading || enPausa}
           >
             {actionLoading ? <Spinner size="sm" color="white" /> : <IconCheck />}
@@ -491,6 +498,45 @@ export default function PausasPage() {
         onClose={() => setShowModal(false)}
         loading={actionLoading}
       />
+
+      {/* RTF-01 / R3-9: el confirm nativo del navegador, con el modal propio.
+          RTF-01 / R3-2: el texto avisa de la regla ANTES de intentarlo. Si
+          quedan tareas en curso el backend responde 409 y el toast dice
+          cuáles; esto evita el viaje para quien ya lo sabe. */}
+      <Modal
+        open={confirmarCierre}
+        onClose={actionLoading ? undefined : () => setConfirmarCierre(false)}
+        title="Finalizar jornada"
+      >
+        <p className={styles.modalSubtitle}>
+          Se registrará tu salida y tu ubicación. No podrás volver a trabajar
+          en tus tareas hasta la próxima entrada.
+        </p>
+        <p className={styles.modalSubtitle}>
+          Si te queda alguna tarea <strong>en curso</strong>, finalízala o
+          pásala a pendiente antes de cerrar.
+        </p>
+        <ModalActions>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setConfirmarCierre(false)}
+            disabled={actionLoading}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleFinalizarJornada}
+            disabled={actionLoading}
+          >
+            {actionLoading
+              ? <><Spinner size="sm" color="white" /> Finalizando…</>
+              : 'Finalizar jornada'}
+          </button>
+        </ModalActions>
+      </Modal>
     </div>
   )
 }

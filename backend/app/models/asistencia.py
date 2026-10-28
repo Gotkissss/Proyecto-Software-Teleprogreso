@@ -1,5 +1,5 @@
 from datetime import date, time
-from sqlalchemy import Date, ForeignKey, Integer, String, Time
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geography
 
@@ -16,6 +16,14 @@ class Asistencia(Base):
     hora_salida:        Mapped[time | None] = mapped_column(Time, nullable=True)
     coordenada_entrada: Mapped[str | None] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     coordenada_salida:  Mapped[str | None] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    # True cuando la salida la puso el sistema y no la persona: el técnico
+    # olvidó marcarla y la jornada se cerró a las 23:59:59
+    # (`_cerrar_jornada_abandonada`). RTF-01 / R3-3: sin esta marca, esas
+    # horas se contaban como trabajadas e inflaban el historial y los tres
+    # reportes del gerente.
+    cierre_automatico:  Mapped[bool]   = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Relaciones
     empleado:  Mapped["Empleado"]      = relationship(back_populates="asistencias")
