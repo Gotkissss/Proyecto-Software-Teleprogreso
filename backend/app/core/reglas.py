@@ -286,6 +286,23 @@ TOLERANCIA_RELOJ_SEGUNDOS = 120
 HORAS_UBICACION_RECIENTE = 8
 
 
+# ── Caducidad de las alertas de «técnico sin entrada» (RTF-01 / R2-2) ───────
+#
+# Un aviso de «no marcó entrada» es de un día concreto: que hoy sí la haya
+# marcado no borra que el martes no lo hizo, así que no se cierra solo cuando
+# la condición deja de cumplirse. El problema es el otro extremo: se quedaba
+# pendiente para siempre. En la revisión técnica aparecieron avisos del 21/08,
+# 02/09 y 01/10 todavía «pendientes», y con el texto en presente («no ha
+# marcado su entrada el día de hoy»), que leído en octubre es falso.
+#
+# Pasados estos días el aviso deja de ser accionable: nadie va a marcar una
+# entrada de hace una semana, y lo que queda por hacer con esa ausencia ya no
+# se resuelve desde la pantalla de alertas. Se cierra como 'resuelta', que
+# conserva la fila y su fecha —el registro de que ese día faltó— pero la saca
+# del contador de pendientes.
+DIAS_VIGENCIA_ALERTA_SIN_ENTRADA = 7
+
+
 # ── Bitácora de auditoría (HU-S9-03) ─────────────────────────────────────────
 #
 # Una lectura sensible idéntica (mismo actor, misma ruta, mismos filtros) se

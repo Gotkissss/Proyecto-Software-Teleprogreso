@@ -68,8 +68,13 @@ const TIPO_ALERTA_INFO = {
   },
   tecnico_sin_entrada: {
     label: 'Técnico sin entrada',
-    describir: (nombre) => `${nombre} no ha marcado su entrada el día de hoy.`,
-    sinNombre: (id) => `El empleado #${id} no ha marcado su entrada el día de hoy.`,
+    // RTF-01 / R2-2: el texto decía «el día de hoy» en presente, así que un
+    // aviso del 21/08 leído en octubre afirmaba algo falso y no había forma de
+    // saber de qué día hablaba sin mirar la marca de tiempo de la tarjeta.
+    describir: (nombre, fecha) =>
+      `${nombre} no marcó su entrada ${fecha}.`,
+    sinNombre: (id, fecha) =>
+      `El empleado #${id} no marcó su entrada ${fecha}.`,
   },
   stock_critico: {
     label: 'Stock crítico',
@@ -123,10 +128,39 @@ function describirAlerta(alerta) {
   const info = TIPO_ALERTA_INFO[alerta.tipo]
   if (!info) return `Alerta: ${alerta.tipo}`
 
-  if (alerta.referencia_label) return info.describir(alerta.referencia_label)
+  // La fecha de la alerta, en palabras, para los tipos que hablan de un día
+  // concreto. Las demás plantillas la ignoran.
+  const cuando = diaDeLaAlerta(alerta.fecha)
+
+  if (alerta.referencia_label) {
+    return info.describir(alerta.referencia_label, cuando)
+  }
 
   const { id } = parseReferencia(alerta.referencia)
-  return id ? info.sinNombre(id) : info.label
+  return id ? info.sinNombre(id, cuando) : info.label
+}
+
+/**
+ * «hoy», «ayer» o «el 21/08/2026», según la fecha de la alerta.
+ *
+ * RTF-01 / R2-2: sin esto el texto siempre decía «el día de hoy», que en un
+ * aviso de hace dos meses es simplemente falso.
+ */
+export function diaDeLaAlerta(iso, referencia = new Date()) {
+  if (!iso) return 'ese día'
+  const fecha = new Date(iso)
+  if (Number.isNaN(fecha.getTime())) return 'ese día'
+
+  const soloDia = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const dias = Math.round(
+    (soloDia(referencia) - soloDia(fecha)) / (1000 * 60 * 60 * 24)
+  )
+
+  if (dias === 0) return 'hoy'
+  if (dias === 1) return 'ayer'
+  return `el ${fecha.toLocaleDateString('es-GT', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  })}`
 }
 
 /*
