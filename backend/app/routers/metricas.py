@@ -62,9 +62,21 @@ async def get_metricas_supervisor(
       número parecía roto al lado de la lista de técnicos, que muestra a todos.
     - **tareas_completadas_hoy**: tareas cerradas hoy (por `fecha_completado`).
     - **tareas_completadas_total**: histórico completo de cerradas.
-    - **tareas_pendientes**: tareas en estado 'pendiente'.
-    - **tareas_retrasadas**: tareas pendientes o en progreso cuya
-      fecha_finalizacion ya pasó.
+    - **tareas_pendientes**: tareas en estado 'pendiente', o sea asignadas o
+      por asignar que nadie ha empezado. NO incluye las que están en curso.
+    - **tareas_en_progreso**: tareas en estado 'en_progreso', es decir con un
+      técnico trabajando en ellas ahora.
+    - **tareas_activas**: la suma de las dos anteriores — todo el trabajo
+      abierto.
+    - **tareas_retrasadas**: de las activas, las que ya pasaron su
+      fecha_finalizacion. Es un subconjunto de `tareas_activas`, no una
+      categoría aparte: una tarea retrasada se cuenta también en pendientes o
+      en progreso según su estado.
+
+    RTF-01 / R2-1: el panel mostraba «Tareas pendientes: 0» con dos tareas en
+    curso vencidas, y los números no cuadraban entre sí porque faltaba el que
+    las contaba. Lo que había no estaba mal calculado; estaba incompleto, y sin
+    esta lista nadie podía saber qué entraba en cada tarjeta.
 
     Roles: admin | supervisor | gerente.
     """
@@ -129,6 +141,18 @@ async def get_metricas_supervisor(
     )
     tareas_pendientes: int = result_pendientes.scalar() or 0
 
+    # ── 3b. Tareas en progreso (RTF-01 / R2-1) ──────────────────────────────
+    # El indicador que faltaba. Sin él, una tarea que un técnico ya empezó no
+    # aparecía en ninguna tarjeta: no estaba en «pendientes» (ya no lo está) ni
+    # en «completadas» (todavía no), así que el panel decía 0 pendientes
+    # mientras había trabajo en marcha.
+    result_en_progreso = await db.execute(
+        select(func.count(Tarea.id_tarea)).where(
+            Tarea.estado_tarea == "en_progreso",
+        )
+    )
+    tareas_en_progreso: int = result_en_progreso.scalar() or 0
+
     # ── 4. Tareas retrasadas ─────────────────────────────────────────────────
     # Definición: están en 'en_progreso' O 'pendiente' y su fecha_finalizacion
     # esperada ya pasó (es anterior a hoy).
@@ -147,6 +171,11 @@ async def get_metricas_supervisor(
         "tareas_completadas_hoy":   tareas_completadas_hoy,
         "tareas_completadas_total": tareas_completadas_total,
         "tareas_pendientes":        tareas_pendientes,
+        "tareas_en_progreso":       tareas_en_progreso,
+        # Se manda calculada y no se deja al cliente sumar: los dos números de
+        # arriba salen de dos consultas, así que sumarlos en el navegador
+        # podría dar un total que no corresponde a ningún instante.
+        "tareas_activas":           tareas_pendientes + tareas_en_progreso,
         "tareas_retrasadas":        tareas_retrasadas,
     }
 

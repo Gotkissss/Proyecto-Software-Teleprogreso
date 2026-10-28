@@ -174,5 +174,11 @@ export async function getTecnicosDisponibles(idTarea = null) {
     // ubicación es otra cosa muy distinta.
     distancia_m: tec.distancia_m ?? null,
     ubicacion_registrada_en: tec.ubicacion_registrada_en ?? null,
+    // RTF-01 / R2-6: el backend ya mandaba estos dos campos y el selector los
+    // ignoraba, así que ofrecía como «Disponible para asignación» a quien no
+    // había marcado entrada. «Disponible» era solo «no llegó a su límite de
+    // tareas», que es otra cosa.
+    marco_entrada: Boolean(tec.marco_entrada),
+    en_jornada: Boolean(tec.en_jornada),
   }))
 }

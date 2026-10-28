@@ -41,6 +41,34 @@ describe('utils/bitacora', () => {
     for (const accion of Object.keys(ACCIONES)) {
       expect(textoAccion(accion)).not.toBe(accion)
     }
-    expect(textoAccion('renovar_sesion')).toBe('renovar_sesion')
+    // Una acción que el backend emita y aquí no esté sale cruda en vez de
+    // dejar la celda vacía. `renovar_sesion` era el ejemplo de esta prueba
+    // justamente porque le faltaba la etiqueta: desde RTF-01 / R1-6 ya la
+    // tiene, así que el ejemplo pasa a ser una acción inventada.
+    expect(textoAccion('accion_que_no_existe')).toBe('accion_que_no_existe')
+  })
+
+  it('las acciones que el backend emite tienen su etiqueta', () => {
+    // RTF-01 / R1-6: la bitácora mostraba «renovar_sesion» tal cual, y un
+    // login salía como «Modificó empleado #n» porque no había una acción
+    // propia. Un registro de auditoría que hay que descifrar no lo lee nadie.
+    for (const accion of [
+      'login',
+      'logout',
+      'renovar_sesion',
+      'login_fallido',
+      'login_bloqueado',
+      'acceso_denegado',
+      'limite_ubicaciones',
+      'error_interno',
+    ]) {
+      expect(ACCIONES[accion], `falta la etiqueta de «${accion}»`).toBeTruthy()
+      expect(textoAccion(accion)).not.toBe(accion)
+    }
+  })
+
+  it('«Inició sesión» se distingue de «Modificó»', () => {
+    expect(textoAccion('login')).toBe('Inició sesión')
+    expect(textoAccion('actualizar')).toBe('Modificó')
   })
 })

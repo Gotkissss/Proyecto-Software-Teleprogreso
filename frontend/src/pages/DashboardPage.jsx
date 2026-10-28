@@ -183,14 +183,34 @@ export default function DashboardPage() {
           onClick={() => navigate('/supervisor/historial-tareas')}
           clickable
         />
+        {/* RTF-01 / R2-1: faltaba la tarjeta de las tareas en curso, así que
+            el panel decía «Tareas pendientes: 0» mientras había dos en marcha
+            y vencidas. Una tarea empezada no estaba en «pendientes» (ya no lo
+            está) ni en «completadas» (todavía no): no aparecía en ninguna
+            parte, y los números no cuadraban entre sí. El sufijo con el total
+            de abiertas es lo que deja comprobar la suma de un vistazo. */}
         <MetricCard
-          label="Tareas pendientes"
+          label="Pendientes"
           value={metricas?.tareas_pendientes ?? 0}
+          suffix={
+            metricas?.tareas_activas
+              ? `${metricas.tareas_activas} abiertas`
+              : null
+          }
           variant="warning"
+        />
+        <MetricCard
+          label="En curso"
+          value={metricas?.tareas_en_progreso ?? 0}
+          variant="info"
         />
         <MetricCard
           label="En retraso"
           value={metricas?.tareas_retrasadas ?? 0}
+          /* «De las abiertas»: es un subconjunto de pendientes + en curso, no
+             una cuarta categoría. Sin decirlo, el que suma las cuatro
+             tarjetas obtiene más tareas de las que hay. */
+          suffix="de las abiertas"
           variant="danger"
           onClick={() => navigate('/supervisor/alertas')}
           clickable

@@ -125,6 +125,25 @@ function tieneAlgunaUbicacion(jornada) {
 }
 
 /** Variante de color para el total de horas trabajadas de la jornada. */
+/**
+ * Duración de una pausa, en palabras.
+ *
+ * RTF-01 / R3-6: una pausa de 40 segundos tiene `minutos: 0` —los minutos
+ * salen de una división entera— y la tabla mostraba «0 min», que se lee como
+ * un fallo del sistema y no como «duró menos de un minuto». El informe la
+ * reportó como «1 descanso con 00:00 de duración».
+ */
+export function duracionPausa(pausa) {
+  const minutos = pausa?.minutos ?? 0
+  if (minutos > 0) return `${minutos} min`
+
+  const segundos = pausa?.segundos ?? 0
+  // Cero de verdad: el técnico inició y cerró la pausa en el mismo segundo,
+  // casi siempre un doble toque en el botón.
+  if (segundos <= 0) return 'sin duración'
+  return `${segundos} s`
+}
+
 function varianteHoras(minutosTrabajados) {
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA) return 'success'
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA / 2) return 'warning'
@@ -228,7 +247,7 @@ function FilaJornada({ jornada }) {
                       <span>
                         {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
                       </span>
-                      <span className={styles.pausaMin}>{p.minutos} min</span>
+                      <span className={styles.pausaMin}>{duracionPausa(p)}</span>
                     </li>
                   ))}
                 </ul>

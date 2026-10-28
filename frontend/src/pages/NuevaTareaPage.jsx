@@ -17,6 +17,7 @@ import {
   crearTarea,
   getTecnicosDisponibles,
 } from '../api/tareaService'
+import { estadoJornada, ordenarPorDisponibilidad } from '../utils/tecnicos'
 import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
 import { hoyISO } from '../utils/fecha'
 import Spinner from '../components/ui/Spinner'
@@ -120,7 +121,10 @@ export default function NuevaTareaPage() {
     const fetchTecnicos = async () => {
       setLoadingTec(true)
       try {
-        setTecnicos(await getTecnicosDisponibles())
+        // RTF-01 / R2-6: en jornada primero, luego los que ya salieron y
+        // al final los que no marcaron entrada. El primero que se ofrecía
+        // podía ser alguien que no había empezado el día.
+        setTecnicos(ordenarPorDisponibilidad(await getTecnicosDisponibles()))
       } catch (err) {
         console.error('Error al cargar técnicos:', err)
         setErrorServidor(
@@ -475,6 +479,10 @@ export default function NuevaTareaPage() {
                       {tec.nombre_completo}
                       {' — '}
                       {tec.tareas_activas ?? 0} tarea{tec.tareas_activas !== 1 ? 's' : ''} activa{tec.tareas_activas !== 1 ? 's' : ''}
+                      {/* RTF-01 / R2-6: el estado de la jornada, en la propia
+                          opción, para no tener que seleccionar a cada uno
+                          para enterarse. */}
+                      {` · ${estadoJornada(tec)}`}
                       {alLimite ? ' (límite alcanzado)' : ''}
                     </option>
                   )
@@ -508,13 +516,37 @@ export default function NuevaTareaPage() {
                   </div>
                 )
               }
+              // RTF-01 / R2-6: «Disponible para asignación» solo quería decir
+              // «no llegó a su límite de tareas», y se mostraba igual a quien
+              // no había marcado entrada. Asignarle trabajo a alguien que no
+              // empezó su jornada no es un error del sistema, pero el
+              // supervisor tiene que saberlo antes de hacerlo.
+              const carga =
+                `${tecnicoSeleccionado.nombre_completo} tiene ${activas} ` +
+                `tarea${activas !== 1 ? 's' : ''} activa${activas !== 1 ? 's' : ''}.`
+
+              if (!tecnicoSeleccionado.marco_entrada) {
+                return (
+                  <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoAdvertencia}`}>
+                    <span>ℹ</span>
+                    <span>{carga} No ha marcado entrada hoy: no podrá iniciarla hasta que lo haga.</span>
+                  </div>
+                )
+              }
+
+              if (!tecnicoSeleccionado.en_jornada) {
+                return (
+                  <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoAdvertencia}`}>
+                    <span>ℹ</span>
+                    <span>{carga} Ya cerró su jornada de hoy.</span>
+                  </div>
+                )
+              }
+
               return (
                 <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoOk}`}>
                   <span>✓</span>
-                  <span>
-                    {tecnicoSeleccionado.nombre_completo} tiene {activas} tarea{activas !== 1 ? 's' : ''} activa{activas !== 1 ? 's' : ''}.
-                    Disponible para asignación.
-                  </span>
+                  <span>{carga} En jornada ahora mismo.</span>
                 </div>
               )
             })()}

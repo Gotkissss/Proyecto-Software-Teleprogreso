@@ -342,12 +342,32 @@ def test_la_misma_lectura_repetida_se_registra_una_vez_por_ventana(eventos_bitac
 
     for _ in range(4):  # el mapa del supervisor se refresca solo
         assert cliente.get("/recorrido/12?fecha=2026-10-11", headers=_token(gerente)).status_code == 200
-    cliente.get("/recorrido/12?fecha=2026-10-12", headers=_token(gerente))  # otro filtro, otra lectura
+    # Otro filtro sobre el MISMO técnico: desde RTF-01 / R1-8 no deja otra
+    # fila. Cambiar de fecha no cambia de quién se están viendo los datos, y
+    # una fila por cada cambio de filtro llenaba la bitácora de ruido.
+    cliente.get("/recorrido/12?fecha=2026-10-12", headers=_token(gerente))
 
-    assert [e["cambios"]["consulta"]["fecha"] for e in _de(eventos_bitacora, "leer")] == [
-        "2026-10-11",
-        "2026-10-12",
-    ]
+    assert [e["id_entidad"] for e in _de(eventos_bitacora, "leer")] == [12]
+    assert [
+        e["cambios"]["consulta"]["fecha"] for e in _de(eventos_bitacora, "leer")
+    ] == ["2026-10-11"]
+
+
+def test_consultar_el_recorrido_de_otro_tecnico_si_es_otra_lectura(eventos_bitacora):
+    """
+    El límite de la deduplicación: «a quién se miró» es lo que esta auditoría
+    existe para responder, así que el id entra en la clave. Si no entrara, un
+    gerente podría recorrer el historial de ubicaciones de toda la plantilla
+    dejando una sola fila.
+    """
+    gerente = _persona(3, "gerente")
+    mini.dependency_overrides[get_db] = _db_con(gerente)
+    cliente = TestClient(mini)
+
+    cliente.get("/recorrido/12?fecha=2026-10-11", headers=_token(gerente))
+    cliente.get("/recorrido/13?fecha=2026-10-11", headers=_token(gerente))
+
+    assert [e["id_entidad"] for e in _de(eventos_bitacora, "leer")] == [12, 13]
 
 
 def test_una_lectura_fallida_no_cuenta_como_lectura(eventos_bitacora):

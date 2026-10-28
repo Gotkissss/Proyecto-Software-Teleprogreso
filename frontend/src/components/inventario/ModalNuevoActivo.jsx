@@ -4,6 +4,52 @@ import Spinner from '../ui/Spinner'
 import { crearActivo } from '../../api/inventarioService'
 import styles from './ModalNuevoActivo.module.css'
 
+/**
+ * Errores por campo del formulario de alta de un activo.
+ *
+ * Se exporta para poder probarla sin montar el modal. Las reglas son las del
+ * backend (`app/schemas/activo.py`), que sigue siendo quien decide: esto solo
+ * evita el viaje y, sobre todo, dice QUÉ campo está mal — el 422 de Pydantic
+ * llega con la lista en un formato que la pantalla no puede mostrar y acababa
+ * en un «Los datos enviados no son válidos.» genérico (RTF-01 / R3-7).
+ */
+export function validarActivo(tipo, form) {
+  const errores = {}
+
+  if (!form.nombre_activo.trim()) {
+    errores.nombre_activo = 'El nombre del activo es obligatorio.'
+  }
+
+  if (tipo === 'carro') {
+    if (!form.placa.trim()) errores.placa = 'La placa es obligatoria.'
+    if (form.capacidad !== '' && Number(form.capacidad) < 0) {
+      errores.capacidad = 'La capacidad no puede ser negativa.'
+    }
+  }
+
+  if (tipo === 'material') {
+    // `Number('')` es 0 y `Number('abc')` es NaN: hay que distinguir el campo
+    // vacío (que vale, se toma como 0) del que tiene algo que no es un número.
+    for (const [campo, etiqueta] of [
+      ['cantidad_disponible', 'La cantidad disponible'],
+      ['stock_minimo', 'El stock mínimo'],
+    ]) {
+      const crudo = String(form[campo] ?? '').trim()
+      if (!crudo) continue
+      const valor = Number(crudo)
+      if (!Number.isFinite(valor)) {
+        errores[campo] = `${etiqueta} tiene que ser un número.`
+      } else if (valor < 0) {
+        errores[campo] = `${etiqueta} no puede ser negativa.`
+      } else if (!Number.isInteger(valor)) {
+        errores[campo] = `${etiqueta} tiene que ser un número entero.`
+      }
+    }
+  }
+
+  return errores
+}
+
 export default function ModalNuevoActivo({ tipoInicial = 'carro', onCerrar, onCreado }) {
   const [tipo, setTipo] = useState(tipoInicial)
   const [form, setForm] = useState({
@@ -22,18 +68,24 @@ export default function ModalNuevoActivo({ tipoInicial = 'carro', onCerrar, onCr
     tipo_material: '',
   })
   const [guardando, setGuardando] = useState(false)
+  // RTF-01 / R3-7: un mensaje por campo, no uno genérico arriba.
+  const [errores,   setErrores]   = useState({})
   const [error, setError] = useState(null)
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const handleGuardar = async (e) => {
     e.preventDefault()
-    if (!form.nombre_activo.trim()) {
-      setError('El nombre del activo es obligatorio.')
-      return
-    }
-    if (tipo === 'carro' && !form.placa.trim()) {
-      setError('La placa es obligatoria para vehículos.')
+
+    // RTF-01 / R3-7: el backend rechaza una cantidad negativa, pero su
+    // respuesta es «Los datos enviados no son válidos.» — un 422 de Pydantic
+    // con la lista de errores en un formato que no se puede mostrar. El
+    // usuario veía un mensaje genérico arriba del formulario y tenía que
+    // adivinar qué campo estaba mal. Se valida aquí y se señala el campo.
+    const nuevosErrores = validarActivo(tipo, form)
+    setErrores(nuevosErrores)
+    if (Object.keys(nuevosErrores).length > 0) {
+      setError(null)
       return
     }
 
@@ -257,22 +309,32 @@ export default function ModalNuevoActivo({ tipoInicial = 'carro', onCerrar, onCr
                 <input
                   type="number"
                   min="0"
-                  className={styles.input}
+                  step="1"
+                  className={`${styles.input} ${errores.cantidad_disponible ? styles.inputError : ''}`}
                   value={form.cantidad_disponible}
                   onChange={e => set('cantidad_disponible', e.target.value)}
                   disabled={guardando}
+                  aria-invalid={Boolean(errores.cantidad_disponible)}
                 />
+                {errores.cantidad_disponible && (
+                  <p className={styles.campoError}>{errores.cantidad_disponible}</p>
+                )}
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Stock mínimo de alerta</label>
                 <input
                   type="number"
                   min="0"
-                  className={styles.input}
+                  step="1"
+                  className={`${styles.input} ${errores.stock_minimo ? styles.inputError : ''}`}
                   value={form.stock_minimo}
                   onChange={e => set('stock_minimo', e.target.value)}
                   disabled={guardando}
+                  aria-invalid={Boolean(errores.stock_minimo)}
                 />
+                {errores.stock_minimo && (
+                  <p className={styles.campoError}>{errores.stock_minimo}</p>
+                )}
               </div>
             </div>
 

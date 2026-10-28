@@ -178,6 +178,14 @@ async def login(
     registrar_actor(empleado)
     empleado.ultimo_acceso = ahora()
 
+    # RTF-01 / R1-6: un login salía en la bitácora como «Modificó empleado #n».
+    # No era un error del hook: escribir `ultimo_acceso` ES una modificación de
+    # la fila, y eso es lo único que el login dejaba. Pero en la pantalla
+    # resultaba imposible distinguir una entrada al sistema de que alguien
+    # hubiera editado los datos de esa persona — justo la diferencia que se va
+    # a buscar cuando se revisa una cuenta.
+    anotar_evento("login", "empleado", empleado.id_empleado)
+
     # Login correcto: se borra el historial de fallos de esta combinación para
     # que un usuario legítimo que se equivocó un par de veces no arrastre el
     # contador.

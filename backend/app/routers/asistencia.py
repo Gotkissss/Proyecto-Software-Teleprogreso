@@ -408,6 +408,7 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
                 hora_inicio=p.hora_inicio,
                 hora_fin=p.hora_fin,
                 minutos=p.minutos,
+                segundos=p.segundos,
                 en_curso=p.en_curso,
             )
             for p in resumen.pausas

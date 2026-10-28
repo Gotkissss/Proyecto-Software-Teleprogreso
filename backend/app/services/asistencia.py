@@ -87,6 +87,11 @@ class ResumenPausa:
     hora_fin: Optional[time]
     minutos: int
     en_curso: bool
+    # RTF-01 / R3-6: los minutos salen de una división entera, así que una
+    # pausa de 40 segundos daba 0 y el historial la mostraba como «00:00» —
+    # que se lee como un error del sistema. Con los segundos, la pantalla
+    # puede decir «menos de 1 min» y distinguirla de una de duración cero.
+    segundos: int = 0
 
 
 @dataclass
@@ -120,24 +125,31 @@ def calcular_minutos_pausas(
     Una pausa sin `hora_fin` sigue en curso: solo se contabiliza si se pasa una
     hora de `referencia` (normalmente "ahora" para la jornada del dia actual).
     Sin referencia se contabiliza como 0 para no inventar tiempo trabajado.
+
+    Se devuelven tambien los SEGUNDOS (RTF-01 / R3-6). Los minutos salen de una
+    division entera, asi que una pausa de 40 segundos daba 0 y el historial la
+    mostraba como «00:00» — que se lee como un error del sistema y no como «duro
+    menos de un minuto». El dato estaba bien; lo que faltaba era poder
+    distinguir una pausa cortisima de una de duracion cero.
     """
     resumen: List[ResumenPausa] = []
 
     for descanso in descansos:
         abierta = descanso.hora_fin is None
         if not abierta:
-            minutos = segundos_entre(descanso.hora_inicio, descanso.hora_fin) // 60
+            segundos = segundos_entre(descanso.hora_inicio, descanso.hora_fin)
         elif referencia is not None:
-            minutos = segundos_entre(descanso.hora_inicio, referencia) // 60
+            segundos = segundos_entre(descanso.hora_inicio, referencia)
         else:
-            minutos = 0
+            segundos = 0
 
         resumen.append(
             ResumenPausa(
                 id_descanso=descanso.id_descanso,
                 hora_inicio=descanso.hora_inicio,
                 hora_fin=descanso.hora_fin,
-                minutos=minutos,
+                minutos=segundos // 60,
+                segundos=segundos,
                 en_curso=abierta,
             )
         )

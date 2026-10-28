@@ -26,6 +26,10 @@ class DescansoResumen(BaseModel):
     hora_inicio: time
     hora_fin: Optional[time] = None
     minutos: int = 0
+    # RTF-01 / R3-6: una pausa de 40 segundos daba `minutos: 0` y el historial
+    # la pintaba como «00:00», que se lee como un fallo del sistema. Con los
+    # segundos, la pantalla puede decir «menos de 1 min».
+    segundos: int = 0
     # True mientras el empleado no haya finalizado la pausa.
     en_curso: bool = False
 
