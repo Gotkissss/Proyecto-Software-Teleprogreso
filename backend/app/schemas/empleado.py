@@ -28,11 +28,13 @@ from pydantic import (
     Field
 )
 from app.core.reglas import (
+    validar_correo_de_empleado,
     validar_nombre_persona,
     validar_politica_contrasena,
     validar_telefono,
 )
 from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
+from app.core.config import settings
 
 
 # ── Enums de dominio ───────────────────────────────────────────────────────
@@ -62,6 +64,23 @@ class EmpleadoCreate(BaseModel):
     rol:                RolEmpleado
     fecha_contratacion: date
     telefono:   Optional[str] = Field(None, max_length=20)
+
+    # RTF-01 / R1-5: el informe encontró a «Luis Fonzi» registrado dos veces,
+    # como técnico y como supervisor. Un homónimo real existe —hay muchos
+    # «José García»— así que no se puede prohibir sin más: el alta se rechaza
+    # con el registro que ya existe a la vista, y el admin la repite con este
+    # campo en true si de verdad son dos personas.
+    permitir_homonimo: bool = False
+
+    @field_validator("correo")
+    @classmethod
+    def correo_de_la_empresa(cls, v):
+        # RTF-01 / R1-5: había cuentas @gmail.com en la lista de
+        # colaboradores. Un correo personal no se puede dar de baja cuando la
+        # persona se va, y es por donde llega el aviso de contraseña.
+        if v is None:
+            return v
+        return validar_correo_de_empleado(v, settings.dominios_correo_empleado)
 
     @field_validator("contrasena")
     @classmethod
@@ -107,6 +126,23 @@ class EmpleadoUpdate(BaseModel):
     rol:                Optional[RolEmpleado] = None
     telefono: Optional[str] = Field(None, max_length=20)
     fecha_contratacion: Optional[date]        = None
+
+    # RTF-01 / R1-5: el informe encontró a «Luis Fonzi» registrado dos veces,
+    # como técnico y como supervisor. Un homónimo real existe —hay muchos
+    # «José García»— así que no se puede prohibir sin más: el alta se rechaza
+    # con el registro que ya existe a la vista, y el admin la repite con este
+    # campo en true si de verdad son dos personas.
+    permitir_homonimo: bool = False
+
+    @field_validator("correo")
+    @classmethod
+    def correo_de_la_empresa(cls, v):
+        # RTF-01 / R1-5: había cuentas @gmail.com en la lista de
+        # colaboradores. Un correo personal no se puede dar de baja cuando la
+        # persona se va, y es por donde llega el aviso de contraseña.
+        if v is None:
+            return v
+        return validar_correo_de_empleado(v, settings.dominios_correo_empleado)
 
     @field_validator("nombre", "apellido")
     @classmethod

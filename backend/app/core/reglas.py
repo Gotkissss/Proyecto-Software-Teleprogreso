@@ -167,6 +167,59 @@ def validar_telefono(valor: str) -> str:
     return f"{digitos[:4]}-{digitos[4:]}"
 
 
+# ── Correo corporativo (RTF-01 / R1-5) ──────────────────────────────────────
+#
+# El informe encontró cuentas @gmail.com mezcladas con las corporativas en la
+# lista de colaboradores. Un correo personal es un problema real, no estético:
+# no se puede dar de baja cuando la persona deja la empresa, y es el canal por
+# el que llega el aviso de restablecimiento de contraseña.
+#
+# El dominio admitido se configura (`DOMINIOS_CORREO_EMPLEADO`) y se puede
+# dejar vacío: quien despliegue esto con otro dominio, o sin dominio propio,
+# no debería quedarse sin poder registrar a nadie.
+
+
+def normalizar_correo(valor: str) -> str:
+    """Correo en minúsculas y sin espacios alrededor."""
+    return (valor or "").strip().lower()
+
+
+def dominio_de(correo: str) -> str:
+    """
+    Parte de después de la arroba, en minúsculas; cadena vacía si no hay.
+
+    `rpartition` devuelve la cadena entera cuando no encuentra el separador,
+    así que se comprueba que la arroba estaba: sin ella no hay dominio, y
+    devolver el texto completo lo haría pasar por uno.
+    """
+    izquierda, arroba, dominio = normalizar_correo(correo).rpartition("@")
+    return dominio if arroba and izquierda else ""
+
+
+def validar_correo_de_empleado(valor: str, dominios) -> str:
+    """
+    Comprueba que el correo esté en uno de los dominios admitidos.
+
+    `dominios` vacío = sin restricción. Un subdominio también vale
+    (`sistemas.teleprogreso.com` con `teleprogreso.com` configurado): sigue
+    siendo correo de la empresa.
+    """
+    correo = normalizar_correo(valor)
+    if not dominios:
+        return correo
+
+    dominio = dominio_de(correo)
+    if any(dominio == d or dominio.endswith("." + d) for d in dominios):
+        return correo
+
+    permitidos = ", ".join("@" + d for d in dominios)
+    raise ValueError(
+        "El correo de un empleado tiene que ser de la empresa "
+        f"({permitidos}). Un correo personal no se puede dar de baja cuando "
+        "la persona se va, y es por donde llegan los avisos de contraseña."
+    )
+
+
 # ── Política de contraseñas (HU-S9-02, HU-S10-01) ───────────────────────────
 #
 # Una sola política para todos los caminos que fijan una contraseña: crear un

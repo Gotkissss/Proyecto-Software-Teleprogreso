@@ -178,6 +178,18 @@ class Settings(BaseSettings):
     # solo es alcanzable a través de su propio proxy.
     PROXIES_CONFIABLES: str = ""
 
+    # RTF-01 / R1-5: dominios de correo que se aceptan al registrar o editar
+    # un empleado, separados por coma. El informe encontró cuentas
+    # @gmail.com mezcladas con las corporativas en la lista de colaboradores:
+    # un correo personal no se puede dar de baja cuando la persona se va, y
+    # es el canal por el que llega el aviso de cambio de contraseña.
+    #
+    # Vacío = sin restricción, para quien despliegue esto con otro dominio o
+    # sin dominio propio. Solo se comprueba al crear y al cambiar el correo,
+    # así que las cuentas que ya existen siguen funcionando y se pueden
+    # editar en lo demás.
+    DOMINIOS_CORREO_EMPLEADO: str = "teleprogreso.com"
+
     # Dominios que el backend acepta en el header Host. Bloquea los ataques de
     # Host header (envenenamiento de links, cache poisoning). Vacío = sin
     # restricción; en producción se exige que esté definido.
@@ -409,6 +421,22 @@ class Settings(BaseSettings):
             )
 
         return self
+
+    @property
+    def dominios_correo_empleado(self) -> tuple:
+        """
+        Dominios admitidos en el correo de un empleado, en minúsculas.
+
+        Tupla vacía = sin restricción.
+        """
+        crudo = (self.DOMINIOS_CORREO_EMPLEADO or "").strip()
+        if not crudo:
+            return ()
+        return tuple(
+            d.strip().lower().lstrip("@")
+            for d in crudo.split(",")
+            if d.strip()
+        )
 
     @property
     def redes_proxy_confiables(self) -> tuple:

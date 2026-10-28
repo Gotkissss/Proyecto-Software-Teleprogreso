@@ -69,6 +69,9 @@ export default function EmpleadosPage() {
   const [empleadoClave,    setEmpleadoClave]    = useState(null)
   const [cargandoAccion,   setCargandoAccion]   = useState(false)
   const [errorModal,       setErrorModal]       = useState(null)
+  // RTF-01 / R1-5: `error` de la respuesta, para que el modal sepa si el
+  // conflicto es un choque de nombres y pueda ofrecer el homónimo.
+  const [codigoErrorModal, setCodigoErrorModal] = useState(null)
 
   const fetchEmpleados = useCallback(async () => {
     setCargando(true)
@@ -149,6 +152,7 @@ export default function EmpleadosPage() {
   const handleGuardarEdicion = async (id, cambios) => {
     setCargandoAccion(true)
     setErrorModal(null)
+    setCodigoErrorModal(null)
     try {
       const { data } = await apiClient.patch(`/empleados/${id}`, cambios)
       setEmpleados(prev => prev.map(e => e.id_empleado === id ? { ...e, ...data } : e))
@@ -156,6 +160,9 @@ export default function EmpleadosPage() {
       toast.success('Datos del empleado actualizados.')
     } catch (err) {
       setErrorModal(err?.response?.data?.detail || 'No se pudieron guardar los cambios.')
+      // RTF-01 / R1-5: el código distingue el choque de nombres del resto, que
+      // es el único caso en el que el modal puede ofrecer una salida.
+      setCodigoErrorModal(err?.response?.data?.error ?? null)
     } finally {
       setCargandoAccion(false)
     }
@@ -272,6 +279,7 @@ export default function EmpleadosPage() {
           onCerrar={() => setEmpleadoEditar(null)}
           cargando={cargandoAccion}
           errorMsg={errorModal}
+          errorCodigo={codigoErrorModal}
           puedeRestablecer={puedeRestablecer(empleadoEditar)}
         />
       )}
