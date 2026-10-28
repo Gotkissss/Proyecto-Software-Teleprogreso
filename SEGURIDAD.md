@@ -366,6 +366,31 @@ al día (ver README):
 
 Cada purga deja su fila en la bitácora con rol `sistema`.
 
+## Escaneo dinámico (T2)
+
+Todo lo demás de este documento se comprueba mirando el código: las pruebas, la
+auditoría de dependencias, las cabeceras de la imagen. El job
+`escaneo-dinamico` del CI mira la API **corriendo**, que es lo único que se
+parece a lo que ve alguien de fuera, y lo único que puede encontrar algo que a
+nadie se le ocurrió escribir una prueba para.
+
+Levanta el stack con `docker compose` y le pasa OWASP ZAP. Usa
+`zap-api-scan.py` y no `zap-baseline.py`: las dos corren las mismas reglas
+pasivas, pero baseline descubre las rutas siguiendo enlaces y esto es una API
+JSON sin una sola página que enlace a otra — vería tres endpoints y se iría.
+`api-scan` lee el `openapi.json` y recorre las 73 operaciones, que es lo que
+hace que el informe sirva como evidencia.
+
+Por eso el escaneo corre con `ENVIRONMENT=development`: en producción el
+`openapi.json` no se publica a propósito (es un mapa completo de la superficie
+de ataque), así que el escáner no tendría de dónde sacar las rutas.
+
+El job es **informativo** y no bloquea, y no por pereza: sobre una API que
+exige JWT en los 68 endpoints de dominio, un escáner dinámico devuelve sobre
+todo 401 y avisos de cabeceras que ya están puestas. Bloquear PRs con eso
+acabaría en que alguien quita el job. El valor está en el informe, que queda
+como artefacto del CI (`informe-zap`).
+
 ## Copias de seguridad
 
 Hasta el Sprint 10 no había ninguna. Todo lo anterior va de que nadie pueda
