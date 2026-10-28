@@ -167,6 +167,14 @@ def validar_telefono(valor: str) -> str:
     return f"{digitos[:4]}-{digitos[4:]}"
 
 
+# ── Jornada completa (RTF-01 / R3-12) ───────────────────────────────────────
+#
+# El historial pinta de verde la jornada que llega a las 8 horas trabajadas, y
+# ahora cuenta cuántas lo hicieron en el rango consultado. El umbral vive aquí
+# para que el conteo del backend y el color del frontend no puedan discrepar.
+MINUTOS_JORNADA_COMPLETA = 8 * 60
+
+
 # ── Correo corporativo (RTF-01 / R1-5) ──────────────────────────────────────
 #
 # El informe encontró cuentas @gmail.com mezcladas con las corporativas en la

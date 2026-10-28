@@ -21,6 +21,7 @@ import LayoutHeader from './shared/LayoutHeader'
 import LayoutSidebar from './shared/LayoutSidebar'
 import UserMenu from './shared/UserMenu'
 import ErrorBoundary from '../ui/ErrorBoundary'
+import { rutaInicialPorRol } from '../../utils/permisos'
 import styles from './SupervisorLayout.module.css'
 
 const IconDashboard = () => (
@@ -152,6 +153,28 @@ const NAV_GROUPS = [
   },
 ]
 
+/**
+ * Subtítulo del menú: la sección con la que arranca el rol, y el rol.
+ *
+ * RTF-01 / R1-9: decía «Panel · Gerente» para todos, pero el gerente no tiene
+ * acceso al Panel —su ruta inicial es Reportes—, así que el menú le nombraba
+ * una pantalla a la que no puede entrar. Se saca del mismo sitio del que sale
+ * la redirección después del login, así que no pueden volver a discrepar.
+ */
+export function subtituloDelMenu(rol) {
+  const nombreDelRol = rol
+    ? rol.charAt(0).toUpperCase() + rol.slice(1)
+    : 'Supervisor'
+
+  const inicial = rutaInicialPorRol(rol ?? '')
+  const seccion = NAV_GROUPS.flatMap((g) => g.items).find(
+    (item) => item.to === inicial
+  )
+
+  return seccion ? `${seccion.label} · ${nombreDelRol}` : nombreDelRol
+}
+
+
 export default function SupervisorLayout() {
   const { user, logoutUser } = useAuth()
   const navigate = useNavigate()
@@ -159,7 +182,7 @@ export default function SupervisorLayout() {
   const alertasPendientes = useAlertasPendientesCount()
   const [menuAbierto, setMenuAbierto] = useState(false)
 
-  const displayRole = user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Supervisor'
+  const subtitulo = subtituloDelMenu(user?.rol)
 
   // El cajón se cierra al navegar. LayoutSidebar ya lo cierra al pulsar uno
   // de sus enlaces, pero no cubre los saltos que dispara la propia pantalla
@@ -185,7 +208,7 @@ export default function SupervisorLayout() {
             <img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />
             <span className={styles.brand}>
               <span className={styles.brandName}>Teleprogreso</span>
-              <span className={styles.brandSub}>Panel · {displayRole}</span>
+              <span className={styles.brandSub}>{subtitulo}</span>
             </span>
           </>
         }
@@ -201,7 +224,7 @@ export default function SupervisorLayout() {
         <LayoutHeader
           variant="supervisor"
           title="Teleprogreso"
-          subtitle={`Panel · ${displayRole}`}
+          subtitle={subtitulo}
           leading={
             <button
               className={styles.menuBtn}

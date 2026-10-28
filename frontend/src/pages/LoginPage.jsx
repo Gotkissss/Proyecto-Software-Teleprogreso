@@ -182,25 +182,31 @@ export default function LoginPage() {
             </div>
 
             <form className={styles.form} onSubmit={handleSubmit} noValidate>
-              {sesionExpirada && !error && (
-                <div className={styles.avisoBanner} role="status">
-                  <span>
-                    Tu sesión se cerró por seguridad. Volvé a entrar para seguir
-                    donde estabas.
-                  </span>
-                </div>
-              )}
+              {/* RTF-01 / R1-10: el hueco del aviso está reservado siempre. Antes
+                  el mensaje aparecía de la nada y empujaba el formulario hacia
+                  abajo, y en una ventana baja eso sacaba el contenido de la
+                  pantalla. */}
+              <div className={styles.avisoSlot}>
+                {sesionExpirada && !error && (
+                  <div className={styles.avisoBanner} role="status">
+                    <span>
+                      Tu sesión se cerró por seguridad. Volvé a entrar para seguir
+                      donde estabas.
+                    </span>
+                  </div>
+                )}
 
-              {error && (
-                <div className={styles.errorBanner} role="alert">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{error}</span>
-                </div>
-              )}
+                {error && (
+                  <div className={styles.errorBanner} role="alert">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
 
               {/* Correo */}
               <div className={styles.field}>

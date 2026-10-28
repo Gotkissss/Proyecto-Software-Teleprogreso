@@ -30,7 +30,7 @@ from app.core.deps import auditar_lectura, get_current_empleado
 from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
 from app.core.exceptions import conflict
-from app.core.reglas import ROL_TECNICO
+from app.core.reglas import MINUTOS_JORNADA_COMPLETA, ROL_TECNICO
 from app.models.asistencia import Asistencia, Descanso
 from app.models.empleado import Empleado, EmpleadoTarea
 from app.models.tarea import Tarea
@@ -553,6 +553,7 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
     minutos_pausa = 0
     minutos_trabajados = 0
     abiertas = 0
+    completas = 0
 
     for jornada in jornadas:
         referencia = hora_local() if jornada.fecha == hoy else None
@@ -562,6 +563,11 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
         minutos_trabajados += resumen.minutos_trabajados
         if resumen.jornada_activa:
             abiertas += 1
+        # RTF-01 / R3-12: el mismo umbral con el que el historial las pinta
+        # de verde. Las que el sistema cerró solo cuentan 0 minutos, así que
+        # una jornada inventada nunca entra aquí.
+        if resumen.minutos_trabajados >= MINUTOS_JORNADA_COMPLETA:
+            completas += 1
 
     cantidad = len(jornadas)
     promedio = minutos_trabajados // cantidad if cantidad else 0
@@ -569,6 +575,7 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
     return HistorialTotales(
         jornadas=cantidad,
         jornadas_abiertas=abiertas,
+        jornadas_completas=completas,
         minutos_trabajados=minutos_trabajados,
         minutos_pausa=minutos_pausa,
         minutos_brutos=minutos_brutos,

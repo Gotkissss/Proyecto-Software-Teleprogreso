@@ -15,6 +15,8 @@ import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import { etiquetaEstado, variantePorEstado } from '../components/mapa/estadoColor'
+import { contarTareas } from '../utils/plural'
 import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
 
@@ -240,7 +242,8 @@ export default function DashboardPage() {
                 <div className={styles.tecnicoInfo}>
                   <span className={styles.tecnicoNombre}>{tec.nombre_completo}</span>
                   <span className={styles.tecnicoTareas}>
-                    {tec.tareas_asignadas ?? 0} tareas activas
+                    {/* RTF-01 / R2-9: decía «1 tareas activas». */}
+                    {contarTareas(tec.tareas_asignadas ?? 0)}
                     {tec.alLimite && ' · al límite'}
                   </span>
                 </div>
@@ -304,13 +307,13 @@ export default function DashboardPage() {
                       </span>
                     </button>
                   )}
+                  {/* RTF-01 / R2-8: salía el valor crudo del backend
+                      («en_progreso») porque se pasaba `tarea.estado` tal cual.
+                      Las dos cosas —texto y color— vienen ahora del mismo sitio
+                      que el resto de la aplicación. */}
                   <Badge
-                    label={tarea.estado}
-                    variant={
-                      tarea.estado === 'completado'  ? 'success' :
-                      tarea.estado === 'en_progreso' ? 'info'    :
-                      tarea.estado === 'retrasado'   ? 'danger'  : 'warning'
-                    }
+                    label={etiquetaEstado(tarea.estado)}
+                    variant={variantePorEstado(tarea.estado)}
                   />
                 </div>
               </li>

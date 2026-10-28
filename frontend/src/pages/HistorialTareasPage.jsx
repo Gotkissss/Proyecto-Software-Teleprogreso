@@ -364,7 +364,15 @@ export default function HistorialTareasPage() {
       ) : (
         <EmptyState
           title="Sin tareas completadas en este rango"
-          description="Prueba a ampliar las fechas o a quitar el filtro de técnico."
+          /* RTF-01 / R3-10: el texto era el mismo para todos y mandaba al
+             técnico a quitar «el filtro de técnico», que en su vista no
+             existe —solo lo ve quien supervisa—, así que le proponía algo
+             imposible y lo dejaba sin saber qué hacer. */
+          description={
+            esSupervision
+              ? 'Prueba a ampliar las fechas o a quitar el filtro de técnico.'
+              : 'Prueba a ampliar el rango de fechas.'
+          }
         />
       )}
     </div>

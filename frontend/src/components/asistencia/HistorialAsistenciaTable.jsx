@@ -411,6 +411,15 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
             valor={`${Math.floor(totales.promedio_minutos_trabajados / 60)}h ${totales.promedio_minutos_trabajados % 60}m`}
             label="Promedio por jornada"
           />
+          {/* RTF-01 / R3-12: el resumen no decía cuántas jornadas llegaron a
+              las 8 horas; solo el color verde de cada fila lo insinuaba, y la
+              leyenda —un ejemplo del chip, con «00:00» escrito dentro— se leía
+              como si ese fuera el número. El conteo lo hace el backend sobre
+              todo el rango, no solo sobre la página que se está viendo. */}
+          <ResumenCard
+            valor={totales.jornadas_completas ?? 0}
+            label="Jornadas completas (≥ 8h)"
+          />
           {totales.jornadas_abiertas > 0 && (
             <ResumenCard
               valor={totales.jornadas_abiertas}
@@ -433,7 +442,10 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
           <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS; si el técnico lo explicó, su motivo va debajo
         </span>
         <span className={styles.leyendaItem}>
-          <span className={`${styles.horasChip} ${styles.horas_success}`}>00:00</span> Jornada completa (≥ 8h)
+          {/* El chip es un ejemplo del color, no un dato: antes decía «00:00»
+              y se leía como una cifra en cero (RTF-01 / R3-12). */}
+          <span className={`${styles.horasChip} ${styles.horas_success}`}>08:00</span> Jornada
+          completa: 8 horas trabajadas o más
         </span>
       </div>
 

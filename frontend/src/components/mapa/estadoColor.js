@@ -20,9 +20,23 @@ export const ESTADO_COLOR = {
 
 export const ESTADO_LABEL = {
   pendiente:   'Pendiente',
-  en_progreso: 'En Curso',
+  en_progreso: 'En curso',
   completado:  'Completado',
   cancelado:   'Cancelado',
+}
+
+/**
+ * Etiqueta legible de un estado de tarea.
+ *
+ * RTF-01 / R2-8: el panel pintaba el valor crudo del backend —«en_progreso»—
+ * porque pasaba `tarea.estado` directo al badge. El respaldo no deja escapar
+ * un estado nuevo con el guion bajo a la vista: lo deja al menos legible.
+ */
+export function etiquetaEstado(estado) {
+  if (ESTADO_LABEL[estado]) return ESTADO_LABEL[estado]
+  const crudo = String(estado ?? '').replace(/_/g, ' ').trim()
+  if (!crudo) return '—'
+  return crudo.charAt(0).toUpperCase() + crudo.slice(1)
 }
 
 export const PRIORIDAD_LABEL = {

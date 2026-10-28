@@ -17,6 +17,8 @@ import {
   crearTarea,
   getTecnicosDisponibles,
 } from '../api/tareaService'
+import { enfocarPrimerError } from '../utils/formulario'
+import { contarTareas } from '../utils/plural'
 import { estadoJornada, ordenarPorDisponibilidad } from '../utils/tecnicos'
 import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
 import { hoyISO } from '../utils/fecha'
@@ -182,7 +184,16 @@ export default function NuevaTareaPage() {
 
     const erroresValidacion = validar(form)
     setErrores(erroresValidacion)
-    if (Object.keys(erroresValidacion).length > 0) return
+    if (Object.keys(erroresValidacion).length > 0) {
+      // RTF-01 / R2-10: el aviso salía arriba del formulario pero la pantalla
+      // no subía hasta él, así que al pulsar «Crear» no pasaba nada visible y
+      // el supervisor volvía a pulsar. Se espera al repintado para que el
+      // mensaje ya esté puesto cuando el campo recibe el foco.
+      requestAnimationFrame(() =>
+        enfocarPrimerError(erroresValidacion, Object.keys(FORM_INICIAL))
+      )
+      return
+    }
 
     // Validación del límite antes de llamar al backend
     if (form.id_tecnico) {
@@ -190,7 +201,7 @@ export default function NuevaTareaPage() {
       const limite = tec?.limite_tareas ?? LIMITE_TAREAS
       if (tec && tec.tareas_activas >= limite) {
         setErrorServidor(
-          `${tec.nombre_completo} ya tiene ${tec.tareas_activas} tareas activas. ` +
+          `${tec.nombre_completo} ya tiene ${contarTareas(tec.tareas_activas)}. ` +
           `El límite es ${limite}. Selecciona otro técnico.`
         )
         return
@@ -234,6 +245,11 @@ export default function NuevaTareaPage() {
           })
           if (Object.keys(errBack).length > 0) {
             setErrores((prev) => ({ ...prev, ...errBack }))
+            // Lo mismo que con la validación de aquí: el error del backend
+            // también hay que ponérselo delante (RTF-01 / R2-10).
+            requestAnimationFrame(() =>
+              enfocarPrimerError(errBack, Object.keys(FORM_INICIAL))
+            )
             return
           }
         }
@@ -308,6 +324,7 @@ export default function NuevaTareaPage() {
             <input
               type="text"
               className={`${styles.input} ${campoError('titulo') ? styles.inputError : ''}`}
+              data-campo="titulo"
               placeholder="Ej: Reparación de señal - Local El Centro"
               value={form.titulo}
               onChange={(e) => handleChange('titulo', e.target.value)}
@@ -346,6 +363,7 @@ export default function NuevaTareaPage() {
             <input
               type="text"
               className={`${styles.input} ${errores.direccion ? styles.inputError : ''}`}
+              data-campo="direccion"
               placeholder="Ej: Calle 15, Ave. Circunvalación, Zona 10"
               value={form.direccion}
               onChange={(e) => handleChange('direccion', e.target.value)}
@@ -412,6 +430,7 @@ export default function NuevaTareaPage() {
               <input
                 type="date"
                 className={`${styles.input} ${campoError('fecha_finalizacion') ? styles.inputError : ''}`}
+                data-campo="fecha_finalizacion"
                 value={form.fecha_finalizacion}
                 onChange={(e) => handleChange('fecha_finalizacion', e.target.value)}
                 onBlur={() => handleBlur('fecha_finalizacion')}
@@ -459,6 +478,7 @@ export default function NuevaTareaPage() {
             ) : (
               <select
                 className={`${styles.select} ${campoError('id_tecnico') ? styles.inputError : ''}`}
+                data-campo="id_tecnico"
                 value={form.id_tecnico}
                 onChange={(e) => {
                   handleChange('id_tecnico', e.target.value)

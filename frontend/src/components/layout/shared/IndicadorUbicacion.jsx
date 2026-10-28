@@ -30,17 +30,20 @@ export default function IndicadorUbicacion() {
 
   if (estado === 'cargando') {
     variante = 'pendiente'
-    texto = 'Obteniendo ubicación…'
+    texto = 'Buscando GPS…'
     titulo = 'Esperando la primera lectura de GPS para empezar a compartir tu ubicación.'
   } else if (estado === 'denegado' || estado === 'no_soportado' || estado === 'error') {
     variante = 'alerta'
-    texto = 'Ubicación no disponible'
+    // RTF-01 / R3-11: «Ubicación no disponible» no cabía en la cápsula del
+    // encabezado y salía como «Ubicación no d…». El texto corto cabe entero y
+    // dice lo mismo; el porqué está en el `title`.
+    texto = 'Sin ubicación'
     titulo = 'Tu supervisor no puede verte en el mapa: no se está compartiendo tu ubicación.'
   } else if (errorEnvio) {
     // Hay lectura de GPS válida, pero el último envío al backend falló
     // (red o servidor). El hook reintenta solo en la siguiente lectura.
     variante = 'alerta'
-    texto = 'Ubicación sin enviar'
+    texto = 'Sin enviar'
     titulo = errorEnvio
   }
 

@@ -176,8 +176,13 @@
   margin: 0;
 }
 
+/* RTF-01 / R3-11: la placa se partía en dos líneas («P-» arriba y «118KLM»
+   abajo) porque el guion es un punto de corte válido. Una placa es una sola
+   unidad: partida no se puede leer ni dictar. */
 .vehiculoPlaca {
   display: inline-block;
+  white-space: nowrap;
+  align-self: flex-start;
   font-size: 0.875rem;
   font-weight: 700;
   font-family: var(--font-mono);

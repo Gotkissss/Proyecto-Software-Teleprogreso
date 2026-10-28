@@ -12,18 +12,25 @@
   font-size: 0.875rem;
 }
 
+/* RTF-01 / R3-12: con las siete cabeceras en una línea («Tiempo en descanso»,
+   «Horas trabajadas») la tabla no cabía y había que desplazarla de lado para
+   ver la última columna, que es justo la que resume la productividad. Las
+   cabeceras ahora se parten en dos líneas —crecen hacia arriba, que es espacio
+   que sobra— y los datos siguen en una sola línea, que es donde partir sí
+   estorba. */
 .tabla th {
   padding: 0;
   border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
+  white-space: normal;
+  vertical-align: bottom;
 }
 
 .ordenar {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-2);
   background: none;
   border: none;
   font-family: var(--font-sans);
@@ -56,7 +63,7 @@
 }
 
 .tabla td {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
 }
@@ -105,4 +112,19 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* RTF-01 / R3-12: en una tableta las siete columnas siguen sin caber aunque
+   las cabeceras se partan. Se aprieta el espaciado antes que esconder datos:
+   el resumen vale precisamente por poder comparar las columnas entre sí. */
+@media (max-width: 900px) {
+  .tabla {
+    font-size: 0.8125rem;
+  }
+
+  .tabla td,
+  .ordenar {
+    padding-left: var(--space-1);
+    padding-right: var(--space-1);
+  }
 }

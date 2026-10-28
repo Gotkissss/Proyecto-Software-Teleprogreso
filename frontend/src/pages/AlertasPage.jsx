@@ -331,8 +331,15 @@ export default function AlertasPage() {
   /*  Contadores para los tabs  */
   // Las dos listas salen de la misma consulta (filtrada en el backend por el
   // estado elegido): las de seguridad van a su propia pestaña.
-  const alertasOperativas = alertas.filter((a) => !esAlertaSeguridad(a))
+  // RTF-01 / R2-11: las alertas de stock salían en las dos pestañas —aquí y
+  // en «Stock crítico», que lista los mismos materiales—. Cada tipo vive en
+  // una sola pestaña, y la de stock es la suya: es donde está el inventario
+  // con el que se resuelven.
+  const alertasOperativas = alertas.filter(
+    (a) => !esAlertaSeguridad(a) && a.tipo !== 'stock_critico'
+  )
   const alertasSeguridad  = alertas.filter(esAlertaSeguridad)
+  const alertasStock      = alertas.filter((a) => a.tipo === 'stock_critico')
   const criticos       = materiales.filter((m) => m.cantidad_disponible === 0).length
   const stockBadge     = materiales.length  // total materiales bajo mínimo
 
@@ -561,6 +568,16 @@ export default function AlertasPage() {
          */}
       {tabActiva === 'stock' && (
         <section className={styles.tabPanel}>
+          {/* RTF-01 / R2-11: las alertas de stock se atienden aquí, junto al
+              inventario que las explica, y ya no se repiten en «operativas». */}
+          {alertasStock.length > 0 && (
+            <div className={styles.alertasDeStock}>
+              {renderListado(alertasStock, {
+                vacioPendientes: 'No hay alertas de stock pendientes.',
+              })}
+            </div>
+          )}
+
           {loadingSt || errorSt || materiales.length === 0 ? (
             <PageState
               loading={loadingSt}

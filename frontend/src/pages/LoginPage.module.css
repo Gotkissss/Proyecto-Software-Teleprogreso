@@ -3,11 +3,24 @@
    Splash + login en dos columnas (branding + form).
    =================================================== */
 
+/* RTF-01 / R1-10: antes esto llevaba `overflow: hidden` para recortar los
+   círculos decorativos del fondo. Con `html, body, #root { height: 100% }`, en
+   una ventana baja el contenido del formulario pasa de la altura de la
+   pantalla, y al aparecer el mensaje de error el navegador desplazaba este
+   contenedor para traer el campo a la vista. Un contenedor con
+   `overflow: hidden` se puede desplazar así pero NO se puede devolver —no hay
+   barra—, de modo que la franja de arriba del degradado quedaba fuera para
+   siempre y abajo asomaba el `--color-bg` de la página: el «bloque blanco»
+   que vio la revisión.
+
+   El recorte se hace ahora en `.bgDecor`, que es lo único que hay que
+   recortar, y la página crece con su contenido: lo que se desplaza es el
+   documento, con su barra, y el degradado cubre todo el alto. */
 .page {
   position: relative;
+  min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
-  overflow: hidden;
   background: var(--color-bg);
 }
 
@@ -17,6 +30,9 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* Los círculos salen de los bordes a propósito: se recortan aquí, que es
+     donde hace falta, y no en `.page` (RTF-01 / R1-10). */
+  overflow: hidden;
 }
 .bgGradient {
   position: absolute;
@@ -267,6 +283,8 @@
   flex-direction: column;
   gap: var(--space-5);
 }
+/* RTF-01 / R1-10: el hueco está reservado desde el principio (ver
+   `.avisoSlot`), así que al aparecer el mensaje el formulario no se mueve. */
 .errorBanner {
   display: flex;
   align-items: center;
@@ -412,4 +430,12 @@
   color: var(--color-primary-deep);
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+/* RTF-01 / R1-10 — hueco para el aviso de sesión expirada o de error.
+   Se reserva su alto mínimo aunque esté vacío: así el formulario no salta
+   hacia abajo al mostrarse el mensaje, que es lo que empujaba el contenido
+   fuera de la pantalla. */
+.avisoSlot {
+  min-height: 48px;
 }

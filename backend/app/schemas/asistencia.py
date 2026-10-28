@@ -90,6 +90,11 @@ class HistorialTotales(BaseModel):
 
     jornadas: int = 0
     jornadas_abiertas: int = 0
+    # RTF-01 / R3-12: cuántas llegaron a las 8 horas trabajadas. La pantalla
+    # tenía el color verde para marcarlas una a una, pero el resumen no decía
+    # cuántas eran y la leyenda —un ejemplo del chip, con «00:00» dentro— se
+    # leía como si ese fuera el número.
+    jornadas_completas: int = 0
     minutos_trabajados: int = 0
     minutos_pausa: int = 0
     minutos_brutos: int = 0

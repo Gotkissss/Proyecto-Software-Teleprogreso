@@ -12,6 +12,7 @@
 
 import { useCallback, useState, useEffect } from 'react'
 import PageState from '../components/ui/PageState'
+import { tipoDeVehiculo } from '../utils/vehiculo'
 import styles from './EquipoPage.module.css'
 
 // La resolución del enlace firmado vive en api/client (urlArchivo): tenerla
@@ -54,28 +55,69 @@ const ESTADO_HERR = {
 }
 
 /* ─── SVG VEHÍCULO (inline, sin imagen externa) ──────────────────────────── */
-function VehiculoIlustracion({ color = '#1e3a5f' }) {
+/* Lo común a las tres siluetas: ruedas y faros se dibujan igual. */
+function RuedasYFaros() {
+  return (
+    <>
+      <circle cx="40" cy="82" r="12" fill="#1a202c"/>
+      <circle cx="40" cy="82" r="5" fill="#718096"/>
+      <circle cx="120" cy="82" r="12" fill="#1a202c"/>
+      <circle cx="120" cy="82" r="5" fill="#718096"/>
+      <rect x="130" y="52" width="10" height="6" rx="2" fill="#ffd54f" opacity="0.85"/>
+      <rect x="20"  y="52" width="10" height="6" rx="2" fill="#ef5350" opacity="0.7"/>
+    </>
+  )
+}
+
+/**
+ * Silueta del vehículo según su carrocería (RTF-01 / R3-11).
+ *
+ * Antes era siempre un sedán, así que la pick-up del técnico salía dibujada
+ * como un carro particular. El tipo se deduce del modelo (`utils/vehiculo.js`)
+ * y, si no se reconoce, se dibuja la silueta de siempre.
+ */
+export function VehiculoIlustracion({ color = '#1e3a5f', tipo = 'sedan' }) {
+  if (tipo === 'pickup') {
+    return (
+      <svg viewBox="0 0 160 90" width="160" height="90" fill="none" aria-hidden="true">
+        {/* Cabina corta delante y palangana abierta detrás. */}
+        <rect x="8" y="48" width="144" height="34" rx="6" fill={color} opacity="0.9"/>
+        <path d="M64 48 L74 20 L120 20 L136 48 Z" fill={color}/>
+        <path d="M78 46 L84 26 L114 26 L124 46 Z" fill="white" opacity="0.25"/>
+        {/* Cajón: el borde alto es lo que distingue a una pick-up de lejos. */}
+        <rect x="10" y="38" width="54" height="12" rx="2" fill={color}/>
+        <rect x="14" y="42" width="46" height="8" fill="white" opacity="0.12"/>
+        <RuedasYFaros />
+      </svg>
+    )
+  }
+
+  if (tipo === 'panel') {
+    return (
+      <svg viewBox="0 0 160 90" width="160" height="90" fill="none" aria-hidden="true">
+        {/* Caja alta y recta de principio a fin. */}
+        <path d="M12 18 L112 18 L140 48 L152 48 L152 82 L12 82 Z" fill={color} opacity="0.95"/>
+        <path d="M114 24 L132 46 L150 46 L150 24 Z" fill="white" opacity="0.22"/>
+        <rect x="24" y="26" width="36" height="20" rx="2" fill="white" opacity="0.12"/>
+        <RuedasYFaros />
+      </svg>
+    )
+  }
+
   return (
     <svg viewBox="0 0 160 90" width="160" height="90" fill="none" aria-hidden="true">
       <rect x="8" y="48" width="144" height="34" rx="6" fill={color} opacity="0.9"/>
       <path d="M28 48 L42 18 L118 18 L136 48 Z" fill={color}/>
       <path d="M46 46 L54 24 L108 24 L118 46 Z" fill="white" opacity="0.25"/>
-      {/* ruedas */}
-      <circle cx="40" cy="82" r="12" fill="#1a202c"/>
-      <circle cx="40" cy="82" r="5" fill="#718096"/>
-      <circle cx="120" cy="82" r="12" fill="#1a202c"/>
-      <circle cx="120" cy="82" r="5" fill="#718096"/>
-      {/* faros */}
-      <rect x="130" y="52" width="10" height="6" rx="2" fill="#ffd54f" opacity="0.85"/>
-      <rect x="20"  y="52" width="10" height="6" rx="2" fill="#ef5350" opacity="0.7"/>
+      <RuedasYFaros />
     </svg>
   )
 }
 
 /** Foto del vehículo; si no carga ni con un enlace nuevo, queda la ilustración. */
-function FotoVehiculo({ src, alt, alExpirar }) {
+function FotoVehiculo({ src, alt, alExpirar, tipo }) {
   const { fallida, alFallar } = useFotoFirmada(src, alExpirar)
-  if (!src || fallida) return <VehiculoIlustracion color="#1e3a5f" />
+  if (!src || fallida) return <VehiculoIlustracion color="#1e3a5f" tipo={tipo} />
   return (
     <img
       src={src}
@@ -165,6 +207,7 @@ export default function EquipoPage() {
                 src={urlArchivo(vehiculo.foto_url)}
                 alt={vehiculo.nombre_activo}
                 alExpirar={renovarEnlaces}
+                tipo={tipoDeVehiculo(vehiculo)}
               />
             </div>
 
