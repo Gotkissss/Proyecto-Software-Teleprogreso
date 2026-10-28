@@ -366,6 +366,112 @@ al día (ver README):
 
 Cada purga deja su fila en la bitácora con rol `sistema`.
 
+## Reglas de negocio e integridad del dato (HU-S10-07 y HU-S10-08)
+
+Esta sección existe porque una parte de la seguridad no va de quién entra, sino
+de **qué puede llegar a decir la base**. Un dato que miente no necesita a nadie
+que ataque: basta con que haya dos caminos para escribirlo y solo uno compruebe
+las reglas.
+
+### Una regla, todos los caminos
+
+«Ninguna tarea se completa sin evidencia» estaba escrito y aplicado… en el
+único camino del técnico (`PATCH /tareas/{id}/finalizar`). Un admin o un
+supervisor cerraban la misma tarea con `PATCH /tareas/{id}` o con
+`/tareas/{id}/estado` y nadie miraba nada.
+
+No era un hueco de permisos —los dos roles pueden editar tareas— sino de
+integridad: ese dato alimenta los tres reportes del gerente y el historial, así
+que «trabajo hecho» significaba dos cosas distintas según por qué pantalla se
+hubiera cerrado la tarea, y el reporte no permitía distinguirlas. Ahora los
+tres caminos pasan por `exigir_evidencia` y responden el mismo 409.
+
+**No hay cierre forzado para el admin.** Se consideró y se descartó: los casos
+que lo justificarían —cliente ausente, tarea duplicada— no son trabajo hecho, y
+para esos ya está el estado `cancelado`, que no entra en los reportes de
+productividad. Un cierre forzado solo añadiría una puerta por la que la regla
+se puede saltar.
+
+Lo mismo con los vehículos: `asignar_tecnico` aceptaba cualquier empleado
+activo, así que un supervisor podía quedar con un vehículo asignado — contado
+«en uso» en el inventario y atribuido en el reporte de activos a quien no sale
+a campo. Ahora exige rol `tecnico`.
+
+### Lo que el código promete, la base lo exige
+
+Las listas blancas de roles, estados y prioridades vivían solo en
+`core/reglas.py` y en los schemas de Pydantic. Eso cubre lo que entra por la
+API, que es casi todo — pero no todo: el seed, una migración de datos, un
+script de corrección y la consola de la base escriben directo.
+
+Y un valor mal escrito por ahí **no revienta nada en el momento**, que es lo
+que lo hace peligroso: una tarea con `estado_tarea = 'en progreso'` (espacio en
+vez de guion bajo) simplemente deja de aparecer en las pantallas que filtran
+por estado, y el reporte del gerente la cuenta en ninguna columna. El síntoma
+es «falta una tarea», semanas después.
+
+La migración `0013` lo cierra desde la base:
+
+- `CHECK` de catálogo en `empleado.rol`, `empleado.estado`,
+  `tarea.estado_tarea`, `tarea.prioridad`, `carro.estado_vehiculo` y
+  `herramienta.estado`.
+- Índices únicos en `empleado_carro` que impiden de verdad que un técnico
+  tenga dos vehículos o un vehículo dos técnicos. Lo impedía solo el servicio,
+  con dos consultas previas: dos peticiones simultáneas las pasan las dos.
+- Clave foránea de `descanso.tipo` al catálogo `tipo_pausa`, con `RESTRICT`:
+  retirar un tipo de pausa no puede llevarse las pausas que ya se tomaron con
+  él (para eso está `tipo_pausa.activo`).
+
+Cada restricción se crea **después** de comprobar que los datos actuales la
+cumplen, y si no, la migración aborta diciendo qué filas sobran. El mensaje del
+motor («violates check constraint») no dice cuáles, y en un despliegue donde la
+base no es alcanzable desde fuera averiguarlo cuesta más que el arreglo.
+
+### El stock solo lo mueve el trabajo
+
+`material.cantidad_disponible` era un número que se editaba a mano en el modal
+del activo. Usarlo en una tarea no lo bajaba, así que la alerta de stock
+crítico vigilaba una cifra que no era la del almacén.
+
+Ahora `services/kardex.py` es el **único** camino que puede tocar esa columna
+—`PATCH /activos/{id}` dejó de aceptar el campo— y cada cambio deja su fila en
+`movimiento_material` con tipo, cantidad, saldo resultante, motivo, tarea,
+actor y fecha.
+
+Dos detalles que no se ven en la descripción:
+
+- El material se lee con `SELECT … FOR UPDATE`. Sin eso, dos técnicos cerrando
+  su tarea en el mismo segundo leen el mismo saldo, cada uno resta lo suyo y el
+  segundo pisa al primero: se consumen 6 de 5 unidades, los dos movimientos
+  dicen que dejaron 2, y **nada falla**. El inventario queda mintiendo sin un
+  solo error en el log.
+- El `CHECK (cantidad_disponible >= 0)` de la migración `0012` es la red de
+  debajo, para lo que entre por fuera de la API.
+
+Las líneas de un mismo material se agrupan antes de aplicarse: mandar el mismo
+material dos veces es fácil desde el formulario, y dos movimientos de 2 parecen
+dos usos distintos del almacén en el mismo cierre.
+
+### El tope de reporte de posición
+
+Cuántos puntos manda un técnico lo decidía solo el cliente. `ubicacion_empleado`
+crece sin tope y guarda un dato sensible —dónde estuvo una persona y a qué
+hora—, así que con el token de un técnico y un bucle de tres líneas se podían
+insertar miles de filas. El freno general por IP no servía: es de 240 por
+minuto y cuenta por IP, de modo que un solo técnico podía gastarlo entero y
+dejar sin cupo a los compañeros que salieran por la misma conexión. El tope
+nuevo es **por empleado** (`core/reglas.MAX_UBICACIONES_POR_VENTANA`), con uno
+aparte y más bajo para los envíos en lote, que traen hasta 500 puntos.
+
+### Los botones que el backend va a rechazar
+
+El gerente veía los botones de atender alertas y de crear, editar, eliminar y
+asignar en inventario. El permiso del backend estaba bien puesto —esos
+endpoints son `require_supervisor`— así que cada clic terminaba en un 403: lo
+que estaba mal era prometer en pantalla algo que la API iba a rechazar. La
+tabla de acciones de `frontend/src/utils/permisos.js` lo decide ahora, y el
+backend sigue siendo quien manda.
+
 ## Modelo de amenazas (STRIDE)
 
 Las secciones anteriores cuentan *qué* defensa hay en cada capa. Esta cuenta lo
@@ -779,3 +885,28 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
 - **`'unsafe-inline'` en los estilos.** React y Leaflet ponen estilos en el
   atributo `style`, así que la CSP los permite. Los scripts no: es lo que
   importa para el robo de sesión.
+- **Segundo factor.** No hay 2FA para ninguna cuenta, tampoco para admin y
+  gerente, que son las que más pesan. Lo que compensa es todo lo demás de
+  «Cuentas y contraseñas»: política única, cambio obligatorio cuando la clave
+  la puso otra persona, tres frenos de fuerza bruta, revocación por `jti`,
+  `version_token` y alerta al admin cuando alguien martillea una cuenta. Nada
+  de eso sustituye un segundo factor: si una contraseña se filtra por fuera
+  —un gestor comprometido, un apunte en papel— no hay nada más.
+- **El JWT vive en `localStorage`.** Un XSS en la página podría leerlo. Pasarlo
+  a una cookie `HttpOnly` exige añadir protección CSRF y cambiar cómo el
+  cliente entero manda las peticiones, que es más de lo que caben en este
+  sprint sin romper algo. Lo que lo mitiga es que el XSS no es fácil de
+  conseguir: React escapa por omisión, no hay un solo
+  `dangerouslySetInnerHTML` en el código, y la CSP del frontend no permite
+  `unsafe-inline` ni `unsafe-eval` en `script-src`, así que un script inyectado
+  no se ejecuta aunque llegue al DOM.
+- **Recuperar la contraseña uno mismo.** No existe «olvidé mi contraseña»:
+  hace falta que un admin o un supervisor la restablezca. Eso necesita envío de
+  correo, que el proyecto no tiene montado. El efecto secundario no es malo —el
+  restablecimiento deja fila en la bitácora con quién lo hizo y obliga a
+  cambiarla al entrar—, pero depende de que haya alguien disponible.
+- **Funcionalidad fuera de alcance.** La PWA guarda en cola lo que se escribe
+  sin señal, pero no funciona sin conexión de verdad; el rastreo de ubicación
+  se detiene cuando el navegador pasa a segundo plano (haría falta una
+  aplicación nativa); no hay optimización de rutas, módulo de daños de activos,
+  reportes de empleados, inventario o incidencias, ni exportación a PDF o CSV.

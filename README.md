@@ -60,10 +60,11 @@ Este proyecto consiste en el desarrollo de una aplicación web/móvil para la su
  
 ## ✨ Funcionalidades
  
-- **Técnicos (móvil/PWA):** ruta diaria con prioridades, control de asistencia (entrada/salida), pausas operativas con countdown, mapa de ruta
-- **Supervisores (desktop):** dashboard con métricas en tiempo real, gestión de alertas operativas, reasignación de tareas entre técnicos
+- **Técnicos (móvil/PWA):** ruta diaria con prioridades, control de asistencia (entrada/salida), pausas operativas con countdown, mapa de ruta, y al cerrar una tarea la evidencia (descripción y foto) más el material que gastó, que se descuenta del inventario
+- **Supervisores (desktop):** dashboard con métricas en tiempo real, gestión de alertas operativas, reasignación de tareas entre técnicos, inventario con el kardex de cada material (quién movió qué, cuándo, en qué tarea y con qué saldo)
 - **Gerencia (admin y gerente):** pantalla de Reportes con indicadores y su variación contra el periodo anterior, tendencia de horas, tareas y pausas por día o semana, productividad por técnico, resumen por empleado con detalle de cada persona y exportación a Excel con los mismos filtros. El gerente entra directo a esta pantalla
-- **Autenticación:** JWT con control de acceso por rol (admin, supervisor, técnico, gerente)
+- **Administración:** bitácora de auditoría con la cadena de hashes verificable, y alertas de seguridad sobre los patrones de esa bitácora (fuerza bruta, cuentas bloqueadas, accesos denegados repetidos)
+- **Autenticación:** JWT con control de acceso por rol (admin, supervisor, técnico, gerente), política única de contraseña y cambio obligatorio cuando la clave la puso otra persona
 ## 🛠️ Levantar el proyecto
  
 ```bash
@@ -272,6 +273,33 @@ de producción en local (es lo mismo que corre el CI):
 scripts/verificar-cabeceras-frontend.sh
 scripts/verificar-imagen-backend.sh
 ```
+
+## 📦 Inventario: el stock lo mueve el trabajo
+
+`material.cantidad_disponible` **no se edita a mano**. Todo cambio pasa por un
+movimiento del kardex (tabla `movimiento_material`), que deja constancia de
+qué, cuánto, por qué, en qué tarea y con qué saldo quedó. Tres tipos:
+
+| Tipo | De dónde viene | Qué hace con el stock |
+|---|---|---|
+| `entrada` | Inventario → Movimientos | Suma |
+| `consumo` | El técnico al cerrar una tarea | Resta, y queda atado a esa tarea |
+| `ajuste` | Inventario → Movimientos, con motivo obligatorio | Fija el saldo contado |
+
+Por qué: antes el stock era un número que alguien escribía en el modal del
+activo, y usar el material en una tarea no lo bajaba. La alerta de stock
+crítico comparaba contra una cifra que no era la del almacén —avisaba de lo que
+no faltaba y callaba sobre lo que sí— y a «¿a dónde se fueron las 40 rosetas?»
+no había respuesta, porque el campo solo guarda el último valor escrito.
+
+El consumo al cerrar la tarea es **opcional**: no todas gastan material, y
+obligar a rellenarlo lleva a teclear cualquier cosa para poder cerrar. Lo que
+no es opcional es que, si se anota, el descuento ocurra en la misma transacción
+que cierra la tarea: si el almacén no alcanza, la respuesta es 409 y la tarea
+se queda abierta para corregir la cantidad.
+
+El historial se consulta en **Inventario → Materiales → Movimientos** (admin y
+supervisor).
 
 ## 📷 Fotos de evidencia: dónde se guardan
 
