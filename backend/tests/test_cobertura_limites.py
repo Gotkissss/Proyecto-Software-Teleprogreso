@@ -13,7 +13,7 @@ from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
 from app.main import app
 from app.models.activo import Activo, Carro, Herramienta, Material
 from app.models.alerta import Alerta
-from app.models.asistencia import Descanso
+from app.models.asistencia import Asistencia, Descanso
 from app.models.bitacora import BitacoraAuditoria
 from app.models.empleado import Empleado
 from app.models.tarea import Incidencia, Tarea
@@ -58,6 +58,12 @@ COLUMNAS = {
                   "estado_vehiculo", "tipo_herramienta", "estado", "unidad_medida",
                   "tipo_material")
     },
+    # RTF-01 / R3-4: el mismo campo del cuerpo va a una columna o a la otra
+    # segun sea la entrada o la salida; las dos son String(200), asi que basta
+    # con comprobar una.
+    ("MarcaAsistencia", "motivo_sin_ubicacion"): (
+        (Asistencia,), "motivo_sin_ubicacion_entrada"
+    ),
     ("GET /tareas", "estado"): ((Tarea,), "estado_tarea"),
     ("GET /empleados", "rol"): ((Empleado,), "rol"),
     ("GET /empleados", "estado"): ((Empleado,), "estado"),

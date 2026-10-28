@@ -24,6 +24,19 @@ class Asistencia(Base):
     cierre_automatico:  Mapped[bool]   = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # RTF-01 / R3-4: lo que el técnico escribe cuando esa marca sale sin
+    # coordenada (GPS denegado, sin señal, un sótano). No la convierte en
+    # verificable —una explicación no es una ubicación— pero deja constancia
+    # de quién dijo qué, que sí se puede revisar. Antes la marca decía
+    # «Ubicación no disponible» y nada más, así que no había forma de
+    # distinguir «el GPS no enganchó» de «marqué desde mi casa». Una por
+    # marca: se puede entrar con GPS y salir sin él.
+    motivo_sin_ubicacion_entrada: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+    motivo_sin_ubicacion_salida: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
 
     # Relaciones
     empleado:  Mapped["Empleado"]      = relationship(back_populates="asistencias")

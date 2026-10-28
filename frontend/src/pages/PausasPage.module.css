@@ -506,3 +506,53 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* RTF-01 / R3-4 — motivo de una marca sin ubicación. */
+.motivosLista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.motivoBtn {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-primary, #1f2937);
+  background: var(--surface-2, #f3f4f6);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.motivoBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.motivoBtnActivo {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-soft, #e0ebff);
+  font-weight: 600;
+}
+
+.motivoLabel {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.motivoTexto {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary, #1f2937);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  resize: vertical;
+}

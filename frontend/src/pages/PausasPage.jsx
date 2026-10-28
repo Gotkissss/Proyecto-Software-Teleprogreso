@@ -129,6 +129,25 @@ const AVISO_SIN_UBICACION =
   'No se pudo obtener tu ubicación: la marca quedó registrada sin ella. ' +
   'Activa el GPS y el permiso de ubicación para las próximas.'
 
+/**
+ * RTF-01 / R3-4 — motivos frecuentes de una marca sin GPS.
+ *
+ * Se ofrecen como botones porque el técnico está en la calle, con una mano
+ * ocupada: pedirle que escriba una frase es pedirle que no la escriba. El
+ * campo libre queda para lo que no esté en la lista.
+ */
+const MOTIVOS_SIN_UBICACION = [
+  'El GPS está denegado en el teléfono',
+  'No hay señal en este punto',
+  'Estoy en un sótano o un sitio cerrado',
+]
+
+/** Lo que dice el botón de marcar según en qué paso va (RTF-01 / R3-5). */
+const PASO_MARCA = {
+  ubicacion: 'Obteniendo ubicación…',
+  enviando: 'Registrando…',
+}
+
 export default function PausasPage() {
   const toast = useToast()
   // HU-4: última posición conocida, como respaldo si la lectura nueva del GPS
@@ -146,6 +165,15 @@ export default function PausasPage() {
   // parece a ningún otro diálogo del sistema y además bloquea la
   // automatización de pruebas. Se confirma con el modal propio.
   const [confirmarCierre, setConfirmarCierre] = useState(false)
+
+  // RTF-01 / R3-5: la lectura del GPS tarda hasta 8 segundos y el botón solo
+  // mostraba un spinner, así que el técnico no sabía si se había colgado.
+  // `paso` dice en voz alta qué se está haciendo.
+  const [paso, setPaso] = useState(null)
+  // RTF-01 / R3-4: cuando no hay ubicación se le pregunta por qué, en vez de
+  // dejar la marca como un hueco que el supervisor no puede contrastar.
+  const [motivoPendiente, setMotivoPendiente] = useState(null)
+  const [motivoTexto, setMotivoTexto] = useState('')
 
   // Segundos añadidos por el tick local desde la última respuesta del servidor.
   // Solo anima el reloj: el valor de partida siempre viene del backend, así
@@ -205,25 +233,94 @@ export default function PausasPage() {
     }
   }, [fetchData])
 
-  const handleRegistrarEntrada = async () => {
-    setActionLoading(true)
+  /**
+   * Manda la marca al backend y refresca la pantalla.
+   *
+   * Es el tramo común de la entrada y la salida: lo que cambia entre las dos
+   * es el endpoint y los textos, no el procedimiento.
+   */
+  const enviarMarca = async (accion, lugar, motivo = null) => {
+    const esEntrada = accion === 'entrada'
+    setPaso('enviando')
     try {
-      // HU-4: lugar de la marca. Nunca bloquea: si no hay GPS, llega null y
-      // la entrada se registra igual, sin ubicación.
-      const lugar = await obtenerPosicionActual({ respaldo: posicion })
-      const respuesta = await registrarEntrada(lugar)
+      const respuesta = esEntrada
+        ? await registrarEntrada(lugar, motivo)
+        : await finalizarJornada(lugar, motivo)
       await fetchData({ silencioso: true })
       // HU-5: la ruta y el envío de ubicación dependen de la jornada; se les
       // avisa ya en vez de esperar el siguiente ciclo del contexto.
       refrescarJornada?.()
-      toast.success('¡Entrada registrada correctamente!')
-      if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
+      toast.success(
+        esEntrada
+          ? '¡Entrada registrada correctamente!'
+          : '¡Jornada finalizada! Tu estado se actualizó.'
+      )
+      if (!respuesta?.ubicacion_registrada) {
+        // Con motivo ya no hace falta regañar: el técnico acaba de explicarlo
+        // y el supervisor lo verá en el historial.
+        toast.info(
+          motivo
+            ? 'La marca quedó sin ubicación, con tu explicación anotada.'
+            : AVISO_SIN_UBICACION
+        )
+      }
+      setConfirmarCierre(false)
+      return true
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'No se pudo registrar la entrada.')
+      // RTF-01 / R3-2: el backend responde 409 con los títulos de las tareas
+      // que siguen en curso. Ese mensaje es el que hay que mostrar —dice qué
+      // falta—, y el modal se queda abierto para que se lea.
+      toast.error(
+        err?.response?.data?.detail ||
+          (esEntrada
+            ? 'No se pudo registrar la entrada.'
+            : 'No se pudo finalizar la jornada.')
+      )
+      return false
+    }
+  }
+
+  /**
+   * Pide el GPS y marca. Si no hay ubicación, abre el modal del motivo en vez
+   * de marcar a ciegas (RTF-01 / R3-4).
+   */
+  const marcar = async (accion) => {
+    setActionLoading(true)
+    setPaso('ubicacion')
+    try {
+      // HU-4: la marca nunca se bloquea por el GPS. Si no hay lectura llega
+      // null, y entonces se pregunta por qué.
+      const lugar = await obtenerPosicionActual({ respaldo: posicion })
+      if (!lugar) {
+        setMotivoTexto('')
+        setMotivoPendiente(accion)
+        return
+      }
+      await enviarMarca(accion, lugar)
     } finally {
+      setPaso(null)
       setActionLoading(false)
     }
   }
+
+  /** Confirma el modal del motivo y manda la marca sin ubicación. */
+  const confirmarSinUbicacion = async (motivo) => {
+    const accion = motivoPendiente
+    if (!accion) return
+    setActionLoading(true)
+    try {
+      const listo = await enviarMarca(accion, null, motivo)
+      if (listo) {
+        setMotivoPendiente(null)
+        setMotivoTexto('')
+      }
+    } finally {
+      setPaso(null)
+      setActionLoading(false)
+    }
+  }
+
+  const handleRegistrarEntrada = () => marcar('entrada')
 
   const handleIniciarPausa = async (tipoPausaId) => {
     setActionLoading(true)
@@ -255,25 +352,7 @@ export default function PausasPage() {
     }
   }
 
-  const handleFinalizarJornada = async () => {
-    setActionLoading(true)
-    try {
-      const lugar = await obtenerPosicionActual({ respaldo: posicion })
-      const respuesta = await finalizarJornada(lugar)
-      await fetchData({ silencioso: true })
-      refrescarJornada?.()
-      toast.success('¡Jornada finalizada! Tu estado se actualizó.')
-      if (!respuesta?.ubicacion_registrada) toast.info(AVISO_SIN_UBICACION)
-      setConfirmarCierre(false)
-    } catch (err) {
-      // RTF-01 / R3-2: el backend responde 409 con los títulos de las tareas
-      // que siguen en curso. Ese mensaje es el que hay que mostrar —dice qué
-      // falta—, y el modal se queda abierto para que se lea.
-      toast.error(err?.response?.data?.detail || 'No se pudo finalizar la jornada.')
-    } finally {
-      setActionLoading(false)
-    }
-  }
+  const handleFinalizarJornada = () => marcar('salida')
 
   if (loading || (error && !estado)) {
     return (
@@ -382,7 +461,10 @@ export default function PausasPage() {
             >
               {actionLoading ? <Spinner size="sm" color="white" /> : <IconLogin />}
               <span>
-                {jornadaFinalizada ? 'Registrar nueva entrada' : 'Registrar Entrada'}
+                {/* RTF-01 / R3-5: el GPS tarda hasta 8 segundos; con solo el
+                    spinner el técnico no sabía si la app se había colgado. */}
+                {PASO_MARCA[paso] ??
+                  (jornadaFinalizada ? 'Registrar nueva entrada' : 'Registrar Entrada')}
               </span>
             </button>
           </div>
@@ -532,8 +614,73 @@ export default function PausasPage() {
             disabled={actionLoading}
           >
             {actionLoading
-              ? <><Spinner size="sm" color="white" /> Finalizando…</>
+              ? <><Spinner size="sm" color="white" /> {PASO_MARCA[paso] ?? 'Finalizando…'}</>
               : 'Finalizar jornada'}
+          </button>
+        </ModalActions>
+      </Modal>
+
+      {/* RTF-01 / R3-4: sin GPS la marca se registra igual —bloquearla deja al
+          técnico sin poder trabajar—, pero antes quedaba como «Ubicación no
+          disponible» y nada más, y el supervisor no podía distinguir «el GPS
+          no enganchó» de «marqué desde mi casa». Ahora se le pregunta. */}
+      <Modal
+        open={Boolean(motivoPendiente)}
+        onClose={actionLoading ? undefined : () => setMotivoPendiente(null)}
+        title="No se pudo obtener tu ubicación"
+      >
+        <p className={styles.modalSubtitle}>
+          Tu {motivoPendiente === 'salida' ? 'salida' : 'entrada'} se va a
+          registrar sin el lugar. Dinos por qué para que tu supervisor lo vea
+          junto a la marca.
+        </p>
+        <div className={styles.motivosLista}>
+          {MOTIVOS_SIN_UBICACION.map((motivo) => (
+            <button
+              key={motivo}
+              type="button"
+              className={`${styles.motivoBtn} ${
+                motivoTexto === motivo ? styles.motivoBtnActivo : ''
+              }`}
+              onClick={() => setMotivoTexto(motivo)}
+              disabled={actionLoading}
+            >
+              {motivo}
+            </button>
+          ))}
+        </div>
+        <label className={styles.motivoLabel} htmlFor="motivo-sin-ubicacion">
+          O escríbelo con tus palabras
+        </label>
+        <textarea
+          id="motivo-sin-ubicacion"
+          className={styles.motivoTexto}
+          rows={2}
+          maxLength={200}
+          value={motivoTexto}
+          onChange={(e) => setMotivoTexto(e.target.value)}
+          disabled={actionLoading}
+        />
+        <ModalActions>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => confirmarSinUbicacion(null)}
+            disabled={actionLoading}
+          >
+            {/* Se puede seguir sin explicar: obligar a escribir algo solo
+                produce motivos inventados, y la marca no debe bloquearse. */}
+            Marcar sin explicar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => confirmarSinUbicacion(motivoTexto)}
+            disabled={actionLoading || !motivoTexto.trim()}
+          >
+            {actionLoading
+              ? <><Spinner size="sm" color="white" /> Registrando…</>
+              : 'Registrar con esta explicación'}
           </button>
         </ModalActions>
       </Modal>

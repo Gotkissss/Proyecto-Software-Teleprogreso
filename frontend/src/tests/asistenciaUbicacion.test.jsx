@@ -147,13 +147,42 @@ describe('PausasPage — marcar con ubicación', () => {
     expect(screen.queryByText(/quedó registrada sin ella/)).not.toBeInTheDocument()
   })
 
-  it('sin ubicación la entrada se registra igual y se avisa al técnico', async () => {
+  it('sin ubicación la entrada se registra igual, explicando por qué', async () => {
+    // RTF-01 / R3-4: la marca sigue sin bloquearse, pero ya no sale muda. Se
+    // pregunta por qué y la explicación viaja con ella.
     simularPantallaPausas(estadoPausas())
     posicionMock.mockResolvedValue(null)
     postMock.mockResolvedValue({ data: { ubicacion_registrada: false } })
 
     montar(PausasPage)
     await userEvent.click(await screen.findByRole('button', { name: /Registrar Entrada/ }))
+
+    const motivo = await screen.findByRole('button', { name: /No hay señal en este punto/ })
+    await userEvent.click(motivo)
+    await userEvent.click(
+      screen.getByRole('button', { name: /Registrar con esta explicación/ })
+    )
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith('/asistencia/entrada', {
+        motivo_sin_ubicacion: 'No hay señal en este punto',
+      })
+    )
+    expect(await screen.findByText('¡Entrada registrada correctamente!')).toBeInTheDocument()
+    // Con explicación no se regaña: el supervisor la verá en el historial.
+    expect(screen.getByText(/con tu explicación anotada/)).toBeInTheDocument()
+  })
+
+  it('sin ubicación se puede marcar sin explicar: la marca nunca se bloquea', async () => {
+    simularPantallaPausas(estadoPausas())
+    posicionMock.mockResolvedValue(null)
+    postMock.mockResolvedValue({ data: { ubicacion_registrada: false } })
+
+    montar(PausasPage)
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar Entrada/ }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Marcar sin explicar/ })
+    )
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/asistencia/entrada', undefined)

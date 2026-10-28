@@ -117,6 +117,22 @@ function salidaSinUbicacion(jornada) {
   return Boolean(jornada.hora_salida) && (jornada.lat_salida == null || jornada.lng_salida == null)
 }
 
+/**
+ * RTF-01 / R3-4: lo que el técnico explicó cuando esa marca salió sin GPS.
+ *
+ * Devuelve null para las marcas anteriores a la corrección y para las que el
+ * técnico decidió no explicar. El badge «Sin ubicación» se muestra igual: lo
+ * que cambia es que, cuando hay explicación, el supervisor la lee aquí en vez
+ * de tener que llamar al técnico.
+ */
+export function motivoSinUbicacion(jornada, marca) {
+  const crudo = marca === 'salida'
+    ? jornada?.motivo_sin_ubicacion_salida
+    : jornada?.motivo_sin_ubicacion_entrada
+  const limpio = String(crudo ?? '').trim()
+  return limpio || null
+}
+
 function tieneAlgunaUbicacion(jornada) {
   return (
     (jornada.lat_entrada != null && jornada.lng_entrada != null) ||
@@ -188,6 +204,11 @@ function FilaJornada({ jornada }) {
           {entradaSinUbicacion(jornada) && (
             <span className={styles.indicadorWrap}>
               <Badge label="Sin ubicación" variant="danger" />
+              {motivoSinUbicacion(jornada, 'entrada') && (
+                <span className={styles.motivoMarca}>
+                  «{motivoSinUbicacion(jornada, 'entrada')}»
+                </span>
+              )}
             </span>
           )}
         </td>
@@ -204,6 +225,11 @@ function FilaJornada({ jornada }) {
               {salidaSinUbicacion(jornada) && (
                 <span className={styles.indicadorWrap}>
                   <Badge label="Sin ubicación" variant="danger" />
+                  {motivoSinUbicacion(jornada, 'salida') && (
+                    <span className={styles.motivoMarca}>
+                      «{motivoSinUbicacion(jornada, 'salida')}»
+                    </span>
+                  )}
                 </span>
               )}
             </>
@@ -404,7 +430,7 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
           <Badge label="Sin salida" variant="danger" /> No se marcó salida en una jornada anterior
         </span>
         <span className={styles.leyendaItem}>
-          <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS: revisar con el técnico
+          <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS; si el técnico lo explicó, su motivo va debajo
         </span>
         <span className={styles.leyendaItem}>
           <span className={`${styles.horasChip} ${styles.horas_success}`}>00:00</span> Jornada completa (≥ 8h)

@@ -57,6 +57,20 @@ class JornadaResponse(BaseModel):
     lat_salida: Optional[float] = None
     lng_salida: Optional[float] = None
 
+    # RTF-01 / R3-4: lo que el técnico explicó cuando esa marca salió sin
+    # coordenada. Con ubicación es None, y en las marcas anteriores a la
+    # corrección también: entonces no se pedía. La pantalla distingue
+    # «sin ubicación, sin explicación» de «sin ubicación, el técnico dijo
+    # que el GPS estaba denegado».
+    motivo_sin_ubicacion_entrada: Optional[str] = None
+    motivo_sin_ubicacion_salida: Optional[str] = None
+
+    # True cuando el sistema cerró la jornada por su cuenta (el técnico se fue
+    # sin marcar salida). Las horas trabajadas de esas jornadas son 0 porque la
+    # hora de salida es inventada; sin este campo la tabla mostraba «00:00» sin
+    # decir por qué (RTF-01 / R3-12).
+    sin_salida: bool = False
+
     # Metricas (en minutos, redondeados hacia abajo)
     minutos_brutos: int = 0        # salida - entrada
     minutos_pausa: int = 0         # suma de todas las pausas

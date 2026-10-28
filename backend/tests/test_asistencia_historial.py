@@ -51,6 +51,10 @@ def _asistencia(
         empleado=SimpleNamespace(nombre="Juan", apellido="Pérez", rol="tecnico"),
         coordenada_entrada=coordenada_entrada,
         coordenada_salida=coordenada_salida,
+        # RTF-01 / R3-4: una marca sin coordenada guarda lo que el técnico
+        # explicó. Los dobles lo llevan en None, como las marcas con GPS.
+        motivo_sin_ubicacion_entrada=None,
+        motivo_sin_ubicacion_salida=None,
     )
 
 

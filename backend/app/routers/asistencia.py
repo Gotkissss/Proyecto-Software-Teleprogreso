@@ -40,7 +40,7 @@ from app.schemas.asistencia import (
     HistorialTotales,
     JornadaResponse,
 )
-from app.schemas.ubicacion import UbicacionCreate
+from app.schemas.ubicacion import MarcaAsistencia, UbicacionCreate
 from app.services.asistencia import (
     calcular_jornada,
     es_del_turno_en_curso,
@@ -111,7 +111,7 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
 async def registrar_entrada(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    marca: Optional[MarcaAsistencia] = None,
 ):
     """
     Registra la hora de entrada del empleado autenticado.
@@ -122,8 +122,13 @@ async def registrar_entrada(
     - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
       lugar de la entrada; si no, la entrada se registra igual sin ubicación.
       Coordenadas fuera de rango responden 422.
+    - RTF-01 / R3-4: sin coordenada se puede mandar `motivo_sin_ubicacion` con
+      lo que el técnico explique (GPS denegado, sin señal). No sustituye a la
+      ubicación, pero deja constancia revisable en vez de un hueco.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
+    coordenadas = marca.coordenadas if marca else None
+
     # 1. Buscar jornadas abiertas (entrada sin salida) del empleado.
     #
     # Se piden todas y no `scalar_one_or_none()`: si por lo que sea quedaron
@@ -173,7 +178,10 @@ async def registrar_entrada(
         id_empleado=current_user.id_empleado,
         fecha=now.date(),
         hora_entrada=now.time(),
-        coordenada_entrada=_punto_de_la_marca(ubicacion),
+        coordenada_entrada=_punto_de_la_marca(coordenadas),
+        motivo_sin_ubicacion_entrada=(
+            None if coordenadas is not None else marca.motivo if marca else None
+        ),
     )
 
     db.add(nueva_asistencia)
@@ -185,7 +193,8 @@ async def registrar_entrada(
         "empleado": f"{current_user.nombre} {current_user.apellido}",
         "fecha": str(now.date()),
         "hora_entrada": str(now.time().strftime("%H:%M:%S")),
-        "ubicacion_registrada": ubicacion is not None,
+        "ubicacion_registrada": coordenadas is not None,
+        "motivo_sin_ubicacion": nueva_asistencia.motivo_sin_ubicacion_entrada,
     }
 
 
@@ -199,7 +208,7 @@ async def registrar_entrada(
 async def registrar_salida(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    marca: Optional[MarcaAsistencia] = None,
 ):
     """
     Registra la hora de salida del empleado autenticado.
@@ -209,6 +218,7 @@ async def registrar_salida(
     - Si no hay ninguna jornada del turno en curso, retorna 400.
     - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
       lugar de la salida; si no, la salida se registra igual sin ubicación.
+    - RTF-01 / R3-4: sin coordenada se acepta `motivo_sin_ubicacion`.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
     now = ahora_local()
@@ -276,7 +286,10 @@ async def registrar_salida(
 
     # 3. Registrar la hora de salida y, si llegó, el lugar (HU-4)
     asistencia_activa.hora_salida = now.time()
-    asistencia_activa.coordenada_salida = _punto_de_la_marca(ubicacion)
+    coordenadas = marca.coordenadas if marca else None
+    asistencia_activa.coordenada_salida = _punto_de_la_marca(coordenadas)
+    if coordenadas is None and marca is not None:
+        asistencia_activa.motivo_sin_ubicacion_salida = marca.motivo
 
     # 4. Cerrar también el descanso que hubiera quedado en curso: si no, la
     #    pausa seguiría "abierta" dentro de una jornada ya cerrada y el
@@ -307,7 +320,8 @@ async def registrar_salida(
         "fecha": str(asistencia_activa.fecha),
         "hora_entrada": str(asistencia_activa.hora_entrada.strftime("%H:%M:%S")),
         "hora_salida": str(now.time().strftime("%H:%M:%S")),
-        "ubicacion_registrada": ubicacion is not None,
+        "ubicacion_registrada": coordenadas is not None,
+        "motivo_sin_ubicacion": asistencia_activa.motivo_sin_ubicacion_salida,
     }
 
 
@@ -395,6 +409,9 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
         lng_entrada=entrada[1] if entrada else None,
         lat_salida=salida[0] if salida else None,
         lng_salida=salida[1] if salida else None,
+        motivo_sin_ubicacion_entrada=asistencia.motivo_sin_ubicacion_entrada,
+        motivo_sin_ubicacion_salida=asistencia.motivo_sin_ubicacion_salida,
+        sin_salida=resumen.sin_salida,
         minutos_brutos=resumen.minutos_brutos,
         minutos_pausa=resumen.minutos_pausa,
         minutos_trabajados=resumen.minutos_trabajados,
