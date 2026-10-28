@@ -39,7 +39,7 @@ import {
   describirAlertaSeguridad,
   enlaceBitacora,
 } from '../utils/alertasSeguridad'
-import { ROLES } from '../utils/permisos'
+import { ROLES, puedeOperar } from '../utils/permisos'
 import { calcularPorcentajeStock, clasificarStock } from '../utils/stock'
 import styles from './AlertasPage.module.css'
 
@@ -206,6 +206,10 @@ export default function AlertasPage() {
   const { user } = useAuth()
   // Solo decide si se dibuja la pestaña: quien no es admin no las recibe.
   const esAdmin = user?.rol === ROLES.ADMIN
+  // HU-S10-08: PATCH /alertas/{id} es `require_supervisor`. El gerente ve esta
+  // pantalla —revisar la operación es su trabajo— pero no atiende ni descarta
+  // avisos, y los dos botones acababan en un 403 por cada clic.
+  const puedeAtender = puedeOperar(user?.rol, 'alertas.atender')
 
   /* Alertas operativas (persistentes, backend real) */
   const [alertas,      setAlertas]      = useState([])
@@ -408,7 +412,7 @@ export default function AlertasPage() {
                   </button>
                 )}
 
-                {alerta.estado === ESTADO_ALERTA.PENDIENTE ? (
+                {alerta.estado === ESTADO_ALERTA.PENDIENTE && puedeAtender ? (
                   <div className={styles.alertaAcciones}>
                     <button
                       className={`btn btn-secondary btn-sm ${styles.resolverBtn}`}
@@ -427,6 +431,9 @@ export default function AlertasPage() {
                   </div>
                 ) : (
                   <span className={styles.alertaEstado}>
+                    {/* Sin esta línea, el gerente veía el aviso sin botones y
+                        sin estado: parecía que la tarjeta estaba incompleta. */}
+                    {alerta.estado === ESTADO_ALERTA.PENDIENTE && '• Pendiente'}
                     {alerta.estado === ESTADO_ALERTA.ATENDIDA && '✓ Atendida'}
                     {alerta.estado === ESTADO_ALERTA.DESCARTADA && '✕ Descartada'}
                     {alerta.estado === ESTADO_ALERTA.RESUELTA &&

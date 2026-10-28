@@ -49,6 +49,17 @@ class Carro(Base):
     capacidad:       Mapped[int | None] = mapped_column(Integer, nullable=True)
     estado_vehiculo: Mapped[str]        = mapped_column(String(30), nullable=False, default="disponible")
 
+    # Los CHECK de catálogo los crea la migración 0013 (HU-S10-08) y se declaran
+# aquí para que `Base.metadata` los conozca: las pruebas de integración crean
+# el esquema desde los modelos, y sin esto una restricción que la migración sí
+# pone no existiría en la base de pruebas.
+    __table_args__ = (
+        CheckConstraint(
+            "estado_vehiculo IN ('disponible', 'en_uso', 'mantenimiento', 'baja')",
+            name="ck_carro_estado",
+        ),
+    )
+
     # Relaciones
     activo:       Mapped["Activo"]               = relationship(back_populates="carro")
     empleado:     Mapped["EmpleadoCarro | None"]  = relationship(back_populates="carro", uselist=False, cascade=_CASCADA_BD, passive_deletes=True)
@@ -149,6 +160,17 @@ class Herramienta(Base):
     marca:            Mapped[str | None] = mapped_column(String(80), nullable=True)
     modelo:           Mapped[str | None] = mapped_column(String(80), nullable=True)
     estado:           Mapped[str]        = mapped_column(String(30), nullable=False, default="disponible")
+
+    # Los CHECK de catálogo los crea la migración 0013 (HU-S10-08) y se declaran
+# aquí para que `Base.metadata` los conozca: las pruebas de integración crean
+# el esquema desde los modelos, y sin esto una restricción que la migración sí
+# pone no existiría en la base de pruebas.
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('disponible', 'en_uso', 'mantenimiento', 'baja')",
+            name="ck_herramienta_estado",
+        ),
+    )
 
     # Relaciones
     activo: Mapped["Activo"]                = relationship(back_populates="herramienta")

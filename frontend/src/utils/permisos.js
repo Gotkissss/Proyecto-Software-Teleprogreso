@@ -86,6 +86,47 @@ export function puedeRestablecerContrasena(usuario, empleado) {
   return puedeAdministrar(usuario.rol, empleado.rol)
 }
 
+// ── Acciones dentro de una pantalla (HU-S10-08) ─────────────────────────────
+//
+// La tabla de rutas de arriba decide qué PANTALLAS ve cada rol. Esta decide
+// qué BOTONES, que no es lo mismo: el gerente entra a Alertas y a Inventario
+// porque su trabajo es revisar la operación, pero no atiende avisos ni toca el
+// almacén. Hasta ahora veía los botones igual y cada clic terminaba en un 403
+// del backend; el permiso estaba bien puesto, lo que estaba mal era prometer
+// en pantalla algo que la API iba a rechazar.
+//
+// Los valores salen de las dependencias de los endpoints que hay detrás
+// (`require_supervisor` en routers/alertas.py, activos.py y carros.py), que es
+// quien de verdad decide. Esto solo evita el clic en falso.
+const PERMISOS_ACCIONES = Object.freeze({
+  // PATCH /alertas/{id}
+  'alertas.atender': REQUIRE_SUPERVISOR,
+  // POST /activos, PATCH /activos/{id}, DELETE /activos/{id}
+  'inventario.crear': REQUIRE_SUPERVISOR,
+  'inventario.editar': REQUIRE_SUPERVISOR,
+  'inventario.eliminar': REQUIRE_SUPERVISOR,
+  // POST/DELETE de asignaciones de vehículo y de herramientas a vehículo
+  'inventario.asignar': REQUIRE_SUPERVISOR,
+  // POST /activos/materiales/{id}/movimientos (HU-S10-07). La CONSULTA de los
+  // movimientos es require_supervisor también, así que el gerente tampoco
+  // abre la pestaña: no es un dato de reporte, es el detalle operativo del
+  // almacén.
+  'inventario.movimientos': REQUIRE_SUPERVISOR,
+})
+
+/**
+ * ¿Puede este rol ejecutar esta acción?
+ *
+ * Una acción desconocida devuelve false a propósito: si alguien añade un botón
+ * y escribe mal la clave, lo seguro es que no se pinte, no que se pinte para
+ * todos.
+ */
+export function puedeOperar(rol, accion) {
+  if (typeof rol !== 'string' || rol === '') return false
+  if (!tieneClave(PERMISOS_ACCIONES, accion)) return false
+  return PERMISOS_ACCIONES[accion].includes(rol)
+}
+
 export function rutaInicialPorRol(rol) {
   if (!tieneClave(RUTA_INICIAL, rol)) {
     return '/login'

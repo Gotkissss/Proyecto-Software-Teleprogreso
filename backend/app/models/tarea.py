@@ -1,5 +1,14 @@
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geography
 
@@ -24,6 +33,21 @@ class Tarea(Base):
     # cálculo de tareas retrasadas. Esta es la que alimenta el historial de
     # "tareas hechas por día".
     fecha_completado:    Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+    # Los CHECK de catálogo los crea la migración 0013 (HU-S10-08) y se declaran
+# aquí para que `Base.metadata` los conozca: las pruebas de integración crean
+# el esquema desde los modelos, y sin esto una restricción que la migración sí
+# pone no existiría en la base de pruebas.
+    __table_args__ = (
+        CheckConstraint(
+            "estado_tarea IN ('pendiente', 'en_progreso', 'completado', 'cancelado')",
+            name="ck_tarea_estado",
+        ),
+        CheckConstraint(
+            "prioridad IN ('baja', 'media', 'alta', 'urgente')",
+            name="ck_tarea_prioridad",
+        ),
+    )
 
     # Relaciones
     empleados:  Mapped[list["EmpleadoTarea"]] = relationship(back_populates="tarea")

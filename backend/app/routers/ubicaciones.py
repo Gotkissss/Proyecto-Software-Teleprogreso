@@ -22,7 +22,9 @@ posiciones a nombre de un compañero y fabricarle una coartada.
 from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.ubicacion import (
@@ -44,6 +46,10 @@ from app.services.ubicaciones import (
 from app.core.deps import auditar_lectura, get_current_empleado, require_admin_supervisor_gerente
 from app.core.exceptions import conflict
 from app.core.geo import punto_wkt
+from app.core.rate_limit import (
+    lotes_ubicaciones_por_empleado,
+    ubicaciones_por_empleado,
+)
 
 # Reloj de la operación (America/Guatemala). El contenedor corre en UTC:
 # usar datetime.now() aquí desplazaría las horas 6 posiciones.
@@ -54,6 +60,9 @@ from app.models.empleado import Empleado
 from app.models.ubicacion import UbicacionEmpleado
 from app.schemas.ubicacion import UbicacionCreate, UbicacionResponse
 from app.services.asistencia import es_del_turno_en_curso
+from app.services.bitacora import anotar_evento, primera_vez
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ubicaciones", tags=["Ubicaciones"])
 
@@ -73,6 +82,45 @@ async def _jornada_en_curso(db: AsyncSession, id_empleado: int) -> Optional[Asis
 
 
 # ─── POST /ubicaciones ───────────────────────────────────────────────────────
+
+
+def _exigir_cupo(ventana, id_empleado: int, que: str) -> None:
+    """
+    Corta con 429 cuando un empleado reporta posición más rápido de lo que
+    cualquier uso real necesita (HU-S10-08).
+
+    El ritmo lo decidía solo el cliente, que es la parte que no se puede
+    garantizar: con el token de un técnico y un bucle de tres líneas se
+    insertaban miles de filas en una tabla que crece sin tope y guarda dónde
+    estuvo una persona. Los umbrales están en `core/reglas.py`.
+
+    `Retry-After` va en la respuesta para que la cola sin conexión del frontend
+    sepa cuánto esperar en vez de reintentar en bucle.
+    """
+    espera = ventana.registrar(f"ubic:{que}:{id_empleado}")
+    if not espera:
+        return
+
+    logger.warning(
+        "Reporte de %s por encima del límite para el empleado %s", que, id_empleado
+    )
+    # Una fila por ventana y no una por petición: quien inunda la API también
+    # inundaría la bitácora.
+    if primera_vez(f"ubic:{que}:{id_empleado}", 60):
+        anotar_evento(
+            "limite_ubicaciones",
+            "ubicacion_empleado",
+            cambios={"tipo": que, "espera_s": espera},
+        )
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=(
+            "Estás enviando tu ubicación demasiado seguido. "
+            f"Vuelve a intentarlo en {espera} segundos."
+        ),
+        headers={"Retry-After": str(espera)},
+    )
+
 
 @router.post(
     "",
@@ -106,6 +154,8 @@ async def registrar_ubicacion(
     #    lo que no encaja es el estado en que se encuentra su jornada. Esa
     #    diferencia le sirve al frontend para distinguir "corrige el dato" de
     #    "marca tu entrada primero".
+    _exigir_cupo(ubicaciones_por_empleado, current_user.id_empleado, "punto")
+
     if await _jornada_en_curso(db, current_user.id_empleado) is None:
         raise conflict(
             "No tienes una jornada abierta. "
@@ -168,6 +218,10 @@ async def registrar_ubicaciones_lote(
 
     Como en POST /ubicaciones, el dueño de los puntos sale del token.
     """
+    _exigir_cupo(
+        lotes_ubicaciones_por_empleado, current_user.id_empleado, "lote"
+    )
+
     guardados, descartados = await registrar_lote(db, current_user, data.puntos)
     await db.flush()
     return UbicacionLoteResponse(guardados=guardados, descartados=descartados)

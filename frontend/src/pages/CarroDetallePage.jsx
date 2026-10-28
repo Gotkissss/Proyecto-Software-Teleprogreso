@@ -24,6 +24,8 @@ import {
   asignarHerramientaACarro,
   liberarHerramientaDeCarro,
 } from '../api/inventarioService'
+import { useAuth } from '../context/AuthContext'
+import { puedeOperar } from '../utils/permisos'
 
 /*  Iconos  */
 const IconBack = () => (
@@ -146,6 +148,12 @@ export default function CarroDetallePage() {
   const [herramientas,     setHerramientas]     = useState([])
   const [loading,          setLoading]          = useState(true)
   const [error,            setError]            = useState(null)
+
+  // HU-S10-08: asignar y liberar herramientas de un vehículo son
+  // `require_supervisor`. El gerente ve esta pantalla desde el inventario,
+  // pero los dos botones le devolvían 403 en cada clic.
+  const { user } = useAuth()
+  const puedeAsignar = puedeOperar(user?.rol, 'inventario.asignar')
 
   const [modalAsignar,     setModalAsignar]     = useState(false)
   const [herramientaLiberar, setHerramientaLiberar] = useState(null)
@@ -303,13 +311,15 @@ export default function CarroDetallePage() {
             </div>
           </div>
 
-          <button
-            className={`btn btn-primary ${styles.asignarBtn}`}
-            onClick={() => setModalAsignar(true)}
-          >
-            <IconPlus />
-            <span>Asignar herramientas</span>
-          </button>
+          {puedeAsignar && (
+            <button
+              className={`btn btn-primary ${styles.asignarBtn}`}
+              onClick={() => setModalAsignar(true)}
+            >
+              <IconPlus />
+              <span>Asignar herramientas</span>
+            </button>
+          )}
         </div>
 
         {/* Lista de herramientas */}
@@ -320,12 +330,14 @@ export default function CarroDetallePage() {
             emptyTitle="Sin herramientas asignadas"
             emptyDescription="Este vehículo no tiene herramientas asignadas."
             emptyAction={
-              <button
-                className="btn btn-primary"
-                onClick={() => setModalAsignar(true)}
-              >
-                <IconPlus /> Asignar primera herramienta
-              </button>
+              puedeAsignar ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setModalAsignar(true)}
+                >
+                  <IconPlus /> Asignar primera herramienta
+                </button>
+              ) : undefined
             }
           />
         ) : (
@@ -372,14 +384,16 @@ export default function CarroDetallePage() {
                     variant={herr.estado === 'disponible' ? 'success' : 'warning'}
                   />
 
-                  <button
-                    className={`btn btn-ghost btn-sm ${styles.liberarBtn}`}
-                    onClick={() => setHerramientaLiberar(herr)}
-                    title={`Liberar ${herr.nombre_activo}`}
-                  >
-                    <IconTrash />
-                    <span>Liberar</span>
-                  </button>
+                  {puedeAsignar && (
+                    <button
+                      className={`btn btn-ghost btn-sm ${styles.liberarBtn}`}
+                      onClick={() => setHerramientaLiberar(herr)}
+                      title={`Liberar ${herr.nombre_activo}`}
+                    >
+                      <IconTrash />
+                      <span>Liberar</span>
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

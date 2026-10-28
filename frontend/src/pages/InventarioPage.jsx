@@ -23,6 +23,8 @@ import TablaVehiculos from '../components/inventario/TablaVehiculos'
 import TablaHerramientas from '../components/inventario/TablaHerramientas'
 import TablaMateriales from '../components/inventario/TablaMateriales'
 import ModalNuevoActivo from '../components/inventario/ModalNuevoActivo'
+import { useAuth } from '../context/AuthContext'
+import { puedeOperar } from '../utils/permisos'
 import ModalEditarActivo from '../components/inventario/ModalEditarActivo'
 import ModalMovimientosMaterial from '../components/inventario/ModalMovimientosMaterial'
 import ModalEliminarActivo from '../components/inventario/ModalEliminarActivo'
@@ -146,6 +148,20 @@ export default function InventarioPage() {
   const [loading,      setLoading]      = useState(false)
   const [errorCarga,   setErrorCarga]   = useState(null)
 
+  // HU-S10-08: qué puede hacer este rol en esta pantalla.
+  //
+  // Los cuatro endpoints de detrás son `require_supervisor`, así que hoy los
+  // cuatro permisos coinciden; se preguntan por separado para que el día que
+  // uno cambie, cambie solo ese y no haga falta volver a buscar los botones.
+  const { user } = useAuth()
+  const puedeCrear     = puedeOperar(user?.rol, 'inventario.crear')
+  const puedeEditar    = puedeOperar(user?.rol, 'inventario.editar')
+  const puedeEliminar  = puedeOperar(user?.rol, 'inventario.eliminar')
+  const puedeAsignar   = puedeOperar(user?.rol, 'inventario.asignar')
+  const puedeMover     = puedeOperar(user?.rol, 'inventario.movimientos')
+  const puedeGestionar =
+    puedeEditar || puedeEliminar || puedeAsignar || puedeMover
+
   // Modales
   const [modalNuevo,              setModalNuevo]              = useState(null)
   const [modalEditar,             setModalEditar]             = useState(null)
@@ -266,13 +282,15 @@ export default function InventarioPage() {
           >
             <IconRefresh />
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setModalNuevo(tabActiva === 'vehiculos' ? 'carro' : tabActiva === 'herramientas' ? 'herramienta' : 'material')}
-          >
-            <IconPlus /> Nuevo activo
-          </button>
+          {puedeCrear && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setModalNuevo(tabActiva === 'vehiculos' ? 'carro' : tabActiva === 'herramientas' ? 'herramienta' : 'material')}
+            >
+              <IconPlus /> Nuevo activo
+            </button>
+          )}
         </div>
       </div>
 
@@ -346,6 +364,7 @@ export default function InventarioPage() {
           onAsignarTecnico={v => setModalAsignarTecnico(v)}
           onEditar={v => setModalEditar(v)}
           onEliminar={v => setModalEliminar(v)}
+          puedeGestionar={puedeGestionar}
           alExpirar={renovarEnlaces}
         />
       )}
@@ -359,6 +378,7 @@ export default function InventarioPage() {
           onAsignarCarro={h => setModalAsignarHerramienta(h)}
           onEditar={h => setModalEditar(h)}
           onEliminar={h => setModalEliminar(h)}
+          puedeGestionar={puedeGestionar}
           alExpirar={renovarEnlaces}
         />
       )}
@@ -372,6 +392,7 @@ export default function InventarioPage() {
           onEditar={m => setModalEditar(m)}
           onEliminar={m => setModalEliminar(m)}
           onVerMovimientos={m => setModalMovimientos(m)}
+          puedeGestionar={puedeGestionar}
           alExpirar={renovarEnlaces}
         />
       )}
