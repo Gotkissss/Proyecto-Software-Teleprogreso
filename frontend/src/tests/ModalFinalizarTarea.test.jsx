@@ -149,6 +149,8 @@ describe('ModalFinalizarTarea', () => {
         foto: expect.any(File),
         // HU-5: jsdom no tiene GPS y el modal no recibió respaldo.
         posicion: null,
+        // HU-S10-07: el paso de materiales es opcional y aquí no se tocó.
+        materiales: [],
       })
     })
     await waitFor(() => expect(onFinalizada).toHaveBeenCalled())

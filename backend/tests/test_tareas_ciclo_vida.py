@@ -315,7 +315,10 @@ async def test_no_se_finaliza_una_tarea_sin_evidencia():
     with pytest.raises(HTTPException) as exc:
         await finalizar_tarea(1, db, _empleado())
 
-    assert exc.value.status_code == 400
+    # 409 desde la HU-S10-08: la misma regla se aplica ya por los tres
+    # caminos que cierran una tarea, y lo que falla no es el cuerpo de la
+    # petición sino el estado de la tarea.
+    assert exc.value.status_code == 409
     assert "evidencia" in exc.value.detail.lower()
     assert tarea.estado_tarea == "en_progreso"
 

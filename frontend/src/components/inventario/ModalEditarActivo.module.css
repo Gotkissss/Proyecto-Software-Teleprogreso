@@ -79,3 +79,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Aviso de que el stock ya no se edita aquí, sino en Movimientos
+   (HU-S10-07). */
+.nota {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef4ff;
+  border: 1px solid #c7d8f7;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #1f3d6b;
+}

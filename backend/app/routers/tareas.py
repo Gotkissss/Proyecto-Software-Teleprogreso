@@ -33,6 +33,7 @@ from app.core.reglas import ESTADOS_TAREA_ACTIVOS, LIMITE_TAREAS_ACTIVAS
 from app.db.session import get_db
 from app.models.empleado import Empleado
 from app.schemas.tarea import (
+    FinalizarTareaRequest,
     HistorialTareasResponse,
     TareaCreate,
     TareaMapaSupervisorResponse,
@@ -44,6 +45,7 @@ from app.schemas.tarea import (
 )
 from app.schemas.ubicacion import UbicacionCreate
 from app.services import tareas as tareas_service
+from app.services.kardex import LineaConsumo
 
 router = APIRouter(prefix="/tareas", tags=["Tareas"])
 
@@ -295,7 +297,7 @@ async def finalizar_tarea(
     id: int,
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(require_tecnico)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    cierre: Optional[FinalizarTareaRequest] = None,
 ):
     """
     Cierra una tarea y deja marcado el momento exacto del cierre.
@@ -314,10 +316,33 @@ async def finalizar_tarea(
     - HU-5: el técnico necesita la jornada abierta (409 si no la tiene).
     - HU-5: el cuerpo `{lat, lng}` es opcional; si llega, el lugar del cierre
       queda en el recorrido del técnico (una sola vez por tarea).
+    - HU-S10-07: el cuerpo acepta además `materiales: [{id_material,
+      cantidad}]` con lo que la tarea gastó. Se descuenta del stock en la
+      misma transacción que cierra la tarea: si el almacén no alcanza responde
+      409 y la tarea se queda abierta, para que el técnico corrija la cantidad
+      en vez de dejar el inventario descuadrado.
+
+    Los clientes que mandaban solo `{lat, lng}` siguen funcionando igual: el
+    cuerpo nuevo tiene esos mismos dos campos.
 
     Roles: técnico asignado, admin, supervisor.
     """
-    return await tareas_service.finalizar_tarea(db, id, current_user, ubicacion)
+    ubicacion = (
+        UbicacionCreate(lat=cierre.lat, lng=cierre.lng)
+        if cierre and cierre.lat is not None and cierre.lng is not None
+        else None
+    )
+    materiales = (
+        [
+            LineaConsumo(id_material=m.id_material, cantidad=m.cantidad)
+            for m in cierre.materiales
+        ]
+        if cierre and cierre.materiales
+        else None
+    )
+    return await tareas_service.finalizar_tarea(
+        db, id, current_user, ubicacion, materiales
+    )
 
 
 @router.get(

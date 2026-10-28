@@ -1,0 +1,195 @@
+/**
+ * components/inventario/ModalMovimientosMaterial.module.css
+ * ---------------------------------------------------------------------------
+ * La tabla de la historia puede ser larga: se le deja su propio scroll para
+ * que el formulario de arriba y el botón de cerrar sigan alcanzables sin
+ * recorrer todo el modal.
+ * ---------------------------------------------------------------------------
+ */
+
+.material {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-texto, #1f2933);
+}
+
+.resumen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.saldo {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-texto, #1f2933);
+}
+
+.minimo {
+  font-size: 0.82rem;
+  color: var(--color-texto-suave, #52606d);
+}
+
+/* ── Formulario ── */
+
+.formulario {
+  margin: 0 0 18px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--color-borde, #cbd2d9);
+  border-radius: 10px;
+}
+
+.leyenda {
+  padding: 0 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .campos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.campo {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.req {
+  color: var(--color-danger, #c0392b);
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-borde, #cbd2d9);
+  border-radius: 8px
+}
+
+.select:focus,
+.input:focus {
+  outline: none;
+  border-color: var(--color-primario, #1f6feb);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
+}
+
+.errorForm {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fdecea;
+  border: 1px solid #f5c2bd;
+  font-size: 0.82rem;
+  color: #8a1f14;
+}
+
+/* ── Historia ── */
+
+.tituloHistoria {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-texto, #1f2933);
+}
+
+.centro {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.errorCarga {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdecea;
+  border: 1px solid #f5c2bd;
+  font-size: 0.85rem;
+  color: #8a1f14;
+}
+
+.vacio {
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: #f4f6f8;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.tablaWrap {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--color-borde, #cbd2d9);
+  border-radius: 8px;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.tabla th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  background: #f4f6f8;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-texto-suave, #52606d);
+  border-bottom: 1px solid var(--color-borde, #cbd2d9);
+  white-space: nowrap;
+}
+
+.tabla td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf0f3;
+  vertical-align: middle;
+}
+
+.tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.derecha {
+  text-align: right;
+}
+
+.saldoFila {
+  font-weight: 600;
+}
+
+.fecha {
+  white-space: nowrap;
+  color: var(--color-texto-suave, #52606d);
+}
+
+.secundario {
+  color: var(--color-texto-suave, #52606d);
+}

@@ -33,6 +33,7 @@ export default function TablaHerramientas({
   onAsignarCarro,
   onEditar,
   onEliminar,
+  puedeGestionar = true,
   alExpirar,
 }) {
   const columns = [
@@ -98,9 +99,18 @@ export default function TablaHerramientas({
     },
   ]
 
+  // HU-S10-08: la columna de acciones no se pinta para quien no puede
+  // ejecutarlas. El gerente entra a esta pantalla porque su trabajo es revisar
+  // la operación, pero los endpoints de detrás son `require_supervisor`: cada
+  // clic suyo acababa en un 403, y el botón prometía algo que la API iba a
+  // rechazar. Lo decide `utils/permisos.puedeOperar`, no el componente.
+  const columnasVisibles = puedeGestionar
+    ? columns
+    : columns.filter((c) => c.key !== 'acciones')
+
   return (
     <TablaFiltrable
-      columns={columns}
+      columns={columnasVisibles}
       datos={datos}
       loading={loading}
       sortConfig={sortConfig}

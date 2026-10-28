@@ -366,6 +366,299 @@ al día (ver README):
 
 Cada purga deja su fila en la bitácora con rol `sistema`.
 
+## Reglas de negocio e integridad del dato (HU-S10-07 y HU-S10-08)
+
+Esta sección existe porque una parte de la seguridad no va de quién entra, sino
+de **qué puede llegar a decir la base**. Un dato que miente no necesita a nadie
+que ataque: basta con que haya dos caminos para escribirlo y solo uno compruebe
+las reglas.
+
+### Una regla, todos los caminos
+
+«Ninguna tarea se completa sin evidencia» estaba escrito y aplicado… en el
+único camino del técnico (`PATCH /tareas/{id}/finalizar`). Un admin o un
+supervisor cerraban la misma tarea con `PATCH /tareas/{id}` o con
+`/tareas/{id}/estado` y nadie miraba nada.
+
+No era un hueco de permisos —los dos roles pueden editar tareas— sino de
+integridad: ese dato alimenta los tres reportes del gerente y el historial, así
+que «trabajo hecho» significaba dos cosas distintas según por qué pantalla se
+hubiera cerrado la tarea, y el reporte no permitía distinguirlas. Ahora los
+tres caminos pasan por `exigir_evidencia` y responden el mismo 409.
+
+**No hay cierre forzado para el admin.** Se consideró y se descartó: los casos
+que lo justificarían —cliente ausente, tarea duplicada— no son trabajo hecho, y
+para esos ya está el estado `cancelado`, que no entra en los reportes de
+productividad. Un cierre forzado solo añadiría una puerta por la que la regla
+se puede saltar.
+
+Lo mismo con los vehículos: `asignar_tecnico` aceptaba cualquier empleado
+activo, así que un supervisor podía quedar con un vehículo asignado — contado
+«en uso» en el inventario y atribuido en el reporte de activos a quien no sale
+a campo. Ahora exige rol `tecnico`.
+
+### Lo que el código promete, la base lo exige
+
+Las listas blancas de roles, estados y prioridades vivían solo en
+`core/reglas.py` y en los schemas de Pydantic. Eso cubre lo que entra por la
+API, que es casi todo — pero no todo: el seed, una migración de datos, un
+script de corrección y la consola de la base escriben directo.
+
+Y un valor mal escrito por ahí **no revienta nada en el momento**, que es lo
+que lo hace peligroso: una tarea con `estado_tarea = 'en progreso'` (espacio en
+vez de guion bajo) simplemente deja de aparecer en las pantallas que filtran
+por estado, y el reporte del gerente la cuenta en ninguna columna. El síntoma
+es «falta una tarea», semanas después.
+
+La migración `0013` lo cierra desde la base:
+
+- `CHECK` de catálogo en `empleado.rol`, `empleado.estado`,
+  `tarea.estado_tarea`, `tarea.prioridad`, `carro.estado_vehiculo` y
+  `herramienta.estado`.
+- Índices únicos en `empleado_carro` que impiden de verdad que un técnico
+  tenga dos vehículos o un vehículo dos técnicos. Lo impedía solo el servicio,
+  con dos consultas previas: dos peticiones simultáneas las pasan las dos.
+- Clave foránea de `descanso.tipo` al catálogo `tipo_pausa`, con `RESTRICT`:
+  retirar un tipo de pausa no puede llevarse las pausas que ya se tomaron con
+  él (para eso está `tipo_pausa.activo`).
+
+Cada restricción se crea **después** de comprobar que los datos actuales la
+cumplen, y si no, la migración aborta diciendo qué filas sobran. El mensaje del
+motor («violates check constraint») no dice cuáles, y en un despliegue donde la
+base no es alcanzable desde fuera averiguarlo cuesta más que el arreglo.
+
+### El stock solo lo mueve el trabajo
+
+`material.cantidad_disponible` era un número que se editaba a mano en el modal
+del activo. Usarlo en una tarea no lo bajaba, así que la alerta de stock
+crítico vigilaba una cifra que no era la del almacén.
+
+Ahora `services/kardex.py` es el **único** camino que puede tocar esa columna
+—`PATCH /activos/{id}` dejó de aceptar el campo— y cada cambio deja su fila en
+`movimiento_material` con tipo, cantidad, saldo resultante, motivo, tarea,
+actor y fecha.
+
+Dos detalles que no se ven en la descripción:
+
+- El material se lee con `SELECT … FOR UPDATE`. Sin eso, dos técnicos cerrando
+  su tarea en el mismo segundo leen el mismo saldo, cada uno resta lo suyo y el
+  segundo pisa al primero: se consumen 6 de 5 unidades, los dos movimientos
+  dicen que dejaron 2, y **nada falla**. El inventario queda mintiendo sin un
+  solo error en el log.
+- El `CHECK (cantidad_disponible >= 0)` de la migración `0012` es la red de
+  debajo, para lo que entre por fuera de la API.
+
+Las líneas de un mismo material se agrupan antes de aplicarse: mandar el mismo
+material dos veces es fácil desde el formulario, y dos movimientos de 2 parecen
+dos usos distintos del almacén en el mismo cierre.
+
+### El tope de reporte de posición
+
+Cuántos puntos manda un técnico lo decidía solo el cliente. `ubicacion_empleado`
+crece sin tope y guarda un dato sensible —dónde estuvo una persona y a qué
+hora—, así que con el token de un técnico y un bucle de tres líneas se podían
+insertar miles de filas. El freno general por IP no servía: es de 240 por
+minuto y cuenta por IP, de modo que un solo técnico podía gastarlo entero y
+dejar sin cupo a los compañeros que salieran por la misma conexión. El tope
+nuevo es **por empleado** (`core/reglas.MAX_UBICACIONES_POR_VENTANA`), con uno
+aparte y más bajo para los envíos en lote, que traen hasta 500 puntos.
+
+### Los botones que el backend va a rechazar
+
+El gerente veía los botones de atender alertas y de crear, editar, eliminar y
+asignar en inventario. El permiso del backend estaba bien puesto —esos
+endpoints son `require_supervisor`— así que cada clic terminaba en un 403: lo
+que estaba mal era prometer en pantalla algo que la API iba a rechazar. La
+tabla de acciones de `frontend/src/utils/permisos.js` lo decide ahora, y el
+backend sigue siendo quien manda.
+
+## Modelo de amenazas (STRIDE)
+
+Las secciones anteriores cuentan *qué* defensa hay en cada capa. Esta cuenta lo
+otro: por cada flujo del sistema, qué podría intentar alguien y qué lo frena.
+Se hace por flujos y no por componentes porque un ataque no entra «por el
+backend», entra por una cosa que el sistema deja hacer.
+
+STRIDE son las seis categorías clásicas: **S**uplantación, **T**ampering
+(alteración), **R**epudio, **I**nformation disclosure (fuga), **D**enegación de
+servicio y **E**levación de privilegios. Donde una casilla queda sin cubrir, se
+dice: eso es un riesgo residual, no un olvido (ver «Lo que esto no cubre»).
+
+### Flujo 1 — Iniciar sesión (`POST /auth/login`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Suplantación | Probar contraseñas de una lista contra correos corporativos | Tres frenos independientes: por (IP, correo), por cuenta sola —para el ataque repartido entre muchas IPs— y por IP contando todos los intentos, no solo los fallidos (`core/rate_limit.py`). bcrypt a 12 rondas hace que cada prueba cueste ~250 ms |
+| Suplantación | Averiguar qué correos existen para dirigir el ataque | Mismo mensaje y **mismo tiempo** en los dos casos: cuando el correo no existe se verifica un hash señuelo (`consumir_tiempo_de_hash`) |
+| Suplantación | Entrar con una contraseña que viene en el manual | Las de demostración ya no están en el repositorio ni en el log de arranque, y en producción el seed se niega a usar las del código (HU-S10-01) |
+| Alteración | Falsificar un JWT | HS256 con lista blanca de un solo algoritmo y `require` de `exp` y `sub`: ni `alg: none` ni cambio a RS256. La `SECRET_KEY` se valida al arrancar y el proceso aborta si es adivinable |
+| Repudio | Negar los intentos | Cada fallo, cada bloqueo y cada entrada deja fila en la bitácora con IP y `request_id` |
+| Fuga | Leer la respuesta para deducir el estado de la cuenta | «Correo o contraseña incorrectos» para todo; la cuenta inactiva sí se distingue, pero solo después de acertar la contraseña |
+| Denegación | Gastar la CPU del servidor a base de verificaciones bcrypt | El tercer freno (30 peticiones por minuto y por IP) existe justamente para esto; bcrypt corre en un hilo aparte para no dejar sordo al bucle de eventos |
+| Elevación | Pedir un token con un rol que no es el suyo | El rol sale del empleado en la base, nunca del cuerpo de la petición |
+
+### Flujo 2 — Asignar y editar una tarea (`POST`/`PATCH /tareas`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Elevación | Un técnico asignándose o reasignando trabajo | `require_supervisor` en los dos endpoints; un técnico solo lee lo suyo |
+| Alteración | Cerrar una tarea sin haberla hecho | Ningún camino completa sin evidencia: los tres (`PATCH /tareas/{id}`, `/estado` y `/finalizar`) pasan por `exigir_evidencia` y responden 409 (HU-S10-08) |
+| Alteración | Dejar un estado o una prioridad fuera del catálogo | Los schemas lo rechazan, y desde la migración `0013` también la base, que es lo que cubre al seed, a un script y a la consola |
+| Repudio | Negar un cambio | El hook del ORM escribe el antes/después de cada columna en la misma transacción |
+| Denegación | Saturar a un técnico de tareas | Límite de tareas activas por técnico, comprobado también al reabrir |
+| Fuga | Ver tareas de otros técnicos | `/tareas` filtra por el actor cuando el rol es técnico |
+
+### Flujo 3 — Cerrar una tarea con evidencia (`/incidencias` + `/finalizar`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Alteración | Subir un HTML o un ejecutable renombrado a `.jpg` | El formato se lee de los primeros bytes del archivo, no de la extensión (`services/uploads.formato_real`) |
+| Fuga | Abrir la foto de la casa de un cliente con el enlace suelto | `/static` se retiró: los archivos se sirven por `/archivos/...` con URL firmada de 10 minutos, y la firma solo se emite si el actor pasa la regla de acceso (HU-S10-02) |
+| Fuga | Adivinar el nombre del archivo | 128 bits al azar en el nombre de las subidas nuevas |
+| Elevación | Cerrar la tarea de otro técnico | Solo el técnico asignado, y con la jornada abierta |
+| Denegación | Llenar el disco con subidas | Tope de cuerpo contado byte a byte (sirve también sin `Content-Length`) y lectura por bloques, más 5 MB por imagen |
+| Alteración | Descontar material que no se usó, o no descontar el que sí | El consumo va en la misma transacción que cierra la tarea y deja su movimiento con tarea, actor y saldo (HU-S10-07) |
+
+### Flujo 4 — Reportar ubicación (`POST /ubicaciones`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Suplantación | Sembrar posiciones a nombre de un compañero para fabricarle una coartada | El dueño del punto sale del token, nunca del cuerpo |
+| Alteración | Mandar una coordenada imposible | Rangos validados en el schema; sin ellos PostGIS guardaría cualquier cosa |
+| Alteración | Falsear la IP de origen para esquivar los límites | `request.client.host` y no la cabecera cruda; uvicorn solo traduce `X-Forwarded-For` desde el proxy que diga `FORWARDED_ALLOW_IPS` |
+| Fuga | Leer dónde estuvo un técnico | Las lecturas del recorrido son de admin, supervisor y gerente, y **quién consulta** queda en la bitácora |
+| Denegación | Inflar `ubicacion_empleado`, que crece sin tope | Tope por empleado en el servidor y no solo en el cliente (HU-S10-08), y purga a 90 días |
+| Fuga | Sacar el histórico de meses atrás | Retención de 90 días (`RETENCION_UBICACIONES_DIAS`) |
+
+### Flujo 5 — Reportes del gerente (`GET /reportes/*`)
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Elevación | Descargar un reporte sin el rol para verlo | El mismo rol para ver y para exportar: no hay una puerta de descarga más floja que la pantalla |
+| Alteración | Meter una fórmula en el Excel del gerente a través del título de una tarea | Todo texto que empiece por `=`, `+`, `-`, `@`, tabulador o retorno se escribe precedido de `'` (HU-S10-04) |
+| Fuga | Sacar la base entera en un XLSX | Tope de filas en la exportación de la bitácora; por encima se pide acotar el filtro |
+| Repudio | Negar que descargó los datos de alguien | Cada exportación queda en la bitácora con sus filtros |
+
+### Flujo 6 — Bitácora de auditoría
+
+| Amenaza | Qué intentaría | Qué lo frena |
+|---|---|---|
+| Alteración | Editar o borrar una fila para tapar algo | `UPDATE` prohibido siempre; `DELETE` solo dentro de la función de purga y siendo el propietario; `TRUNCATE` prohibido incluso para el dueño |
+| Alteración | Reescribir la cadena de hashes | El hash lo calcula la base en el trigger, no el backend: ni controlando el backend se puede fabricar uno |
+| Alteración | Que el backend desactive el trigger | El rol de la aplicación no es el propietario de la tabla (`aplicar_rol_aplicacion.py`), y en producción el arranque se niega si lo fuera |
+| Alteración | Borrar las últimas filas con el superusuario | El ancla externa: `mantenimiento.py anclar` deja id y hash en el log del servicio, fuera de la base, y `verificar-bitacora --ancla` lo detecta |
+| Repudio | Actuar sin dejar rastro | `test_cobertura_auditoria.py` falla si aparece un endpoint que muta datos sin su caso en el catálogo |
+| Fuga | Leer la bitácora para saber qué se vigila | Solo admin; y la bitácora nunca copia hashes de contraseña ni coordenadas |
+
+## Matriz OWASP Top 10:2025
+
+Una fila por categoría, con **dónde está el control** y **qué prueba lo
+vigila**. La vigila a su vez `backend/tests/test_matriz_owasp.py`, que lee esta
+tabla y falla si alguno de los archivos que nombra deja de existir: una matriz
+que envejece en silencio es peor que no tenerla, porque se presenta como
+evidencia de algo que ya no se cumple.
+
+| Categoría | Control principal | Archivo | Prueba |
+|---|---|---|---|
+| A01 Control de acceso roto | Rol exigido en los 68 endpoints de dominio, técnico limitado a lo suyo, archivos subidos solo con URL firmada, 403 que no enumera roles | `backend/app/core/deps.py` | `backend/tests/test_permisos_roles.py` |
+| A02 Configuración incorrecta | `SECRET_KEY` validada al arrancar, docs apagadas en producción, CORS sin comodín, contenedores sin root, cabeceras en la página | `backend/app/core/config.py` | `backend/tests/test_arranque_produccion.py` |
+| A03 Cadena de suministro | Auditoría que bloquea el PR, Dependabot, Actions por SHA, imágenes por digest, detección de secretos | `.github/workflows/ci.yml` | `backend/tests/test_cadena_suministro.py` |
+| A04 Fallas criptográficas | bcrypt a 12 rondas, HS256 con llave validada, SCRAM en Postgres, HSTS, enlaces de archivo firmados con llave propia | `backend/app/core/security.py` | `backend/tests/test_security.py` |
+| A05 Inyección | ORM parametrizado en todo el backend, React escapa por omisión, fórmulas de Excel neutralizadas, longitudes acotadas | `backend/app/services/exportacion_reportes.py` | `backend/tests/test_formulas_excel.py` |
+| A06 Diseño inseguro | Reglas de negocio centralizadas y aplicadas por todos los caminos, jornada obligatoria, kardex como único camino al stock | `backend/app/core/reglas.py` | `backend/tests/test_reglas_no_se_saltan.py` |
+| A07 Fallas de autenticación | Tres frenos de fuerza bruta, anti-enumeración, revocación por `jti`, `version_token`, política única de contraseña, cambio obligatorio | `backend/app/routers/auth.py` | `backend/tests/test_politica_contrasena.py` |
+| A08 Integridad de software y datos | Cadena de hashes calculada por la base, ancla externa, firma de imágenes por sus bytes, `CHECK` de catálogo | `backend/alembic/versions/0010_bitacora_inmutable.py` | `backend/tests/integracion/test_integridad_catalogos.py` |
+| A09 Registro y alertas | Bitácora con actor, IP y `request_id`; alertas de seguridad sobre patrones de la propia bitácora; generación programada | `backend/app/services/alertas_seguridad.py` | `backend/tests/integracion/test_alertas_seguridad.py` |
+| A10 Condiciones excepcionales | 500 con `request_id` y sin stack, errores de base como 409/422, tope de cuerpo real, `ErrorBoundary` en el frontend | `backend/app/core/exceptions.py` | `backend/tests/test_error_interno.py` |
+
+Sobre **SSRF**, que el Top 10:2025 metió dentro de A01: el backend **no hace
+ninguna petición saliente**. Nominatim lo llama el navegador, no el servidor,
+así que hoy no hay ningún sitio donde una URL del usuario se convierta en una
+petición del servidor. Queda escrito para que, si algún día se añade una
+integración que sí salga a internet, se sepa que esa casilla estaba vacía por
+construcción y no por haberla cubierto.
+
+## Escaneo dinámico (T2)
+
+Todo lo demás de este documento se comprueba mirando el código: las pruebas, la
+auditoría de dependencias, las cabeceras de la imagen. El job
+`escaneo-dinamico` del CI mira la API **corriendo**, que es lo único que se
+parece a lo que ve alguien de fuera, y lo único que puede encontrar algo que a
+nadie se le ocurrió escribir una prueba para.
+
+Levanta el stack con `docker compose` y le pasa OWASP ZAP. Usa
+`zap-api-scan.py` y no `zap-baseline.py`: las dos corren las mismas reglas
+pasivas, pero baseline descubre las rutas siguiendo enlaces y esto es una API
+JSON sin una sola página que enlace a otra — vería tres endpoints y se iría.
+`api-scan` lee el `openapi.json` y recorre las 73 operaciones, que es lo que
+hace que el informe sirva como evidencia.
+
+Por eso el escaneo corre con `ENVIRONMENT=development`: en producción el
+`openapi.json` no se publica a propósito (es un mapa completo de la superficie
+de ataque), así que el escáner no tendría de dónde sacar las rutas.
+
+El job es **informativo** y no bloquea, y no por pereza: sobre una API que
+exige JWT en los 68 endpoints de dominio, un escáner dinámico devuelve sobre
+todo 401 y avisos de cabeceras que ya están puestas. Bloquear PRs con eso
+acabaría en que alguien quita el job. El valor está en el informe, que queda
+como artefacto del CI (`informe-zap`).
+
+## Copias de seguridad
+
+Hasta el Sprint 10 no había ninguna. Todo lo anterior va de que nadie pueda
+leer ni alterar los datos; esto va de lo otro, que es igual de definitivo y
+mucho más probable: un `DROP`, un `--reset` corrido en el entorno equivocado,
+un disco que se va. Una base cifrada y auditada que ya no existe no se
+recupera con permisos.
+
+`scripts/respaldo.sh` toma el volcado con el **propietario del esquema** y no
+con el rol de la aplicación. No es un detalle: el rol de la aplicación no puede
+leer `bitacora_auditoria` entera —es lo que la hace append-only de verdad—, así
+que un `pg_dump` hecho con él dejaría fuera justo la tabla que no se puede
+reconstruir. Para eso está `DATABASE_URL_MIGRACIONES`.
+
+El archivo va cifrado con GPG simétrico (AES-256) y la frase se pasa por
+`RESPALDO_PASSPHRASE`, nunca en la línea de comandos: ahí la vería cualquiera
+con `ps`. El cifrado no es opcional, porque el volcado contiene:
+
+- la tabla de empleados, con sus hashes de contraseña;
+- `ubicacion_empleado`: dónde estuvo cada técnico y a qué hora;
+- la bitácora completa.
+
+Es, literalmente, todo lo que el resto de este documento protege, en un archivo
+que se va a copiar a sitios con menos cuidado que la base.
+
+El volcado no se escribe nunca en claro en el disco: `pg_dump | gzip | gpg` va
+en una sola tubería. Y al terminar, el script lo vuelve a descifrar para
+comprobar que se lee; si no, borra el archivo. Un respaldo cifrado con la frase
+equivocada no se descubre hasta el día que hace falta, que es el peor día
+posible.
+
+### Prueba de restauración
+
+Un respaldo que nadie ha restaurado es una suposición: puede estar truncado,
+cifrado con otra frase o faltarle una tabla.
+
+```bash
+RESPALDO_PASSPHRASE='…' bash scripts/respaldo.sh probar backups/<archivo>
+```
+
+Crea una base temporal, restaura ahí, y comprueba cuatro cosas antes de
+borrarla: que las trece tablas del dominio existen, que la bitácora llegó con
+todas sus filas (si sale vacía con la de origen poblada, el volcado se hizo con
+el rol de la aplicación), a qué migración corresponde el esquema, y que la
+cadena de hashes de la bitácora sigue cuadrando después de restaurar — una
+bitácora restaurada con la cadena rota no vale como evidencia de nada.
+
+**Última prueba de restauración: 2026-10-28.** Resultado: correcta. Base de
+origen con el escenario del seed y 73 filas de bitácora; las 73 se restauraron
+y la cadena quedó íntegra. Esquema en la migración `0013`.
+
+Cuando se restaure sobre un despliegue hay que volver a aplicar el
+endurecimiento del rol (`python backend/db/aplicar_rol_aplicacion.py`): el
+volcado se hace con `--no-owner --no-privileges` para que se pueda restaurar
+en una base con otros nombres de rol, así que no trae los privilegios.
+
 ## Inyección SQL
 
 Se revisó el backend completo. Todas las consultas se construyen con el ORM de
@@ -397,6 +690,10 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 6. En un despliegue, no dejes que el seed use las contraseñas de demo: define
    `CONTRASENA_DEMO` (o `SEMBRAR_DEMO=false` con `ADMIN_INICIAL_CORREO` y
    `ADMIN_INICIAL_CONTRASENA`). Ver «Cuentas y contraseñas».
+7. Programa el respaldo diario (`bash scripts/respaldo.sh crear`, ver README) y
+   corre `scripts/respaldo.sh probar` de vez en cuando, anotando la fecha y el
+   resultado arriba. Guarda `RESPALDO_PASSPHRASE` en el gestor del equipo: sin
+   ella los respaldos no sirven para nada.
 
 ## Cadena de suministro
 
@@ -553,9 +850,11 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
   host; en un despliegue donde la base viva en otra máquina hay que activar TLS
   en Postgres (`ssl=on` con certificados), exigir `hostssl` en `pg_hba.conf` y
   definir `DB_SSL_MODE=verify-full` en el backend.
-- **Copias de seguridad.** No hay ninguna configurada. La disponibilidad de los
-  datos es parte de su seguridad: un ransomware o un `docker volume rm` a
-  destiempo pesan más que cualquier intrusión.
+- **Copias de seguridad fuera del host.** Ya existe el procedimiento y está
+  probado (ver «Copias de seguridad»), pero los archivos se quedan donde los
+  deja el cron. Un ransomware o un `docker volume rm` que alcance también esa
+  carpeta se lleva la base y sus respaldos a la vez: hay que copiarlos a otro
+  sitio, y eso es un paso de operación que nadie ha montado todavía.
 - **Cifrado en reposo.** El volumen de Postgres no está cifrado. Quien tenga
   acceso físico o administrativo al host puede leerlo.
 - **Contadores en memoria.** Los límites de frecuencia viven en el proceso. Con
@@ -586,3 +885,28 @@ Conviene tenerlo claro para no dar por resuelto lo que no lo está:
 - **`'unsafe-inline'` en los estilos.** React y Leaflet ponen estilos en el
   atributo `style`, así que la CSP los permite. Los scripts no: es lo que
   importa para el robo de sesión.
+- **Segundo factor.** No hay 2FA para ninguna cuenta, tampoco para admin y
+  gerente, que son las que más pesan. Lo que compensa es todo lo demás de
+  «Cuentas y contraseñas»: política única, cambio obligatorio cuando la clave
+  la puso otra persona, tres frenos de fuerza bruta, revocación por `jti`,
+  `version_token` y alerta al admin cuando alguien martillea una cuenta. Nada
+  de eso sustituye un segundo factor: si una contraseña se filtra por fuera
+  —un gestor comprometido, un apunte en papel— no hay nada más.
+- **El JWT vive en `localStorage`.** Un XSS en la página podría leerlo. Pasarlo
+  a una cookie `HttpOnly` exige añadir protección CSRF y cambiar cómo el
+  cliente entero manda las peticiones, que es más de lo que caben en este
+  sprint sin romper algo. Lo que lo mitiga es que el XSS no es fácil de
+  conseguir: React escapa por omisión, no hay un solo
+  `dangerouslySetInnerHTML` en el código, y la CSP del frontend no permite
+  `unsafe-inline` ni `unsafe-eval` en `script-src`, así que un script inyectado
+  no se ejecuta aunque llegue al DOM.
+- **Recuperar la contraseña uno mismo.** No existe «olvidé mi contraseña»:
+  hace falta que un admin o un supervisor la restablezca. Eso necesita envío de
+  correo, que el proyecto no tiene montado. El efecto secundario no es malo —el
+  restablecimiento deja fila en la bitácora con quién lo hizo y obliga a
+  cambiarla al entrar—, pero depende de que haya alguien disponible.
+- **Funcionalidad fuera de alcance.** La PWA guarda en cola lo que se escribe
+  sin señal, pero no funciona sin conexión de verdad; el rastreo de ubicación
+  se detiene cuando el navegador pasa a segundo plano (haría falta una
+  aplicación nativa); no hay optimización de rutas, módulo de daños de activos,
+  reportes de empleados, inventario o incidencias, ni exportación a PDF o CSV.

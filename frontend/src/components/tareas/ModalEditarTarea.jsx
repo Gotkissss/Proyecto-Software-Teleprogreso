@@ -13,11 +13,20 @@
  * pasársela. Tener las dos puertas obligaba además a elegir entre ellas sin
  * ninguna pista de que una estaba peor equipada. El técnico se muestra en
  * modo lectura y el botón lleva al flujo de reasignación, que es el completo.
+ *
+ * T6 del Sprint 10: la ubicación sí se edita aquí, con el mismo selector de
+ * mapa de «Nueva tarea». El backend aceptaba `lat`/`lng` en este PATCH desde
+ * SCRUM-170, pero la interfaz no los ofrecía: una tarea creada con la
+ * coordenada mal puesta —o sin coordenada, porque el supervisor la escribió
+ * con prisa— no se podía arreglar sin borrarla y volver a crearla, y con ella
+ * se iban su historial y sus evidencias. El técnico, mientras tanto, veía el
+ * pin en otra calle o no veía ninguno.
  * ---------------------------------------------------------------------------
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal, { ModalActions } from '../ui/Modal'
+import SelectorUbicacionMapa from '../mapa/SelectorUbicacionMapa'
 import { actualizarTarea } from '../../api/tareaService'
 import styles from './ModalEditarTarea.module.css'
 
@@ -45,6 +54,10 @@ function tareaAFormulario(tarea) {
     estado:             tarea?.estado_tarea ?? 'pendiente',
     fecha_inicio:       tarea?.fecha_inicio ?? '',
     fecha_finalizacion: tarea?.fecha_finalizacion ?? '',
+    // null y no '' cuando la tarea no tiene ubicación: el selector distingue
+    // "sin punto" de "punto en el 0,0", que cae en el golfo de Guinea.
+    lat:                tarea?.lat ?? null,
+    lng:                tarea?.lng ?? null,
   }
 }
 
@@ -67,10 +80,34 @@ export default function ModalEditarTarea({
     setError(null)
   }, [inicial, open])
 
+  /**
+   * Mapa ↔ dirección, igual que en «Nueva tarea».
+   *
+   * `direccion` llega como undefined mientras la geocodificación inversa sigue
+   * en curso, o cuando el punto se movió sin que Nominatim devolviera texto:
+   * en esos casos no se pisa lo que el supervisor ya tenía escrito.
+   */
+  const handleUbicacionCambiada = useCallback(({ lat, lng, direccion }) => {
+    setForm((prev) => ({
+      ...prev,
+      lat,
+      lng,
+      direccion: direccion !== undefined ? direccion : prev.direccion,
+    }))
+    setError(null)
+  }, [])
+
   if (!tarea) return null
 
   const handleChange = (campo, valor) => {
     setForm((prev) => ({ ...prev, [campo]: valor }))
+    setError(null)
+  }
+
+  const quitarUbicacion = () => {
+    // Las dos a null borran la coordenada en el backend (ver
+    // `actualizarTarea`): el validador las exige como par.
+    setForm((prev) => ({ ...prev, lat: null, lng: null }))
     setError(null)
   }
 
@@ -95,11 +132,24 @@ export default function ModalEditarTarea({
     // Solo lo que cambió respecto al valor original.
     const cambios = {}
     Object.keys(inicial).forEach((campo) => {
+      if (campo === 'lat' || campo === 'lng') return
       const valor = campo === 'titulo' ? form[campo].trim() : form[campo]
       if (String(valor ?? '') !== String(inicial[campo] ?? '')) {
         cambios[campo] = valor
       }
     })
+
+    // La coordenada va aparte porque es un par: el validador del backend
+    // rechaza una lat sin su lng, y comparar campo a campo podía mandar solo
+    // una cuando el punto se movía en una dirección casi recta y la otra
+    // coordenada quedaba con el mismo valor redondeado.
+    if (
+      String(form.lat ?? '') !== String(inicial.lat ?? '')
+      || String(form.lng ?? '') !== String(inicial.lng ?? '')
+    ) {
+      cambios.lat = form.lat
+      cambios.lng = form.lng
+    }
 
     if (Object.keys(cambios).length === 0) {
       onClose?.()
@@ -115,7 +165,10 @@ export default function ModalEditarTarea({
     } catch (err) {
       const status = err?.response?.status
       const detail = err?.response?.data?.detail
-      if (status === 400 || status === 404) {
+      // 409 desde la HU-S10-08: pasar la tarea a 'completado' sin evidencia
+      // registrada. El motivo que manda el backend es el que hay que mostrar
+      // —dice qué falta—, así que va en la misma rama que el 400.
+      if (status === 400 || status === 404 || status === 409) {
         setError(detail || 'No se pudo guardar la tarea. Revisa los datos.')
       } else if (status === 403) {
         setError(detail || 'Tu rol no tiene permiso para editar tareas.')
@@ -162,6 +215,33 @@ export default function ModalEditarTarea({
         value={form.direccion}
         onChange={(e) => handleChange('direccion', e.target.value)}
       />
+
+      {/* T6: la ubicación, con el mismo selector de «Nueva tarea». Escribir la
+          dirección mueve el pin y mover el pin rellena la dirección. */}
+      <div className={styles.ubicacionCabecera}>
+        <span className={styles.label}>Ubicación en el mapa</span>
+        {form.lat != null && (
+          <button
+            type="button"
+            className={styles.quitarUbicacion}
+            onClick={quitarUbicacion}
+            disabled={guardando}
+          >
+            Quitar ubicación
+          </button>
+        )}
+      </div>
+      <SelectorUbicacionMapa
+        direccion={form.direccion}
+        lat={form.lat}
+        lng={form.lng}
+        onCambiarUbicacion={handleUbicacionCambiada}
+      />
+      <p className={styles.ubicacionNota}>
+        {form.lat == null
+          ? 'Esta tarea no tiene ubicación: el técnico no la ve en su mapa. Toca el mapa para ponerle una.'
+          : 'Toca el mapa o arrastra el pin para corregirla.'}
+      </p>
 
       <div className={styles.row}>
         <div className={styles.col}>

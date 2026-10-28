@@ -110,9 +110,22 @@ def test_estado_se_normaliza_a_minusculas():
 def test_stock_negativo_se_rechaza(campo):
     """Se podía dejar un material en -500 unidades."""
     with pytest.raises(ValidationError):
-        ActivoUpdateRequest(**{campo: -1})
-    with pytest.raises(ValidationError):
         MaterialCreate(nombre_activo="Cable", **{campo: -1})
+
+
+def test_el_stock_minimo_negativo_se_rechaza_tambien_al_editar():
+    with pytest.raises(ValidationError):
+        ActivoUpdateRequest(stock_minimo=-1)
+
+
+def test_editar_un_activo_ya_no_toca_el_stock():
+    """
+    HU-S10-07: `cantidad_disponible` salió de `ActivoUpdateRequest`. Era el
+    camino por el que el stock cambiaba sin dejar rastro, y Pydantic ignora en
+    silencio un campo que ya no existe: sin esta prueba, un cliente podría
+    seguir mandándolo y creer que surtió efecto.
+    """
+    assert "cantidad_disponible" not in ActivoUpdateRequest.model_fields
 
 
 def test_stock_cero_es_valido():

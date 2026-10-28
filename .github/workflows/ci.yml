@@ -147,3 +147,106 @@ jobs:
         run: scripts/verificar-cabeceras-frontend.sh
       - name: Backend — sin compilador, sin root y proxy
         run: scripts/verificar-imagen-backend.sh
+  escaneo-dinamico:
+    name: Escaneo dinámico (OWASP ZAP, informativo)
+    runs-on: ubuntu-latest
+    # T2 del Sprint 10. Todo lo demás de este CI mira el código: los tests, la
+    # auditoría de dependencias, las cabeceras de la imagen. Esto mira la API
+    # CORRIENDO, que es lo único que se parece a lo que ve un atacante —y lo
+    # único que puede encontrar algo que nadie pensó en escribir una prueba
+    # para.
+    #
+    # Es INFORMATIVO a propósito, y no por pereza: un escáner dinámico sobre
+    # una API que exige JWT en los 68 endpoints devuelve sobre todo "401" y
+    # algún aviso de cabeceras que ya están puestas. Bloquear PRs con eso
+    # acabaría en que alguien quita el job. Lo que se busca es el informe, que
+    # queda como artefacto y es la evidencia externa de la cobertura OWASP para
+    # la presentación.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Levantar la API con docker compose
+        run: |
+          set -euo pipefail
+          # Un .env mínimo: el compose exige estas variables y el backend se
+          # niega a arrancar con una SECRET_KEY débil (core/config.py), así
+          # que se genera una de verdad para este escaneo.
+          cat > .env <<EOF
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=$(openssl rand -hex 16)
+          POSTGRES_DB=teleprogreso
+          POSTGRES_PORT=5432
+          SECRET_KEY=$(openssl rand -hex 48)
+          BIND_HOST=0.0.0.0
+          ENVIRONMENT=development
+          BACKEND_CORS_ORIGINS=["http://localhost:5173"]
+          EOF
+          docker compose up -d db migraciones backend
+          # El healthcheck de la imagen no cubre el arranque completo (las
+          # migraciones y el seed corren antes de uvicorn), así que se espera
+          # a que la API responda de verdad.
+          for intento in $(seq 1 90); do
+            if curl -fsS -o /dev/null http://localhost:8000/health; then
+              echo "API arriba tras $intento s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8000/health
+
+      - name: ZAP (reglas pasivas sobre la API)
+        # `zap-api-scan.py` y no `zap-baseline.py`: las dos corren las mismas
+        # reglas pasivas, pero baseline descubre las rutas spidereando enlaces
+        # y esto es una API JSON sin una sola página que enlace a otra — vería
+        # tres endpoints y se iría. api-scan lee el `openapi.json` y recorre
+        # los 68, que es lo que hace que el informe sirva de evidencia.
+        #
+        # Por eso el compose arranca con ENVIRONMENT=development: en producción
+        # el `openapi.json` no se publica a propósito (es un mapa completo de la
+        # superficie de ataque), así que el escaneo tiene que correr contra un
+        # entorno donde sí esté.
+        #
+        # `-I` hace que ZAP no termine en error por los avisos; el `|| true`
+        # cubre que el propio contenedor termine mal, que tampoco debe romper el
+        # CI al ser informativo.
+        run: |
+          mkdir -p reportes-zap
+          # ZAP escribe el informe con el usuario del contenedor: sin esto no
+          # puede crear nada en el volumen montado.
+          chmod 777 reportes-zap
+          docker run --rm --network host \
+            -v "$PWD/reportes-zap:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py \
+              -t http://localhost:8000/openapi.json \
+              -f openapi \
+              -I \
+              -r informe-zap.html \
+              -w informe-zap.md \
+              -J informe-zap.json \
+            || true
+          ls -la reportes-zap || true
+
+      - name: Resumen en el log del job
+        if: always()
+        run: |
+          if [ -f reportes-zap/informe-zap.md ]; then
+            # Lo más útil del informe en el propio log, para no tener que
+            # descargar el artefacto solo para ver si hay algo.
+            head -60 reportes-zap/informe-zap.md
+          else
+            echo "ZAP no dejó informe; revisa el paso anterior."
+          fi
+
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: informe-zap
+          path: reportes-zap/
+          if-no-files-found: warn
+
+      - name: Apagar
+        if: always()
+        run: docker compose down -v || true

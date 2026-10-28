@@ -32,7 +32,20 @@ class Descanso(Base):
     # Tipo de pausa según la normativa (almuerzo | tecnica | personal).
     # Nullable porque los descansos creados antes de la migración 0004 no lo
     # tienen; la UI los muestra como "Pausa".
-    tipo:         Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # HU-S10-08: la clave foránea la crea la migración 0013 y se declara aquí
+    # para que `Base.metadata` la conozca (las pruebas de integración crean el
+    # esquema desde los modelos). El catálogo de pausas es una tabla desde la
+    # 0005, pero esta columna era texto suelto: una pausa con un tipo que no
+    # existe sale del historial sin etiqueta y sin duración máxima que comparar.
+    #
+    # RESTRICT y no CASCADE: retirar un tipo de pausa no puede borrar las
+    # pausas que ya se tomaron con él; `tipo_pausa.activo` existe para dar de
+    # baja un tipo sin tocar el historial.
+    tipo:         Mapped[str | None] = mapped_column(
+        String(20),
+        ForeignKey("tipo_pausa.id_tipo_pausa", ondelete="RESTRICT", onupdate="CASCADE"),
+        nullable=True,
+    )
 
     # Relaciones
     asistencia: Mapped["Asistencia"] = relationship(back_populates="descansos")

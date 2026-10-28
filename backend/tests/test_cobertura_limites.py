@@ -82,6 +82,11 @@ SIN_COLUMNA = {
     ("EmpleadoPasswordUpdate", "contrasena"): (M, "se guarda su hash"),
     ("EmpleadoPasswordUpdate", "contrasena_confirmacion"): (M, "se compara"),
     ("GET /empleados", "buscar"): (100, "filtro; busca en nombre, apellido y correo"),
+    ("MovimientoMaterialCreate", "motivo"): (
+        300,
+        "va a movimiento_material.motivo, que no es una columna de los modelos "
+        "que recorre esta prueba",
+    ),
 }
 
 EXENTOS = {

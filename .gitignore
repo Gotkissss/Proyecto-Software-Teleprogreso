@@ -22,7 +22,10 @@ backups/
 __pycache__/
 *.pyc
 *.pyo
-.venv/
+# `.venv*` y no solo `.venv`: para comprobar las dependencias nuevas hace
+# falta un entorno con otra versión de Python (backend/.venv312), y tampoco se
+# versiona.
+.venv*/
 venv/
 
 # Node / React 
@@ -45,3 +48,7 @@ Thumbs.db
 # Agents
 AGENTS.md
 RESUMEN_PROYECTO.md
+
+# Configuración local de agentes: no se versiona.
+.claude/
+CLAUDE.md

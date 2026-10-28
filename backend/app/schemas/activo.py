@@ -1,7 +1,7 @@
 
 from datetime import date, datetime
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.archivos_firmados import UrlArchivo
 from app.core.reglas import ESTADOS_HERRAMIENTA, ESTADOS_VEHICULO
@@ -197,7 +197,13 @@ class ActivoUpdateRequest(BaseModel):
     tipo_herramienta:    Optional[str] = Field(None, max_length=80)
     estado:              Optional[str] = Field(None, max_length=30)
     # Material
-    cantidad_disponible: Optional[int] = Field(None, ge=0)
+    #
+    # `cantidad_disponible` NO está aquí a propósito (HU-S10-07). Editar el
+    # stock a mano por este PATCH era el camino por el que el número cambiaba
+    # sin dejar rastro: nadie podía saber si las 40 unidades que faltaban se
+    # habían usado en tareas, se habían perdido o alguien se había equivocado
+    # al teclear. El stock se mueve con POST
+    # /activos/materiales/{id}/movimientos, que exige decir por qué.
     stock_minimo:        Optional[int] = Field(None, ge=0)
     unidad_medida:       Optional[str] = Field(None, max_length=30)
     tipo_material:       Optional[str] = Field(None, max_length=80)
@@ -259,3 +265,67 @@ class ImagenActivoResponse(BaseModel):
     detail:   str
     foto_url: UrlArchivo = None
 
+
+# ── Kardex de materiales (HU-S10-07) ────────────────────────────────────────
+
+class MovimientoMaterialCreate(BaseModel):
+    """
+    Body de POST /activos/materiales/{id}/movimientos.
+
+    `tipo` decide qué significa `cantidad`:
+
+      - `entrada`: unidades que llegan al almacén. Se suman.
+      - `ajuste`:  el saldo al que queda el material tras contarlo. Se fija,
+                   no se suma, porque un ajuste es "contamos y hay 37", no
+                   "sumá 37". Lleva motivo obligatorio: sin él, un ajuste y un
+                   dedazo son la misma fila.
+
+    No se acepta `consumo` por aquí. Un consumo pertenece a una tarea, y la
+    tarea es la que lo registra al cerrarse: dejarlo suelto permitiría apuntar
+    consumos sin trabajo que los explique, que es el agujero que esta historia
+    cierra.
+    """
+
+    tipo: Literal["entrada", "ajuste"]
+    cantidad: int = Field(..., gt=0)
+    motivo: Optional[str] = Field(None, max_length=300)
+
+    @model_validator(mode="after")
+    def ajuste_con_motivo(self) -> "MovimientoMaterialCreate":
+        if self.tipo == "ajuste" and not (self.motivo or "").strip():
+            raise ValueError(
+                "Un ajuste de inventario necesita un motivo."
+            )
+        return self
+
+
+class MovimientoMaterialResponse(BaseModel):
+    """Una línea del kardex, como la pinta la pestaña de movimientos."""
+
+    id_movimiento: int
+    tipo: str
+    cantidad: int
+    saldo_resultante: int
+    motivo: Optional[str] = None
+    fecha_hora: datetime
+    # Null cuando la tarea o el empleado se borraron: el movimiento no se
+    # reescribe, así que la fila sigue contando lo que pasó aunque ya no se
+    # pueda decir quién.
+    id_tarea: Optional[int] = None
+    titulo_tarea: Optional[str] = None
+    id_empleado: Optional[int] = None
+    nombre_empleado: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MovimientosMaterialResponse(BaseModel):
+    """Respuesta de GET /activos/materiales/{id}/movimientos."""
+
+    id_material: int
+    nombre_material: str
+    cantidad_disponible: int
+    stock_minimo: int
+    total: int
+    movimientos: list[MovimientoMaterialResponse]

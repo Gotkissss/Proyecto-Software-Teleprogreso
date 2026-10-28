@@ -135,7 +135,10 @@ export async function eliminarIncidencia(idTarea, idIncidencia) {
  * @param {{descripcion: string, foto: File}} datos
  * @returns {Promise<Object>} la incidencia creada, ya con su foto
  */
-export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, posicion = null }) {
+export async function finalizarTareaConEvidencia(
+  idTarea,
+  { descripcion, foto, posicion = null, materiales = null },
+) {
   const incidencia = await crearIncidencia(idTarea, {
     descripcion,
     finalizarTarea: false,
@@ -161,7 +164,7 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, p
   // se avisa pero no se pierde el trabajo del técnico.
   let tarea = null
   try {
-    tarea = await finalizarTarea(idTarea, posicion)
+    tarea = await finalizarTarea(idTarea, posicion, materiales)
   } catch (err) {
     console.error('La evidencia se guardó pero no se pudo confirmar el cierre:', err)
     throw err
@@ -177,13 +180,24 @@ export async function finalizarTareaConEvidencia(idTarea, { descripcion, foto, p
  * HU-5: si llega la posición, el lugar del cierre queda en el recorrido del
  * técnico (una sola vez por tarea, aunque se reintente).
  *
+ * HU-S10-07: `materiales` es lo que la tarea gastó. El backend lo descuenta
+ * del stock en la MISMA transacción que cierra la tarea, así que si el almacén
+ * no alcanza responde 409 y la tarea se queda abierta — el técnico corrige la
+ * cantidad en vez de dejar el inventario descuadrado.
+ *
  * @param {number} idTarea
  * @param {{lat:number, lng:number}|null} [posicion]
+ * @param {Array<{id_material:number, cantidad:number}>|null} [materiales]
  */
-export async function finalizarTarea(idTarea, posicion = null) {
-  const { data } = await apiClient.patch(
-    `/tareas/${idTarea}/finalizar`,
-    cuerpoUbicacion(posicion),
-  )
+export async function finalizarTarea(idTarea, posicion = null, materiales = null) {
+  // El cuerpo lleva lat/lng y materiales en el mismo objeto. Las claves vacías
+  // se omiten: el schema del backend exige lat y lng juntas o ninguna, y
+  // mandar `materiales: []` haría una vuelta al kardex para nada.
+  const cuerpo = { ...cuerpoUbicacion(posicion) }
+  if (Array.isArray(materiales) && materiales.length > 0) {
+    cuerpo.materiales = materiales
+  }
+
+  const { data } = await apiClient.patch(`/tareas/${idTarea}/finalizar`, cuerpo)
   return data
 }

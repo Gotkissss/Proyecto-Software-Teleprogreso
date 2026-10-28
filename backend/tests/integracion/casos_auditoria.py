@@ -350,8 +350,22 @@ async def _crear_activo(e):
 async def _editar_activo(e):
     supervisor = await e.empleado("supervisor")
     id_activo = await e.activo(supervisor, "material", cantidad_disponible=5)
+    # Ya no se edita `cantidad_disponible` por aquí (HU-S10-07): el stock se
+    # mueve con un movimiento del kardex, que es el caso de abajo.
     return await e.llamar(
-        "PATCH", f"/activos/{id_activo}", supervisor, json={"cantidad_disponible": 3}
+        "PATCH", f"/activos/{id_activo}", supervisor, json={"stock_minimo": 3}
+    )
+
+
+@caso("POST", "/activos/materiales/{id:int}/movimientos")
+async def _movimiento_material(e):
+    supervisor = await e.empleado("supervisor")
+    id_material = await e.activo(supervisor, "material", cantidad_disponible=5)
+    return await e.llamar(
+        "POST",
+        f"/activos/materiales/{id_material}/movimientos",
+        supervisor,
+        json={"tipo": "entrada", "cantidad": 7},
     )
 
 

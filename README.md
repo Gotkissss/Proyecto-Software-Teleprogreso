@@ -60,10 +60,11 @@ Este proyecto consiste en el desarrollo de una aplicación web/móvil para la su
  
 ## ✨ Funcionalidades
  
-- **Técnicos (móvil/PWA):** ruta diaria con prioridades, control de asistencia (entrada/salida), pausas operativas con countdown, mapa de ruta
-- **Supervisores (desktop):** dashboard con métricas en tiempo real, gestión de alertas operativas, reasignación de tareas entre técnicos
+- **Técnicos (móvil/PWA):** ruta diaria con prioridades, control de asistencia (entrada/salida), pausas operativas con countdown, mapa de ruta, y al cerrar una tarea la evidencia (descripción y foto) más el material que gastó, que se descuenta del inventario
+- **Supervisores (desktop):** dashboard con métricas en tiempo real, gestión de alertas operativas, reasignación de tareas entre técnicos, inventario con el kardex de cada material (quién movió qué, cuándo, en qué tarea y con qué saldo)
 - **Gerencia (admin y gerente):** pantalla de Reportes con indicadores y su variación contra el periodo anterior, tendencia de horas, tareas y pausas por día o semana, productividad por técnico, resumen por empleado con detalle de cada persona y exportación a Excel con los mismos filtros. El gerente entra directo a esta pantalla
-- **Autenticación:** JWT con control de acceso por rol (admin, supervisor, técnico, gerente)
+- **Administración:** bitácora de auditoría con la cadena de hashes verificable, y alertas de seguridad sobre los patrones de esa bitácora (fuerza bruta, cuentas bloqueadas, accesos denegados repetidos)
+- **Autenticación:** JWT con control de acceso por rol (admin, supervisor, técnico, gerente), política única de contraseña y cambio obligatorio cuando la clave la puso otra persona
 ## 🛠️ Levantar el proyecto
  
 ```bash
@@ -209,6 +210,41 @@ que un superusuario borre las últimas filas. Prográmalo una vez al día
 `python mantenimiento.py verificar-bitacora --ancla <id>:<hash>` termina con 1
 si esa fila desapareció o cambió.
 
+### Copias de seguridad
+
+`scripts/respaldo.sh` (T3 del Sprint 10). El volcado lo toma el **propietario
+del esquema** y va **cifrado**: lleva los hashes de las contraseñas, el
+historial de ubicaciones de cada técnico y la bitácora completa.
+
+```bash
+RESPALDO_PASSPHRASE='<frase del equipo>' bash scripts/respaldo.sh crear
+```
+
+```bash
+bash scripts/respaldo.sh listar
+```
+
+```bash
+RESPALDO_PASSPHRASE='<frase del equipo>' bash scripts/respaldo.sh probar backups/<archivo>
+```
+
+`probar` restaura en una base temporal, comprueba que las tablas están, que la
+bitácora llegó completa y que su cadena de hashes sigue cuadrando, y la borra.
+Es lo que separa «tenemos respaldos» de «tenemos respaldos que funcionan».
+
+Prográmalo a diario:
+
+- **Local / servidor propio:**
+  `0 2 * * * cd /ruta/al/proyecto && RESPALDO_PASSPHRASE='…' bash scripts/respaldo.sh crear`
+- **Railway:** un servicio con la misma imagen del backend, *Cron Schedule*
+  `0 8 * * *` (02:00 en Guatemala) y *Start Command*
+  `bash scripts/respaldo.sh crear`, con `RESPALDO_DIR` apuntando a un volumen
+  persistente —el disco del contenedor es efímero— y `RESPALDO_PASSPHRASE` en
+  las variables del servicio.
+
+Hacen falta `pg_dump` y `gpg`; la imagen del backend trae el primero, y el
+segundo se instala con `gnupg`. `backups/` está en `.gitignore`.
+
 Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
 defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
 define `DATABASE_URL_MIGRACIONES` con el propietario del esquema: con ella
@@ -237,6 +273,33 @@ de producción en local (es lo mismo que corre el CI):
 scripts/verificar-cabeceras-frontend.sh
 scripts/verificar-imagen-backend.sh
 ```
+
+## 📦 Inventario: el stock lo mueve el trabajo
+
+`material.cantidad_disponible` **no se edita a mano**. Todo cambio pasa por un
+movimiento del kardex (tabla `movimiento_material`), que deja constancia de
+qué, cuánto, por qué, en qué tarea y con qué saldo quedó. Tres tipos:
+
+| Tipo | De dónde viene | Qué hace con el stock |
+|---|---|---|
+| `entrada` | Inventario → Movimientos | Suma |
+| `consumo` | El técnico al cerrar una tarea | Resta, y queda atado a esa tarea |
+| `ajuste` | Inventario → Movimientos, con motivo obligatorio | Fija el saldo contado |
+
+Por qué: antes el stock era un número que alguien escribía en el modal del
+activo, y usar el material en una tarea no lo bajaba. La alerta de stock
+crítico comparaba contra una cifra que no era la del almacén —avisaba de lo que
+no faltaba y callaba sobre lo que sí— y a «¿a dónde se fueron las 40 rosetas?»
+no había respuesta, porque el campo solo guarda el último valor escrito.
+
+El consumo al cerrar la tarea es **opcional**: no todas gastan material, y
+obligar a rellenarlo lleva a teclear cualquier cosa para poder cerrar. Lo que
+no es opcional es que, si se anota, el descuento ocurra en la misma transacción
+que cierra la tarea: si el almacén no alcanza, la respuesta es 409 y la tarea
+se queda abierta para corregir la cantidad.
+
+El historial se consulta en **Inventario → Materiales → Movimientos** (admin y
+supervisor).
 
 ## 📷 Fotos de evidencia: dónde se guardan
 

@@ -150,3 +150,35 @@
     gap: 0;
   }
 }
+
+/* ── Ubicación en el mapa (T6 del Sprint 10) ───────────────────────────────
+   La cabecera lleva la etiqueta a la izquierda y el enlace de quitar a la
+   derecha, para que "Quitar ubicación" no parezca un botón del formulario. */
+.ubicacionCabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quitarUbicacion {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--color-danger, #c0392b);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.quitarUbicacion:disabled {
+  color: var(--color-texto-suave, #52606d);
+  cursor: default;
+}
+
+.ubicacionNota {
+  margin: 6px 0 4px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-texto-suave, #52606d);
+}

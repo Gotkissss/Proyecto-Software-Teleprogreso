@@ -32,6 +32,11 @@ from dataclasses import dataclass, field
 from threading import Lock
 
 from app.core.config import settings
+from app.core.reglas import (
+    MAX_LOTES_UBICACIONES_POR_VENTANA,
+    MAX_UBICACIONES_POR_VENTANA,
+    VENTANA_UBICACIONES_SEGUNDOS,
+)
 
 # Techo de claves distintas que se guardan en memoria. Sin este límite, alguien
 # rotando direcciones IP haría crecer el diccionario hasta agotar la RAM del
@@ -191,6 +196,27 @@ peticiones_login_por_ip = VentanaDeslizante(
 limite_general = VentanaDeslizante(
     maximo=settings.RATE_LIMIT_POR_MINUTO,
     ventana_segundos=60,
+)
+
+# Reporte de posición, por EMPLEADO y no por IP (HU-S10-08).
+#
+# Por empleado porque es lo que identifica al dueño de los puntos: la IP de un
+# teléfono con datos móviles cambia sola, y varios técnicos pueden compartir la
+# de la oficina. El freno general por IP (240/min) no servía aquí: un solo
+# técnico podía gastarlo entero en ubicaciones y, de paso, dejar sin cupo a los
+# demás que entraran por la misma salida a internet.
+#
+# Sin bloqueo: pasado el minuto vuelve a aceptar. Esto no es un castigo por
+# atacar, es un techo de escritura en una tabla que crece sin tope y guarda
+# dónde estuvo una persona.
+ubicaciones_por_empleado = VentanaDeslizante(
+    maximo=MAX_UBICACIONES_POR_VENTANA,
+    ventana_segundos=VENTANA_UBICACIONES_SEGUNDOS,
+)
+
+lotes_ubicaciones_por_empleado = VentanaDeslizante(
+    maximo=MAX_LOTES_UBICACIONES_POR_VENTANA,
+    ventana_segundos=VENTANA_UBICACIONES_SEGUNDOS,
 )
 
 

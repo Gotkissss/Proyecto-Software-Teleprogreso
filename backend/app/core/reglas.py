@@ -245,6 +245,29 @@ MINUTOS_HUECO_RECORRIDO = 10
 # Máximo de puntos por envío en lote (cola sin conexión del frontend).
 MAX_PUNTOS_LOTE = 500
 
+# ── Frecuencia de reporte de posición, del lado del SERVIDOR (HU-S10-08) ─────
+#
+# Cuántos puntos manda un técnico lo decidía solo el cliente
+# (utils/reglasUbicacion.js: uno cada 2 min si se mueve, uno de control cada
+# 5 min si está quieto). Eso vale para el uso normal, pero el cliente es
+# justamente la parte que no se puede garantizar: con el token de un técnico y
+# un bucle de tres líneas se podían insertar miles de filas en
+# `ubicacion_empleado`, que es una tabla que crece sin tope y lleva un dato
+# sensible (dónde estuvo una persona). Ni el límite general por IP lo frenaba
+# de forma útil: es de 240 por minuto y cuenta por IP, así que un técnico desde
+# datos móviles podía gastarlo entero en ubicaciones.
+#
+# Los números dejan mucho aire sobre el uso legítimo (2 o 3 puntos cada cinco
+# minutos) para que un reintento, dos pestañas abiertas o un vaciado de la cola
+# sin conexión no molesten a nadie.
+VENTANA_UBICACIONES_SEGUNDOS = 300
+MAX_UBICACIONES_POR_VENTANA = 20
+
+# El lote trae hasta MAX_PUNTOS_LOTE puntos de una vez, así que se cuenta
+# aparte y con un tope más bajo: seis envíos cubren de sobra el vaciado de una
+# cola acumulada durante horas sin señal.
+MAX_LOTES_UBICACIONES_POR_VENTANA = 6
+
 # Margen para puntos en lote con hora ligeramente "futura" por diferencias
 # entre el reloj del teléfono y el del servidor.
 TOLERANCIA_RELOJ_SEGUNDOS = 120
