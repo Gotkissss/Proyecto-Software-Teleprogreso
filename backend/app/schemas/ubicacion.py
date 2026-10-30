@@ -13,7 +13,7 @@ llega a ninguna parte: el router toma ese dato del token y nunca del cuerpo.
 
 from datetime import date, datetime
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.reglas import MAX_PUNTOS_LOTE
 
@@ -37,6 +37,47 @@ class UbicacionCreate(BaseModel):
         le=180,
         description="Longitud en grados decimales (WGS84), entre -180 y 180.",
     )
+
+
+class MarcaAsistencia(BaseModel):
+    """
+    Cuerpo de `POST /asistencia/entrada` y `/salida`.
+
+    Los clientes que mandaban `{lat, lng}` siguen funcionando: son los mismos
+    dos campos con los mismos nombres y las mismas validaciones de rango.
+
+    `motivo_sin_ubicacion` es lo que el técnico escribe cuando el GPS no dio
+    nada (RTF-01 / R3-4). Solo tiene sentido sin coordenada: con ubicación no
+    hay nada que explicar, y aceptarlo en ese caso dejaría filas con las dos
+    cosas que se contradicen.
+    """
+
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lng: Optional[float] = Field(None, ge=-180, le=180)
+    motivo_sin_ubicacion: Optional[str] = Field(None, max_length=200)
+
+    @model_validator(mode="after")
+    def coherente(self) -> "MarcaAsistencia":
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("Manda lat y lng juntas, o ninguna de las dos.")
+        if self.lat is not None and (self.motivo_sin_ubicacion or "").strip():
+            raise ValueError(
+                "No se manda un motivo de «sin ubicación» junto con una "
+                "ubicación."
+            )
+        return self
+
+    @property
+    def coordenadas(self) -> "Optional[UbicacionCreate]":
+        """La parte de ubicación, o None si la marca no la trae."""
+        if self.lat is None or self.lng is None:
+            return None
+        return UbicacionCreate(lat=self.lat, lng=self.lng)
+
+    @property
+    def motivo(self) -> Optional[str]:
+        limpio = (self.motivo_sin_ubicacion or "").strip()
+        return limpio or None
 
 
 class UbicacionResponse(BaseModel):

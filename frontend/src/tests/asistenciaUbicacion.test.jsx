@@ -147,13 +147,42 @@ describe('PausasPage — marcar con ubicación', () => {
     expect(screen.queryByText(/quedó registrada sin ella/)).not.toBeInTheDocument()
   })
 
-  it('sin ubicación la entrada se registra igual y se avisa al técnico', async () => {
+  it('sin ubicación la entrada se registra igual, explicando por qué', async () => {
+    // RTF-01 / R3-4: la marca sigue sin bloquearse, pero ya no sale muda. Se
+    // pregunta por qué y la explicación viaja con ella.
     simularPantallaPausas(estadoPausas())
     posicionMock.mockResolvedValue(null)
     postMock.mockResolvedValue({ data: { ubicacion_registrada: false } })
 
     montar(PausasPage)
     await userEvent.click(await screen.findByRole('button', { name: /Registrar Entrada/ }))
+
+    const motivo = await screen.findByRole('button', { name: /No hay señal en este punto/ })
+    await userEvent.click(motivo)
+    await userEvent.click(
+      screen.getByRole('button', { name: /Registrar con esta explicación/ })
+    )
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith('/asistencia/entrada', {
+        motivo_sin_ubicacion: 'No hay señal en este punto',
+      })
+    )
+    expect(await screen.findByText('¡Entrada registrada correctamente!')).toBeInTheDocument()
+    // Con explicación no se regaña: el supervisor la verá en el historial.
+    expect(screen.getByText(/con tu explicación anotada/)).toBeInTheDocument()
+  })
+
+  it('sin ubicación se puede marcar sin explicar: la marca nunca se bloquea', async () => {
+    simularPantallaPausas(estadoPausas())
+    posicionMock.mockResolvedValue(null)
+    postMock.mockResolvedValue({ data: { ubicacion_registrada: false } })
+
+    montar(PausasPage)
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar Entrada/ }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Marcar sin explicar/ })
+    )
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/asistencia/entrada', undefined)
@@ -163,7 +192,6 @@ describe('PausasPage — marcar con ubicación', () => {
   })
 
   it('al finalizar la jornada envía la posición de la salida', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     simularPantallaPausas(
       estadoPausas({ jornada_activa: true, id_asistencia: 1, hora_entrada: '08:00:00' })
     )
@@ -174,10 +202,46 @@ describe('PausasPage — marcar con ubicación', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: /Guardar y Finalizar Jornada/ })
     )
+    // RTF-01 / R3-9: la confirmación ya no es `window.confirm()` sino el modal
+    // propio del sistema, así que hay que confirmar en él.
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Finalizar jornada' })
+    )
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/asistencia/salida', LUGAR)
     )
+  })
+
+  it('sin confirmar el modal no se cierra la jornada', async () => {
+    // Lo que `window.confirm()` daba gratis: que un toque accidental en el
+    // botón no registre la salida.
+    simularPantallaPausas(
+      estadoPausas({ jornada_activa: true, id_asistencia: 1, hora_entrada: '08:00:00' })
+    )
+
+    montar(PausasPage)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Guardar y Finalizar Jornada/ })
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar' }))
+
+    expect(postMock).not.toHaveBeenCalledWith('/asistencia/salida', expect.anything())
+  })
+
+  it('el modal avisa de la regla de las tareas en curso', async () => {
+    // RTF-01 / R3-2: el backend lo rechaza con 409, pero decirlo antes evita
+    // el viaje y explica por qué.
+    simularPantallaPausas(
+      estadoPausas({ jornada_activa: true, id_asistencia: 1, hora_entrada: '08:00:00' })
+    )
+
+    montar(PausasPage)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Guardar y Finalizar Jornada/ })
+    )
+
+    expect(await screen.findByText(/en curso/i)).toBeInTheDocument()
   })
 })
 

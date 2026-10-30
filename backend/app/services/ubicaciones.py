@@ -69,20 +69,58 @@ async def jornada_en_curso(
 
 async def exigir_jornada_abierta(db: AsyncSession, empleado: Empleado) -> None:
     """
-    Un técnico no trabaja en tareas sin haber marcado entrada (HU-5).
+    Un técnico no trabaja en tareas sin haber marcado entrada (HU-5) ni
+    mientras tiene una pausa en curso (RTF-01 / R3-1).
 
     Se aplica al iniciar y finalizar tareas y al registrar su evidencia. Solo
     al rol técnico: admin y supervisor no marcan jornada y pueden operar las
     tareas desde el panel. Responde 409 (no 400) porque la petición está bien
     formada; lo que no encaja es el estado de la jornada.
+
+    La pausa: el sistema promete que una pausa es tiempo que no cuenta como
+    trabajo, y sin esta comprobación un técnico en «Pausa Personal» podía
+    iniciar una tarea y dejarla «En curso». Eso no solo rompe la regla: las
+    horas de esa pausa se descuentan de la jornada mientras la tarea avanza, de
+    modo que el reporte de productividad cuenta trabajo hecho en tiempo que el
+    mismo reporte resta. El dato queda sin significado.
     """
     if empleado.rol != ROL_TECNICO:
         return
-    if await jornada_en_curso(db, empleado.id_empleado) is None:
+
+    jornada = await jornada_en_curso(db, empleado.id_empleado)
+    if jornada is None:
         raise conflict(
             "Registra tu entrada para iniciar la jornada antes de trabajar "
             "en tus tareas."
         )
+
+    pausa = await pausa_en_curso(db, jornada.id_asistencia)
+    if pausa is not None:
+        raise conflict(
+            "Tienes una pausa en curso. Termínala antes de trabajar en tus "
+            "tareas."
+        )
+
+
+async def pausa_en_curso(db: AsyncSession, id_asistencia: int):
+    """
+    Pausa sin `hora_fin` de una jornada, o None.
+
+    Vive aquí, junto a `jornada_en_curso`, para que la regla «no se trabaja en
+    pausa» se pueda aplicar desde los servicios de tareas sin que estos
+    importen el router de descanso.
+    """
+    from app.models.asistencia import Descanso
+
+    resultado = await db.execute(
+        select(Descanso)
+        .where(
+            Descanso.id_asistencia == id_asistencia,
+            Descanso.hora_fin.is_(None),
+        )
+        .order_by(Descanso.hora_inicio.desc())
+    )
+    return resultado.scalars().first()
 
 
 # ─── Puntos de inicio y fin de tarea ─────────────────────────────────────────

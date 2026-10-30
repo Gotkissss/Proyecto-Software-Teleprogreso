@@ -53,24 +53,37 @@ export const getAsistenciaHoy = async () => {
  * Cuerpo de la marca de entrada/salida (HU-4): `{lat, lng}` si hay posición.
  * Sin posición no se manda cuerpo y el backend registra la marca "sin
  * ubicación"; nunca se bloquea al técnico por no tener GPS.
+ *
+ * RTF-01 / R3-4: sin posición se puede mandar `motivo_sin_ubicacion` con lo
+ * que el técnico escriba (GPS denegado, sin señal). No sustituye a la
+ * ubicación, pero la marca deja de ser un hueco mudo que el supervisor no
+ * puede contrastar. El backend rechaza las dos cosas juntas, así que el
+ * motivo solo se adjunta cuando no hay coordenada.
  */
-function cuerpoMarca(posicion) {
-  return Number.isFinite(posicion?.lat) && Number.isFinite(posicion?.lng)
-    ? { lat: posicion.lat, lng: posicion.lng }
-    : undefined
+export function cuerpoMarca(posicion, motivo = null) {
+  if (Number.isFinite(posicion?.lat) && Number.isFinite(posicion?.lng)) {
+    return { lat: posicion.lat, lng: posicion.lng }
+  }
+  const limpio = String(motivo ?? '').trim().slice(0, 200)
+  return limpio ? { motivo_sin_ubicacion: limpio } : undefined
 }
 
 /**
  * Registra la entrada al inicio de la jornada.
  *
  * @param {{lat:number, lng:number}|null} [posicion] - lugar de la marca (HU-4)
+ * @param {string|null} [motivo] - por qué no hay ubicación (RTF-01 / R3-4)
  * @returns {Promise<Object>} asistencia normalizada + `ubicacion_registrada`
  */
-export const registrarEntrada = async (posicion = null) => {
-  const { data } = await apiClient.post('/asistencia/entrada', cuerpoMarca(posicion))
+export const registrarEntrada = async (posicion = null, motivo = null) => {
+  const { data } = await apiClient.post(
+    '/asistencia/entrada',
+    cuerpoMarca(posicion, motivo),
+  )
   return {
     ...normalizarAsistencia(data),
     ubicacion_registrada: Boolean(data?.ubicacion_registrada),
+    motivo_sin_ubicacion: data?.motivo_sin_ubicacion ?? null,
   }
 }
 
@@ -150,8 +163,11 @@ export const getTiposPausa = async () => {
  * @param {{lat:number, lng:number}|null} [posicion] - lugar de la marca (HU-4)
  * @returns {Promise<Object>} respuesta del backend, con `ubicacion_registrada`
  */
-export const finalizarJornada = async (posicion = null) => {
-  const { data } = await apiClient.post('/asistencia/salida', cuerpoMarca(posicion))
+export const finalizarJornada = async (posicion = null, motivo = null) => {
+  const { data } = await apiClient.post(
+    '/asistencia/salida',
+    cuerpoMarca(posicion, motivo),
+  )
   return data
 }
 

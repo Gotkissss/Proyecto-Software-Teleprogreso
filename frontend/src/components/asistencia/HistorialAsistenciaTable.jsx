@@ -117,6 +117,22 @@ function salidaSinUbicacion(jornada) {
   return Boolean(jornada.hora_salida) && (jornada.lat_salida == null || jornada.lng_salida == null)
 }
 
+/**
+ * RTF-01 / R3-4: lo que el técnico explicó cuando esa marca salió sin GPS.
+ *
+ * Devuelve null para las marcas anteriores a la corrección y para las que el
+ * técnico decidió no explicar. El badge «Sin ubicación» se muestra igual: lo
+ * que cambia es que, cuando hay explicación, el supervisor la lee aquí en vez
+ * de tener que llamar al técnico.
+ */
+export function motivoSinUbicacion(jornada, marca) {
+  const crudo = marca === 'salida'
+    ? jornada?.motivo_sin_ubicacion_salida
+    : jornada?.motivo_sin_ubicacion_entrada
+  const limpio = String(crudo ?? '').trim()
+  return limpio || null
+}
+
 function tieneAlgunaUbicacion(jornada) {
   return (
     (jornada.lat_entrada != null && jornada.lng_entrada != null) ||
@@ -125,6 +141,25 @@ function tieneAlgunaUbicacion(jornada) {
 }
 
 /** Variante de color para el total de horas trabajadas de la jornada. */
+/**
+ * Duración de una pausa, en palabras.
+ *
+ * RTF-01 / R3-6: una pausa de 40 segundos tiene `minutos: 0` —los minutos
+ * salen de una división entera— y la tabla mostraba «0 min», que se lee como
+ * un fallo del sistema y no como «duró menos de un minuto». El informe la
+ * reportó como «1 descanso con 00:00 de duración».
+ */
+export function duracionPausa(pausa) {
+  const minutos = pausa?.minutos ?? 0
+  if (minutos > 0) return `${minutos} min`
+
+  const segundos = pausa?.segundos ?? 0
+  // Cero de verdad: el técnico inició y cerró la pausa en el mismo segundo,
+  // casi siempre un doble toque en el botón.
+  if (segundos <= 0) return 'sin duración'
+  return `${segundos} s`
+}
+
 function varianteHoras(minutosTrabajados) {
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA) return 'success'
   if (minutosTrabajados >= MINUTOS_JORNADA_COMPLETA / 2) return 'warning'
@@ -169,6 +204,11 @@ function FilaJornada({ jornada }) {
           {entradaSinUbicacion(jornada) && (
             <span className={styles.indicadorWrap}>
               <Badge label="Sin ubicación" variant="danger" />
+              {motivoSinUbicacion(jornada, 'entrada') && (
+                <span className={styles.motivoMarca}>
+                  «{motivoSinUbicacion(jornada, 'entrada')}»
+                </span>
+              )}
             </span>
           )}
         </td>
@@ -185,6 +225,11 @@ function FilaJornada({ jornada }) {
               {salidaSinUbicacion(jornada) && (
                 <span className={styles.indicadorWrap}>
                   <Badge label="Sin ubicación" variant="danger" />
+                  {motivoSinUbicacion(jornada, 'salida') && (
+                    <span className={styles.motivoMarca}>
+                      «{motivoSinUbicacion(jornada, 'salida')}»
+                    </span>
+                  )}
                 </span>
               )}
             </>
@@ -228,7 +273,7 @@ function FilaJornada({ jornada }) {
                       <span>
                         {formatearHora(p.hora_inicio)} — {p.en_curso ? 'en curso' : formatearHora(p.hora_fin)}
                       </span>
-                      <span className={styles.pausaMin}>{p.minutos} min</span>
+                      <span className={styles.pausaMin}>{duracionPausa(p)}</span>
                     </li>
                   ))}
                 </ul>
@@ -366,6 +411,15 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
             valor={`${Math.floor(totales.promedio_minutos_trabajados / 60)}h ${totales.promedio_minutos_trabajados % 60}m`}
             label="Promedio por jornada"
           />
+          {/* RTF-01 / R3-12: el resumen no decía cuántas jornadas llegaron a
+              las 8 horas; solo el color verde de cada fila lo insinuaba, y la
+              leyenda —un ejemplo del chip, con «00:00» escrito dentro— se leía
+              como si ese fuera el número. El conteo lo hace el backend sobre
+              todo el rango, no solo sobre la página que se está viendo. */}
+          <ResumenCard
+            valor={totales.jornadas_completas ?? 0}
+            label="Jornadas completas (≥ 8h)"
+          />
           {totales.jornadas_abiertas > 0 && (
             <ResumenCard
               valor={totales.jornadas_abiertas}
@@ -385,10 +439,13 @@ export default function HistorialAsistenciaTable({ showHeader = true }) {
           <Badge label="Sin salida" variant="danger" /> No se marcó salida en una jornada anterior
         </span>
         <span className={styles.leyendaItem}>
-          <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS: revisar con el técnico
+          <Badge label="Sin ubicación" variant="danger" /> La marca se registró sin GPS; si el técnico lo explicó, su motivo va debajo
         </span>
         <span className={styles.leyendaItem}>
-          <span className={`${styles.horasChip} ${styles.horas_success}`}>00:00</span> Jornada completa (≥ 8h)
+          {/* El chip es un ejemplo del color, no un dato: antes decía «00:00»
+              y se leía como una cifra en cero (RTF-01 / R3-12). */}
+          <span className={`${styles.horasChip} ${styles.horas_success}`}>08:00</span> Jornada
+          completa: 8 horas trabajadas o más
         </span>
       </div>
 

@@ -32,7 +32,15 @@ const IconCheck    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IconMap      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>
 
 // Panel de detalle / modal de tarea
-function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa, bloqueado = false }) {
+function DetallePanel({
+  servicio,
+  onClose,
+  onIniciar,
+  onTerminar,
+  onVerEnMapa,
+  bloqueado = false,
+  motivoBloqueo = 'jornada',
+}) {
   const isInProgress = servicio.estado === 'en_progreso'
   const isCompleted  = servicio.estado === 'completado'
 
@@ -97,11 +105,23 @@ function DetallePanel({ servicio, onClose, onIniciar, onTerminar, onVerEnMapa, b
           </button>
 
           {/* Acciones */}
-          {/* HU-5: sin jornada abierta no se trabaja en tareas. */}
+          {/* HU-5: sin jornada abierta no se trabaja en tareas.
+              RTF-01 / R3-1: tampoco con una pausa en curso. El aviso dice qué
+              hacer en cada caso; mandar a «registra tu entrada» a quien ya la
+              tiene marcada deja al técnico dando vueltas. */}
           {!isCompleted && bloqueado && (
             <p className={styles.avisoJornada}>
-              Registra tu entrada en <Link to="/pausas">Pausas</Link> para{' '}
-              {isInProgress ? 'finalizar' : 'iniciar'} esta tarea.
+              {motivoBloqueo === 'pausa' ? (
+                <>
+                  Termina tu pausa en <Link to="/pausas">Pausas</Link> para{' '}
+                  {isInProgress ? 'finalizar' : 'iniciar'} esta tarea.
+                </>
+              ) : (
+                <>
+                  Registra tu entrada en <Link to="/pausas">Pausas</Link> para{' '}
+                  {isInProgress ? 'finalizar' : 'iniciar'} esta tarea.
+                </>
+              )}
             </p>
           )}
 
@@ -247,8 +267,15 @@ export default function RutaDiariaPage() {
   // (UbicacionContext); no se abre un segundo watchPosition.
   // HU-5: jornadaActiva bloquea iniciar/finalizar tareas sin haber marcado
   // entrada; refrescarJornada evita esperar el ciclo de 30 s del contexto.
-  const { posicion, jornadaActiva, jornadaCargada, refrescarJornada } = useUbicacion()
+  const { posicion, jornadaActiva, jornadaCargada, pausaActiva, refrescarJornada } =
+    useUbicacion()
   const sinJornada = jornadaCargada && !jornadaActiva
+  // RTF-01 / R3-1: una pausa en curso bloquea el trabajo en tareas igual que
+  // la falta de jornada. El sistema promete que una pausa es tiempo que no
+  // cuenta como trabajo; con la tarea avanzando, el reporte de productividad
+  // contaría trabajo hecho en tiempo que el mismo reporte resta.
+  const enPausa = Boolean(pausaActiva)
+  const bloqueado = sinJornada || enPausa
   const toast = useToast()
   const navigate = useNavigate()
   const [ruta,           setRuta]           = useState(null)
@@ -327,6 +354,10 @@ export default function RutaDiariaPage() {
       toast.error('Registra tu entrada para iniciar la jornada antes de iniciar tareas.')
       return
     }
+    if (enPausa) {
+      toast.error('Termina tu pausa antes de iniciar una tarea.')
+      return
+    }
     // Se guarda el estado previo para poder revertir con exactitud si el
     // backend rechaza el inicio (antes se revertía siempre a 'pendiente',
     // aunque la tarea viniera de otro estado).
@@ -375,6 +406,10 @@ export default function RutaDiariaPage() {
   const handleTerminar = (idServicio) => {
     if (sinJornada) {
       toast.error('Registra tu entrada para iniciar la jornada antes de finalizar tareas.')
+      return
+    }
+    if (enPausa) {
+      toast.error('Termina tu pausa antes de finalizar una tarea.')
       return
     }
     const servicio = servicios.find((s) => s.id_servicio === idServicio)
@@ -489,6 +524,20 @@ export default function RutaDiariaPage() {
         </div>
       )}
 
+      {/* RTF-01 / R3-1: lo mismo con la pausa. Va aparte del aviso de arriba
+          porque el motivo y la salida son distintos: aquí la jornada está
+          abierta y lo que hay que hacer es terminar la pausa. */}
+      {!sinJornada && enPausa && (
+        <div className={styles.avisoJornadaBanner} role="status">
+          <IconAlert />
+          <span>
+            Tienes una pausa en curso. Termínala en{' '}
+            <Link to="/pausas">Pausas</Link> para volver a trabajar en tus
+            tareas.
+          </span>
+        </div>
+      )}
+
       {ruta?.alerta && (
         <div className={styles.alertBanner}>
           <IconAlert />
@@ -542,7 +591,8 @@ export default function RutaDiariaPage() {
           onIniciar={handleIniciar}
           onTerminar={handleTerminar}
           onVerEnMapa={handleVerEnMapa}
-          bloqueado={sinJornada}
+          bloqueado={bloqueado}
+          motivoBloqueo={sinJornada ? 'jornada' : 'pausa'}
         />
       )}
 

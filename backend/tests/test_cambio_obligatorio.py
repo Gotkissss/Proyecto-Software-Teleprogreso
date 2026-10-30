@@ -244,6 +244,10 @@ async def test_si_el_cambio_se_rechaza_la_bandera_sigue_encendida():
 async def test_crear_un_empleado_lo_deja_con_cambio_pendiente():
     resultado = MagicMock()
     resultado.scalar_one_or_none.return_value = None  # correo libre
+    # RTF-01 / R1-5: y nadie más se llama igual. Sin esta línea el doble
+    # devuelve un MagicMock, que es verdadero, y el alta se rechazaría por
+    # duplicada.
+    resultado.scalars.return_value.first.return_value = None
     bd = MagicMock()
     bd.execute = AsyncMock(return_value=resultado)
     bd.add = MagicMock()

@@ -17,7 +17,11 @@ import {
   crearTarea,
   getTecnicosDisponibles,
 } from '../api/tareaService'
+import { enfocarPrimerError } from '../utils/formulario'
+import { contarTareas } from '../utils/plural'
+import { estadoJornada, ordenarPorDisponibilidad } from '../utils/tecnicos'
 import SelectorUbicacionMapa from '../components/mapa/SelectorUbicacionMapa'
+import { hoyISO } from '../utils/fecha'
 import Spinner from '../components/ui/Spinner'
 import styles from './NuevaTareaPage.module.css'
 
@@ -62,7 +66,41 @@ function validar(form) {
     errores.fecha_finalizacion =
       'La fecha límite no puede ser anterior a la de inicio.'
   }
+
+  // RTF-01 / R2-5: dirección y ubicación eran las dos opcionales, así que la
+  // tarea podía nacer sin saber dónde es el servicio: no aparecía en el mapa
+  // del técnico —que es por donde se trabaja— y había que preguntar por chat.
+  // Basta con una de las dos: un punto en el mapa dice dónde es igual de bien.
+  if (!form.direccion.trim() && form.lat === null) {
+    errores.direccion =
+      'Escribe la dirección o marca el punto en el mapa: sin una de las dos, ' +
+      'el técnico no sabe a dónde ir.'
+  }
+
   return errores
+}
+
+/**
+ * Avisos que NO impiden guardar: cosas que casi siempre son un error pero
+ * que a veces se quieren a propósito.
+ *
+ * RTF-01 / R2-4: se podían crear tareas con fecha límite pasada y la tarea
+ * nacía «Vencida hace 286 días» sin que nada lo dijera. Bloquearlo sin más
+ * impediría registrar una tarea que de verdad venció la semana pasada, así
+ * que se avisa y se deja decidir.
+ */
+export function avisosDeLaTarea(form, hoy = hoyISO()) {
+  const avisos = []
+  if (form.fecha_finalizacion && form.fecha_finalizacion < hoy) {
+    avisos.push(
+      'La fecha límite ya pasó: la tarea va a nacer vencida y generará una ' +
+      'alerta en cuanto se guarde.'
+    )
+  }
+  if (form.fecha_inicio && form.fecha_inicio < hoy) {
+    avisos.push('La fecha de inicio ya pasó.')
+  }
+  return avisos
 }
 
 export default function NuevaTareaPage() {
@@ -85,7 +123,10 @@ export default function NuevaTareaPage() {
     const fetchTecnicos = async () => {
       setLoadingTec(true)
       try {
-        setTecnicos(await getTecnicosDisponibles())
+        // RTF-01 / R2-6: en jornada primero, luego los que ya salieron y
+        // al final los que no marcaron entrada. El primero que se ofrecía
+        // podía ser alguien que no había empezado el día.
+        setTecnicos(ordenarPorDisponibilidad(await getTecnicosDisponibles()))
       } catch (err) {
         console.error('Error al cargar técnicos:', err)
         setErrorServidor(
@@ -143,7 +184,16 @@ export default function NuevaTareaPage() {
 
     const erroresValidacion = validar(form)
     setErrores(erroresValidacion)
-    if (Object.keys(erroresValidacion).length > 0) return
+    if (Object.keys(erroresValidacion).length > 0) {
+      // RTF-01 / R2-10: el aviso salía arriba del formulario pero la pantalla
+      // no subía hasta él, así que al pulsar «Crear» no pasaba nada visible y
+      // el supervisor volvía a pulsar. Se espera al repintado para que el
+      // mensaje ya esté puesto cuando el campo recibe el foco.
+      requestAnimationFrame(() =>
+        enfocarPrimerError(erroresValidacion, Object.keys(FORM_INICIAL))
+      )
+      return
+    }
 
     // Validación del límite antes de llamar al backend
     if (form.id_tecnico) {
@@ -151,7 +201,7 @@ export default function NuevaTareaPage() {
       const limite = tec?.limite_tareas ?? LIMITE_TAREAS
       if (tec && tec.tareas_activas >= limite) {
         setErrorServidor(
-          `${tec.nombre_completo} ya tiene ${tec.tareas_activas} tareas activas. ` +
+          `${tec.nombre_completo} ya tiene ${contarTareas(tec.tareas_activas)}. ` +
           `El límite es ${limite}. Selecciona otro técnico.`
         )
         return
@@ -195,6 +245,11 @@ export default function NuevaTareaPage() {
           })
           if (Object.keys(errBack).length > 0) {
             setErrores((prev) => ({ ...prev, ...errBack }))
+            // Lo mismo que con la validación de aquí: el error del backend
+            // también hay que ponérselo delante (RTF-01 / R2-10).
+            requestAnimationFrame(() =>
+              enfocarPrimerError(errBack, Object.keys(FORM_INICIAL))
+            )
             return
           }
         }
@@ -232,6 +287,9 @@ export default function NuevaTareaPage() {
     )
   }
 
+  // RTF-01 / R2-4: avisos que no impiden guardar (ver avisosDeLaTarea).
+  const avisos = avisosDeLaTarea(form)
+
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
@@ -266,6 +324,7 @@ export default function NuevaTareaPage() {
             <input
               type="text"
               className={`${styles.input} ${campoError('titulo') ? styles.inputError : ''}`}
+              data-campo="titulo"
               placeholder="Ej: Reparación de señal - Local El Centro"
               value={form.titulo}
               onChange={(e) => handleChange('titulo', e.target.value)}
@@ -295,16 +354,25 @@ export default function NuevaTareaPage() {
           {/* ── Dirección ── */}
           <div className={styles.field}>
             <label className={styles.label}>
-              Dirección del servicio <span className={styles.optional}>(opcional)</span>
+              Dirección del servicio{' '}
+              {/* RTF-01 / R2-5: dirección O punto en el mapa, pero una de las
+                  dos. Las dos decían «(opcional)» y la tarea nacía sin saber
+                  dónde es el servicio. */}
+              <span className={styles.optional}>(o marca el punto en el mapa)</span>
             </label>
             <input
               type="text"
-              className={styles.input}
+              className={`${styles.input} ${errores.direccion ? styles.inputError : ''}`}
+              data-campo="direccion"
               placeholder="Ej: Calle 15, Ave. Circunvalación, Zona 10"
               value={form.direccion}
               onChange={(e) => handleChange('direccion', e.target.value)}
+              onBlur={() => handleBlur('direccion')}
               disabled={cargando}
             />
+            {errores.direccion && (
+              <p className={styles.fieldError}>{errores.direccion}</p>
+            )}
           </div>
 
           {/* ── Ubicación en el mapa (SCRUM-171) ──
@@ -314,7 +382,8 @@ export default function NuevaTareaPage() {
               técnico recibe así coordenadas exactas y no solo un texto. */}
           <div className={styles.field}>
             <label className={styles.label}>
-              Ubicación en el mapa <span className={styles.optional}>(opcional)</span>
+              Ubicación en el mapa{' '}
+              <span className={styles.optional}>(o escribe la dirección)</span>
             </label>
             <SelectorUbicacionMapa
               direccion={form.direccion}
@@ -325,6 +394,17 @@ export default function NuevaTareaPage() {
               error={errores.lat || errores.lng || null}
             />
           </div>
+
+          {/* RTF-01 / R2-4: la tarea podía nacer «Vencida hace 286 días» sin
+              que nada lo dijera. Es un aviso y no un error: registrar una
+              tarea que de verdad venció la semana pasada es legítimo. */}
+          {avisos.length > 0 && (
+            <div className={styles.avisoFechas} role="status">
+              {avisos.map((aviso) => (
+                <p key={aviso}>{aviso}</p>
+              ))}
+            </div>
+          )}
 
           {/* ── Fechas ──
               La fecha límite es la que usa el sistema de alertas para marcar
@@ -350,6 +430,7 @@ export default function NuevaTareaPage() {
               <input
                 type="date"
                 className={`${styles.input} ${campoError('fecha_finalizacion') ? styles.inputError : ''}`}
+                data-campo="fecha_finalizacion"
                 value={form.fecha_finalizacion}
                 onChange={(e) => handleChange('fecha_finalizacion', e.target.value)}
                 onBlur={() => handleBlur('fecha_finalizacion')}
@@ -397,6 +478,7 @@ export default function NuevaTareaPage() {
             ) : (
               <select
                 className={`${styles.select} ${campoError('id_tecnico') ? styles.inputError : ''}`}
+                data-campo="id_tecnico"
                 value={form.id_tecnico}
                 onChange={(e) => {
                   handleChange('id_tecnico', e.target.value)
@@ -417,6 +499,10 @@ export default function NuevaTareaPage() {
                       {tec.nombre_completo}
                       {' — '}
                       {tec.tareas_activas ?? 0} tarea{tec.tareas_activas !== 1 ? 's' : ''} activa{tec.tareas_activas !== 1 ? 's' : ''}
+                      {/* RTF-01 / R2-6: el estado de la jornada, en la propia
+                          opción, para no tener que seleccionar a cada uno
+                          para enterarse. */}
+                      {` · ${estadoJornada(tec)}`}
                       {alLimite ? ' (límite alcanzado)' : ''}
                     </option>
                   )
@@ -450,13 +536,37 @@ export default function NuevaTareaPage() {
                   </div>
                 )
               }
+              // RTF-01 / R2-6: «Disponible para asignación» solo quería decir
+              // «no llegó a su límite de tareas», y se mostraba igual a quien
+              // no había marcado entrada. Asignarle trabajo a alguien que no
+              // empezó su jornada no es un error del sistema, pero el
+              // supervisor tiene que saberlo antes de hacerlo.
+              const carga =
+                `${tecnicoSeleccionado.nombre_completo} tiene ${activas} ` +
+                `tarea${activas !== 1 ? 's' : ''} activa${activas !== 1 ? 's' : ''}.`
+
+              if (!tecnicoSeleccionado.marco_entrada) {
+                return (
+                  <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoAdvertencia}`}>
+                    <span>ℹ</span>
+                    <span>{carga} No ha marcado entrada hoy: no podrá iniciarla hasta que lo haga.</span>
+                  </div>
+                )
+              }
+
+              if (!tecnicoSeleccionado.en_jornada) {
+                return (
+                  <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoAdvertencia}`}>
+                    <span>ℹ</span>
+                    <span>{carga} Ya cerró su jornada de hoy.</span>
+                  </div>
+                )
+              }
+
               return (
                 <div className={`${styles.tecnicoInfo} ${styles.tecnicoInfoOk}`}>
                   <span>✓</span>
-                  <span>
-                    {tecnicoSeleccionado.nombre_completo} tiene {activas} tarea{activas !== 1 ? 's' : ''} activa{activas !== 1 ? 's' : ''}.
-                    Disponible para asignación.
-                  </span>
+                  <span>{carga} En jornada ahora mismo.</span>
                 </div>
               )
             })()}

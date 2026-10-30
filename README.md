@@ -259,6 +259,8 @@ Variables que importan en un despliegue (Railway), además de las de la base:
 | Backend | `ENVIRONMENT=production` | Apaga `/docs`, exige `ALLOWED_HOSTS` y orígenes `https`, y hace que el backend **no arranque** si su conexión puede alterar la bitácora (superusuario o dueña de la tabla) |
 | Backend | `CLAVE_FIRMA_ARCHIVOS` | Llave de los enlaces a las fotos; distinta de `SECRET_KEY` |
 | Backend | `FORWARDED_ALLOW_IPS` | De quién se aceptan `X-Forwarded-*`. Sin definir: `127.0.0.1`, y en Railway su proxy (`*`) |
+| Backend | `PROXIES_CONFIABLES` | Redes desde las que se cree `X-Forwarded-For` al anotar la IP en la bitácora. Se rellena sola en Railway; vacía, no se confía en nadie |
+| Backend | `DOMINIOS_CORREO_EMPLEADO` | Dominios admitidos en el correo de un empleado, separados por coma. Por omisión `teleprogreso.com`; vacío = sin restricción |
 | Backend | `DB_SSL_MODE` | `require` o `verify-full` si la base no está en la misma red privada; vacío si lo está |
 | Frontend | `VITE_API_URL` | URL de la API: la usa la build y la CSP de nginx |
 | Frontend | `PORT` | Puerto de nginx; 8080 si no se define (nginx ya no corre como root y no puede usar el 80) |
@@ -273,6 +275,31 @@ de producción en local (es lo mismo que corre el CI):
 scripts/verificar-cabeceras-frontend.sh
 scripts/verificar-imagen-backend.sh
 ```
+
+## 🧾 Revisión RTF-01
+
+Una revisión externa reportó 32 hallazgos sobre el sistema desplegado y están
+corregidos todos. Lo que cambia para quien use el sistema o lo despliegue:
+
+- **Al registrar un empleado** el correo tiene que ser del dominio de la
+  empresa (`DOMINIOS_CORREO_EMPLEADO`), el nombre y el apellido tienen que
+  parecer un nombre y el teléfono tiene que tener 8 dígitos, que se guardan
+  como `####-####`. Si ya hay alguien con ese nombre y apellido, el alta se
+  para y dice con quién choca; si de verdad son dos personas distintas, el
+  mismo aviso ofrece crearlo igual.
+- **La jornada y las pausas** dejaron de poder contradecirse: con una pausa en
+  curso no se inicia una tarea, no se cierra la jornada con una tarea en
+  curso, y las jornadas que el sistema cierra solo (nadie marcó salida) ya no
+  cuentan como trabajadas en el historial ni en los reportes.
+- **Al marcar entrada o salida sin GPS** se pregunta por qué. La marca se
+  registra igual —nunca se bloquea al técnico—, y la explicación se ve en el
+  historial de asistencia junto al aviso de «sin ubicación».
+- **Dos migraciones nuevas**, `0014` y `0015`, que añaden `cierre_automatico` y
+  el motivo de cada marca sin ubicación. Se aplican con el servicio
+  `migraciones` como cualquier otra; no hace falta tocar datos existentes.
+
+El detalle de los hallazgos que afectan a la integridad del dato y a la
+bitácora está en `SEGURIDAD.md`, «Lo que corrigió la revisión RTF-01».
 
 ## 📦 Inventario: el stock lo mueve el trabajo
 

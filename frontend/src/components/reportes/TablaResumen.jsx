@@ -18,7 +18,9 @@ const COLUMNAS = [
   { clave: 'jornadas', etiqueta: 'Jornadas', orden: 'jornadas' },
   { clave: 'horas_trabajadas', etiqueta: 'Horas trabajadas', orden: 'minutos_trabajados' },
   { clave: 'descansos', etiqueta: 'Descansos', orden: 'descansos' },
-  { clave: 'horas_descanso', etiqueta: 'Tiempo en descanso', orden: 'minutos_descanso' },
+  // RTF-01 / R3-12: «Tiempo en descanso» era la cabecera más ancha de la
+  // tabla y empujaba la última columna fuera de la pantalla. Dice lo mismo.
+  { clave: 'horas_descanso', etiqueta: 'Horas en descanso', orden: 'minutos_descanso' },
   { clave: 'tareas_completadas', etiqueta: 'Tareas', orden: 'tareas_completadas' },
   { clave: 'tareas_por_hora', etiqueta: 'Tareas/hora', orden: 'tareas_por_hora', decimales: 2 },
 ]

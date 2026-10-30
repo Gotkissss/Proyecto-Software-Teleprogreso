@@ -165,3 +165,22 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* RTF-01 / R1-5 — repetir el alta declarando que es un homónimo. */
+.enlaceHomonimo {
+  margin-top: 0.4rem;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: inherit;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.enlaceHomonimo:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

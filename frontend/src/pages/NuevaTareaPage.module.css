@@ -392,3 +392,25 @@
     gap: 0;
   }
 }
+
+/* Avisos que no impiden guardar (RTF-01 / R2-4): fecha límite ya pasada.
+   Amarillo y no rojo a propósito: no es un error, es algo que casi siempre
+   está mal pero que a veces se quiere así. */
+.avisoFechas {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff8e6;
+  border: 1px solid #f0d9a0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #6b4e00;
+}
+
+.avisoFechas p {
+  margin: 0;
+}
+
+.avisoFechas p + p {
+  margin-top: 6px;
+}

@@ -197,14 +197,30 @@ def auditar_lectura(entidad: str):
     ):
         yield
         consulta = dict(request.query_params)
-        clave = f"leer:{actor.id_empleado}:{request.url.path}:{sorted(consulta.items())}"
+        ids = [int(v) for v in request.path_params.values() if str(v).isdigit()]
+
+        # La ventana se cuenta por ACTOR, ENTIDAD y el ID de la fila mirada;
+        # ya NO por ruta y filtros (RTF-01 / R1-8).
+        #
+        # Por qué: la pantalla de Reportes hace cinco llamadas paralelas a
+        # endpoints distintos de la misma entidad, y con la clave anterior
+        # dejaba cinco filas «Consultó reporte» en el mismo segundo. Ese ruido
+        # entierra lo que de verdad hay que revisar al abrir la bitácora.
+        #
+        # El id SÍ entra en la clave: consultar el recorrido de dos técnicos
+        # distintos son dos lecturas de datos sensibles diferentes, y «a quién
+        # se miró» es justo lo que esta auditoría existe para responder. Lo que
+        # se colapsa son los FILTROS sobre la misma fila —cambiar de fecha en
+        # el recorrido del mismo técnico—, que no cambia de quién se están
+        # viendo los datos.
+        id_mirado = ids[0] if ids else None
+        clave = f"leer:{actor.id_empleado}:{entidad}:{id_mirado}"
         if not primera_vez(clave, SEGUNDOS_LECTURA_REPETIDA):
             return
-        ids = [int(v) for v in request.path_params.values() if str(v).isdigit()]
         anotar_evento(
             "leer",
             entidad,
-            ids[0] if ids else None,
+            id_mirado,
             {"ruta": request.url.path, "consulta": consulta},
         )
 

@@ -16,6 +16,11 @@ const INTERVALO_REFRESCO_JORNADA_MS = 30 * 1000
  */
 export function UbicacionProvider({ children, idEmpleado = null }) {
   const [jornadaActiva, setJornadaActiva] = useState(false)
+  // RTF-01 / R3-1: con una pausa en curso no se trabaja en tareas. El backend
+  // lo rechaza con 409, pero la pantalla tiene que decirlo antes: el técnico
+  // tocaba «Iniciar Tarea», la tarjeta pasaba a «En curso» por el
+  // actualizado optimista y luego volvía atrás con un error.
+  const [pausaActiva, setPausaActiva] = useState(null)
   // HU-5: false hasta la primera respuesta. Evita que la ruta muestre por un
   // instante "registra tu entrada" a quien ya tiene la jornada abierta.
   const [jornadaCargada, setJornadaCargada] = useState(false)
@@ -24,13 +29,21 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
   const consultarJornada = useCallback(async () => {
     try {
       const estadoPausas = await getEstadoPausas()
-      if (montadoRef.current) setJornadaActiva(Boolean(estadoPausas.jornada_activa))
+      if (montadoRef.current) {
+        setJornadaActiva(Boolean(estadoPausas.jornada_activa))
+        setPausaActiva(estadoPausas.pausa_activa ?? null)
+      }
     } catch {
       // Sin dato confiable de jornada se asume cerrada: es la opción
       // segura. Dejar de reportar por un fallo de red pasajero se corrige
       // solo en el siguiente ciclo; reportar de más cuando en realidad no
       // hay jornada abierta no tiene forma de corregirse después.
-      if (montadoRef.current) setJornadaActiva(false)
+      if (montadoRef.current) {
+        setJornadaActiva(false)
+        // La pausa se deja como estaba: a diferencia de la jornada, asumir
+        // «sin pausa» por un fallo de red es la opción insegura — dejaría
+        // iniciar una tarea en pausa, que es justo lo que se bloquea.
+      }
     } finally {
       if (montadoRef.current) setJornadaCargada(true)
     }
@@ -58,6 +71,7 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
   const value = {
     jornadaActiva,
     jornadaCargada,
+    pausaActiva,
     posicion,
     estado,
     mensaje,

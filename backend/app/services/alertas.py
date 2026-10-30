@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.reglas import DIAS_VIGENCIA_ALERTA_SIN_ENTRADA
 from app.models.activo import Activo, Material
 from app.models.alerta import Alerta
 from app.models.asistencia import Asistencia
@@ -286,9 +287,14 @@ async def _resolver_alertas_obsoletas(
 
     Devuelve cuántas se cerraron.
     """
-    tipos_evaluados = [TIPO_TAREA_VENCIDA, TIPO_STOCK_CRITICO]
-    if evaluar_sin_entrada:
-        tipos_evaluados.append(TIPO_TECNICO_SIN_ENTRADA)
+    # `TIPO_TECNICO_SIN_ENTRADA` entra siempre: antes solo se revisaba pasada
+    # la hora límite, y con eso las alertas caducadas de días anteriores no se
+    # cerraban en las ejecuciones de la madrugada. `evaluar_sin_entrada` sigue
+    # decidiendo si se cierran las de HOY —antes de las 08:00 todavía es
+    # válido que un técnico no haya marcado— pero no si se revisan las viejas.
+    tipos_evaluados = [
+        TIPO_TAREA_VENCIDA, TIPO_STOCK_CRITICO, TIPO_TECNICO_SIN_ENTRADA,
+    ]
 
     result = await db.execute(
         select(Alerta).where(
@@ -301,17 +307,40 @@ async def _resolver_alertas_obsoletas(
     for alerta in result.scalars().all():
         if alerta.referencia is None:
             continue
+
+        # El docstring promete que lo que cerró una persona no se toca, y eso
+        # lo garantizaba solo el WHERE de arriba. Comprobarlo aquí deja la
+        # promesa junto a la escritura que la podría romper: esta función la
+        # llama también el comando programado, sin nadie mirando.
+        if alerta.estado != "pendiente":
+            continue
         if (alerta.tipo, alerta.referencia) in vigentes:
             continue
 
-        # Los avisos de "no marcó entrada" son de un día concreto: que hoy sí
-        # haya marcado no borra que ayer no lo hizo. Solo se cierran los del
-        # propio día.
+        # Antes de la hora límite no se sabe si el técnico va a marcar: las de
+        # hoy se dejan como están.
         if (
             alerta.tipo == TIPO_TECNICO_SIN_ENTRADA
-            and alerta.fecha.date() != hoy
+            and alerta.fecha.date() == hoy
+            and not evaluar_sin_entrada
         ):
             continue
+
+        # Los avisos de "no marcó entrada" son de un día concreto: que hoy sí
+        # haya marcado no borra que ayer no lo hizo, así que los de días
+        # anteriores NO se cierran por que la condición ya no se cumpla.
+        #
+        # Pero tampoco pueden quedarse pendientes para siempre (RTF-01 /
+        # R2-2): en la revisión había avisos de dos meses atrás sin atender,
+        # inflando el contador y enterrando los del día. Pasados
+        # DIAS_VIGENCIA_ALERTA_SIN_ENTRADA el aviso deja de ser accionable
+        # —nadie va a marcar una entrada de la semana pasada— y se cierra como
+        # 'resuelta', que conserva la fila y su fecha pero la saca de
+        # pendientes.
+        if alerta.tipo == TIPO_TECNICO_SIN_ENTRADA and alerta.fecha.date() != hoy:
+            dias = (hoy - alerta.fecha.date()).days
+            if dias <= DIAS_VIGENCIA_ALERTA_SIN_ENTRADA:
+                continue
 
         alerta.estado = ESTADO_RESUELTA
         resueltas += 1

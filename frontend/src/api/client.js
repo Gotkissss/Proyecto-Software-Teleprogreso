@@ -85,10 +85,66 @@ export function marcarSesionIniciada() {
   sesionYaCaducada = false
 }
 
+/* ── Reintento de los fallos de red (RTF-01 / R1-2) ──────────────────────
+ *
+ * En la revisión técnica aparecieron errores intermitentes de conexión
+ * («No se pudo cargar el panel», «No se pudo verificar la bitácora»), con
+ * `AxiosError: Network Error`, que al reintentar a mano funcionaban. El
+ * patrón es el arranque en frío del backend en Railway: la primera petición
+ * después de un rato sin tráfico llega mientras el contenedor todavía
+ * levanta, y muere sin respuesta.
+ *
+ * Lo que se reintenta y lo que no:
+ *
+ *   · Sin `error.response` —la petición no llegó o no volvió— se reintenta.
+ *     Ahí no hay nada que pueda haber pasado a medias en el servidor.
+ *   · 502, 503 y 504: el proxy contesta por un backend que no está. Tampoco
+ *     procesó nada.
+ *   · Cualquier respuesta del backend (400, 401, 409, 500…) NO se reintenta:
+ *     el servidor ya decidió, y repetir un 500 solo repite el error.
+ *
+ * Solo métodos idempotentes. Un POST que no devolvió respuesta puede haberse
+ * ejecutado igual —marcar entrada, crear una tarea, registrar una evidencia—
+ * y repetirlo crearía la fila dos veces. Esos se dejan al usuario, que tiene
+ * la pantalla delante y sabe si la acción surtió efecto.
+ */
+const METODOS_REINTENTABLES = new Set(['get', 'head', 'options'])
+const ESTADOS_REINTENTABLES = new Set([502, 503, 504])
+const MAX_REINTENTOS = 2
+const ESPERA_BASE_MS = 400
+
+function sePuedeReintentar(error) {
+  const config = error.config
+  if (!config) return false
+  if (!METODOS_REINTENTABLES.has((config.method || 'get').toLowerCase())) {
+    return false
+  }
+  // Una llamada puede pedir que no se reintente (p. ej. un sondeo que ya corre
+  // en bucle y no gana nada esperando).
+  if (config.sinReintento) return false
+  if (!error.response) return true
+  return ESTADOS_REINTENTABLES.has(error.response.status)
+}
+
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /* ── Response Interceptor ────────────────────────────────────────────── */
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    // RTF-01 / R1-2: el arranque en frío del backend tira la primera petición
+    // sin respuesta. Se reintenta antes de molestar al usuario con un error
+    // que se arregla solo. La espera crece entre intentos para darle tiempo al
+    // contenedor a levantar.
+    if (sePuedeReintentar(error)) {
+      const config = error.config
+      config.__reintentos = (config.__reintentos || 0) + 1
+      if (config.__reintentos <= MAX_REINTENTOS) {
+        await esperar(ESPERA_BASE_MS * config.__reintentos)
+        return apiClient(config)
+      }
+    }
+
     // HU-S10-04: se recuerda el request_id de los 5xx para mostrarlo en la
     // pantalla de error y que se pueda reportar.
     registrarErrorServidor(error)

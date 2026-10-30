@@ -49,6 +49,11 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
   const [showPass,      setShowPass]      = useState(false)
   const [showConfirm,   setShowConfirm]   = useState(false)
   const [tocados,       setTocados]       = useState({})
+  // RTF-01 / R1-5: el backend para el alta cuando ya hay alguien con ese
+  // nombre y apellido —«Luis Fonzi» estaba registrado dos veces, como técnico
+  // y como supervisor—. Aquí se guarda ese aviso para poder repetir el alta
+  // declarando que es un homónimo de verdad, que también los hay.
+  const [avisoDuplicado, setAvisoDuplicado] = useState(null)
 
   const strength = getPasswordStrength(form.contrasena)
 
@@ -67,7 +72,7 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
     setErrores(prev => ({ ...prev, [campo]: nuevosErrores[campo] || null }))
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, { permitirHomonimo = false } = {}) => {
     e.preventDefault()
     const todosTocados = Object.keys(FORM_INICIAL).reduce((acc, k) => ({ ...acc, [k]: true }), {})
     setTocados(todosTocados)
@@ -82,6 +87,7 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
 
     setCargando(true)
     setErrorServidor(null)
+    if (!permitirHomonimo) setAvisoDuplicado(null)
     try {
       const payload = {
         nombre: form.nombre.trim(),
@@ -91,13 +97,19 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
         rol: form.rol,
         contrasena: form.contrasena,
         fecha_contratacion: form.fecha_contratacion,
+        permitir_homonimo: permitirHomonimo,
       }
       const { data } = await apiClient.post('/empleados', payload)
       onCreado(data)
     } catch (err) {
       const status = err?.response?.status
       const detail = err?.response?.data?.detail
-      if (status === 409) {
+      if (status === 409 && err?.response?.data?.error === 'EMPLEADO_DUPLICADO') {
+        // RTF-01 / R1-5: antes CUALQUIER 409 se mostraba como «este correo ya
+        // está registrado», así que este aviso se habría leído como un error
+        // del correo, que está bien.
+        setAvisoDuplicado(typeof detail === 'string' ? detail : 'Ya hay un empleado con ese nombre.')
+      } else if (status === 409) {
         setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado en el sistema.' }))
       } else if (status === 400 || status === 422) {
         if (Array.isArray(detail)) {
@@ -135,6 +147,27 @@ export default function ModalCrearEmpleado({ onCreado, onCerrar, empleadosExiste
         <div className={styles.errorBanner}>
           <IconAlert />
           <span>{errorServidor}</span>
+        </div>
+      )}
+
+      {/* RTF-01 / R1-5: duplicar a una persona parte en dos su historial —sus
+          tareas, sus jornadas y sus horas quedan en dos ids— y los reportes la
+          cuentan a medias. No se prohíbe del todo porque los homónimos
+          existen: se para, se dice con quién choca y se decide. */}
+      {avisoDuplicado && (
+        <div className={styles.errorBanner}>
+          <IconAlert />
+          <div>
+            <p>{avisoDuplicado}</p>
+            <button
+              type="button"
+              className={styles.enlaceHomonimo}
+              onClick={(e) => handleSubmit(e, { permitirHomonimo: true })}
+              disabled={cargando}
+            >
+              Son dos personas distintas, crearlo igual
+            </button>
+          </div>
         </div>
       )}
 

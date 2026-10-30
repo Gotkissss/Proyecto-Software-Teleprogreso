@@ -26,6 +26,7 @@ recortando el ritmo de un ataque en varios órdenes de magnitud.
 """
 from __future__ import annotations
 
+import ipaddress
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -220,15 +221,58 @@ lotes_ubicaciones_por_empleado = VentanaDeslizante(
 )
 
 
+def _en_red_confiable(direccion: str) -> bool:
+    """True si `direccion` pertenece a una de las redes de proxy confiables."""
+    redes = settings.redes_proxy_confiables
+    if not redes:
+        return False
+    try:
+        ip = ipaddress.ip_address(direccion)
+    except ValueError:
+        return False
+    return any(ip in red for red in redes)
+
+
 def ip_cliente(request) -> str:
     """
     IP de origen de la petición.
 
-    Se usa `request.client.host` y NO el header X-Forwarded-For crudo: ese
-    header lo puede escribir cualquiera, y confiar en él permitiría saltarse
-    todos los límites simplemente mandando una IP distinta en cada intento.
-    Cuando la app corre detrás del proxy de Railway, uvicorn arranca con
-    `--proxy-headers`, y es uvicorn quien traduce el header a `client.host`
-    tras validarlo. Así el valor es fiable en los dos escenarios.
+    Por omisión es `request.client.host`, el peer TCP, y NO la cabecera
+    `X-Forwarded-For` cruda: esa la puede escribir cualquiera, y creerla
+    permitiría saltarse todos los límites de frecuencia mandando una IP
+    distinta en cada intento.
+
+    Hay un caso en el que el peer TCP no sirve: detrás de un proxy inverso es
+    la dirección del proxy. En Railway eso significaba que la bitácora guardaba
+    una dirección de la red interna del proveedor (100.64.0.x) que además
+    cambiaba en cada petición del mismo usuario (RTF-01 / R1-1), así que la
+    columna IP no identificaba a nadie — y la trazabilidad es el punto de tener
+    una bitácora.
+
+    Cuando el peer está dentro de una red declarada en `PROXIES_CONFIABLES`, se
+    lee la cabecera y se toma la ÚLTIMA dirección que no sea de un proxy
+    confiable. Importa que sea la última y no la primera: los proxies AÑADEN su
+    vista al final de la lista, así que un cliente que mande su propia cabecera
+    (`X-Forwarded-For: 1.2.3.4`) solo consigue que el proxy la deje a la
+    izquierda y escriba detrás la dirección real que él vio. Recorriendo de
+    derecha a izquierda, lo que gana es lo que escribió el proxy, no lo que
+    dijo el cliente.
+
+    No depende de que uvicorn arranque con `--proxy-headers`: el
+    `startCommand` del despliegue puede no llevarlo —de hecho no lo lleva— y
+    esta función tiene que dar la IP correcta igual.
     """
-    return request.client.host if request.client else "desconocido"
+    directa = request.client.host if request.client else None
+    if not directa:
+        return "desconocido"
+
+    if not _en_red_confiable(directa):
+        return directa
+
+    reenviada = request.headers.get("x-forwarded-for", "")
+    for candidata in reversed([p.strip() for p in reenviada.split(",") if p.strip()]):
+        if not _en_red_confiable(candidata):
+            return candidata
+
+    # Toda la cadena es interna: no hay más dato que el peer.
+    return directa

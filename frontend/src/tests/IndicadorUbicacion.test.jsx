@@ -51,7 +51,7 @@ function montar() {
  */
 async function montarConJornadaAbierta() {
   montar()
-  await screen.findByText('Obteniendo ubicación…')
+  await screen.findByText('Buscando GPS…')
   await act(async () => {})
 }
 
@@ -136,7 +136,8 @@ describe('IndicadorUbicacion', () => {
 
     montar()
 
-    expect(await screen.findByText('Ubicación no disponible')).toBeInTheDocument()
+    // RTF-01 / R3-11: el texto largo salía cortado a media palabra.
+    expect(await screen.findByText('Sin ubicación')).toBeInTheDocument()
   })
 
   it('si el último envío al backend falló, lo dice aunque el GPS funcione', async () => {
@@ -146,6 +147,6 @@ describe('IndicadorUbicacion', () => {
     await montarConJornadaAbierta()
     await emitirLectura()
 
-    expect(await screen.findByText('Ubicación sin enviar')).toBeInTheDocument()
+    expect(await screen.findByText('Sin enviar')).toBeInTheDocument()
   })
 })

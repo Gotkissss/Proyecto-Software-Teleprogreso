@@ -19,6 +19,7 @@ import {
   getTecnicosDisponibles,
   reasignarTarea,
 } from '../api/tareaService'
+import { ordenarPorDisponibilidad } from '../utils/tecnicos'
 import { diasRestantes, parsearFechaLocal } from '../utils/vencimiento'
 import { formatearDistancia } from '../utils/navegacion'
 import { soloHora } from '../utils/fecha'
@@ -299,7 +300,9 @@ export default function ReasignacionPage() {
       ])
 
       setTareas(Array.isArray(listaTareas) ? listaTareas : [])
-      setTecnicos(listaTecnicos)
+      // RTF-01 / R2-6: en jornada primero. Reasignar a quien no marcó
+      // entrada deja la tarea parada hasta que lo haga.
+      setTecnicos(ordenarPorDisponibilidad(listaTecnicos))
     } catch (err) {
       setError(
         err?.response?.data?.detail || 'No se pudieron cargar las tareas.'
@@ -484,7 +487,11 @@ export default function ReasignacionPage() {
 
     try {
       const conDistancias = await getTecnicosDisponibles(idTarea)
-      if (tareaDistanciasRef.current === idTarea) setTecnicos(conDistancias)
+      // Aquí el orden lo decide la distancia dentro del modal, pero la
+      // lista base se mantiene con el mismo criterio por coherencia.
+      if (tareaDistanciasRef.current === idTarea) {
+        setTecnicos(ordenarPorDisponibilidad(conDistancias))
+      }
     } catch (err) {
       // Sin distancias el modal sigue sirviendo para reasignar por carga, así
       // que esto no bloquea la pantalla ni pinta un error rojo.

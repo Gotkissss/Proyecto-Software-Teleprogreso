@@ -156,6 +156,40 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
 
+    # ── Proxies en los que se confía para leer la IP real (RTF-01 / R1-1) ────
+    #
+    # Redes (CIDR) desde las que se acepta la cabecera `X-Forwarded-For` para
+    # determinar el origen de una petición. Vacío = no se confía en nadie y la
+    # IP es la del peer TCP, que es lo correcto cuando no hay proxy delante.
+    #
+    # Por qué hace falta: detrás del proxy de Railway, `request.client.host` es
+    # una dirección de la red interna del proveedor (100.64.0.x) que además
+    # cambia en cada petición del mismo usuario. La bitácora la guardaba tal
+    # cual, así que la columna IP no identificaba a nadie y la trazabilidad
+    # —que es el punto de tener una bitácora— quedaba sin servir.
+    #
+    # Esto NO es lo mismo que confiar en la cabecera a secas: solo se lee si el
+    # peer directo está dentro de una de estas redes, y de la lista se toma la
+    # última dirección que NO sea de un proxy confiable. Esa la escribió el
+    # proxy a partir de la conexión que él vio, así que un cliente no la puede
+    # falsear añadiendo entradas por su cuenta.
+    #
+    # En Railway se rellena sola (ver `redes_proxy_confiables`): su backend
+    # solo es alcanzable a través de su propio proxy.
+    PROXIES_CONFIABLES: str = ""
+
+    # RTF-01 / R1-5: dominios de correo que se aceptan al registrar o editar
+    # un empleado, separados por coma. El informe encontró cuentas
+    # @gmail.com mezcladas con las corporativas en la lista de colaboradores:
+    # un correo personal no se puede dar de baja cuando la persona se va, y
+    # es el canal por el que llega el aviso de cambio de contraseña.
+    #
+    # Vacío = sin restricción, para quien despliegue esto con otro dominio o
+    # sin dominio propio. Solo se comprueba al crear y al cambiar el correo,
+    # así que las cuentas que ya existen siguen funcionando y se pueden
+    # editar en lo demás.
+    DOMINIOS_CORREO_EMPLEADO: str = "teleprogreso.com"
+
     # Dominios que el backend acepta en el header Host. Bloquea los ataques de
     # Host header (envenenamiento de links, cache poisoning). Vacío = sin
     # restricción; en producción se exige que esté definido.
@@ -387,6 +421,55 @@ class Settings(BaseSettings):
             )
 
         return self
+
+    @property
+    def dominios_correo_empleado(self) -> tuple:
+        """
+        Dominios admitidos en el correo de un empleado, en minúsculas.
+
+        Tupla vacía = sin restricción.
+        """
+        crudo = (self.DOMINIOS_CORREO_EMPLEADO or "").strip()
+        if not crudo:
+            return ()
+        return tuple(
+            d.strip().lower().lstrip("@")
+            for d in crudo.split(",")
+            if d.strip()
+        )
+
+    @property
+    def redes_proxy_confiables(self) -> tuple:
+        """
+        Redes desde las que se cree la cabecera `X-Forwarded-For`.
+
+        Si `PROXIES_CONFIABLES` está vacío y se detecta Railway
+        (`RAILWAY_ENVIRONMENT_NAME`, que el proveedor pone en todos sus
+        servicios), se usan las redes privadas y la CGNAT: ahí el backend solo
+        es alcanzable a través del proxy de Railway, así que el peer directo
+        siempre es él. Fuera de Railway no se asume nada.
+        """
+        import ipaddress
+        import os
+
+        crudo = self.PROXIES_CONFIABLES.strip()
+        if not crudo:
+            if not os.getenv("RAILWAY_ENVIRONMENT_NAME"):
+                return ()
+            crudo = "100.64.0.0/10,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+        redes = []
+        for parte in crudo.split(","):
+            parte = parte.strip()
+            if not parte:
+                continue
+            try:
+                redes.append(ipaddress.ip_network(parte, strict=False))
+            except ValueError:
+                # Una entrada mal escrita no puede tumbar el arranque ni, peor,
+                # hacer que se confíe en algo que no se quiso: se ignora.
+                continue
+        return tuple(redes)
 
     @property
     def es_produccion(self) -> bool:

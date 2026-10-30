@@ -29,15 +29,18 @@ from app.core.tiempo import ahora as ahora_local, hora_actual as hora_local, hoy
 from app.core.deps import auditar_lectura, get_current_empleado
 from app.core.geo import lat_lng_de, punto_wkt
 from app.db.session import get_db
+from app.core.exceptions import conflict
+from app.core.reglas import MINUTOS_JORNADA_COMPLETA, ROL_TECNICO
 from app.models.asistencia import Asistencia, Descanso
-from app.models.empleado import Empleado
+from app.models.empleado import Empleado, EmpleadoTarea
+from app.models.tarea import Tarea
 from app.schemas.asistencia import (
     DescansoResumen,
     HistorialAsistenciaResponse,
     HistorialTotales,
     JornadaResponse,
 )
-from app.schemas.ubicacion import UbicacionCreate
+from app.schemas.ubicacion import MarcaAsistencia, UbicacionCreate
 from app.services.asistencia import (
     calcular_jornada,
     es_del_turno_en_curso,
@@ -81,7 +84,12 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
     hasta la hora de salida, así que una pausa olvidada a las 10:00 pasaba a
     figurar como casi catorce horas de descanso.
     """
-    jornada.hora_salida = jornada.hora_salida or HORA_CIERRE_FORZADO
+    if jornada.hora_salida is None:
+        jornada.hora_salida = HORA_CIERRE_FORZADO
+        # RTF-01 / R3-3: queda dicho que esta salida la puso el sistema. Sin la
+        # marca, el historial contaba 19:01–23:59 como 4 h 58 de trabajo y ese
+        # número entraba en los tres reportes del gerente.
+        jornada.cierre_automatico = True
 
     result = await db.execute(
         select(Descanso).where(
@@ -103,7 +111,7 @@ async def _cerrar_jornada_abandonada(db: AsyncSession, jornada: Asistencia) -> N
 async def registrar_entrada(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    marca: Optional[MarcaAsistencia] = None,
 ):
     """
     Registra la hora de entrada del empleado autenticado.
@@ -114,8 +122,13 @@ async def registrar_entrada(
     - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
       lugar de la entrada; si no, la entrada se registra igual sin ubicación.
       Coordenadas fuera de rango responden 422.
+    - RTF-01 / R3-4: sin coordenada se puede mandar `motivo_sin_ubicacion` con
+      lo que el técnico explique (GPS denegado, sin señal). No sustituye a la
+      ubicación, pero deja constancia revisable en vez de un hueco.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
+    coordenadas = marca.coordenadas if marca else None
+
     # 1. Buscar jornadas abiertas (entrada sin salida) del empleado.
     #
     # Se piden todas y no `scalar_one_or_none()`: si por lo que sea quedaron
@@ -165,7 +178,10 @@ async def registrar_entrada(
         id_empleado=current_user.id_empleado,
         fecha=now.date(),
         hora_entrada=now.time(),
-        coordenada_entrada=_punto_de_la_marca(ubicacion),
+        coordenada_entrada=_punto_de_la_marca(coordenadas),
+        motivo_sin_ubicacion_entrada=(
+            None if coordenadas is not None else marca.motivo if marca else None
+        ),
     )
 
     db.add(nueva_asistencia)
@@ -177,7 +193,8 @@ async def registrar_entrada(
         "empleado": f"{current_user.nombre} {current_user.apellido}",
         "fecha": str(now.date()),
         "hora_entrada": str(now.time().strftime("%H:%M:%S")),
-        "ubicacion_registrada": ubicacion is not None,
+        "ubicacion_registrada": coordenadas is not None,
+        "motivo_sin_ubicacion": nueva_asistencia.motivo_sin_ubicacion_entrada,
     }
 
 
@@ -191,7 +208,7 @@ async def registrar_entrada(
 async def registrar_salida(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     current_user: Annotated[Empleado, Depends(get_current_empleado)],
-    ubicacion: Optional[UbicacionCreate] = None,
+    marca: Optional[MarcaAsistencia] = None,
 ):
     """
     Registra la hora de salida del empleado autenticado.
@@ -201,6 +218,7 @@ async def registrar_salida(
     - Si no hay ninguna jornada del turno en curso, retorna 400.
     - HU-4: el cuerpo `{lat, lng}` es opcional. Si llega, se guarda como el
       lugar de la salida; si no, la salida se registra igual sin ubicación.
+    - RTF-01 / R3-4: sin coordenada se acepta `motivo_sin_ubicacion`.
     - Requiere token JWT válido en el header Authorization: Bearer <token>.
     """
     now = ahora_local()
@@ -234,11 +252,46 @@ async def registrar_salida(
                    "Registra la entrada primero.",
         )
 
-    # 2. Registrar la hora de salida y, si llegó, el lugar (HU-4)
-    asistencia_activa.hora_salida = now.time()
-    asistencia_activa.coordenada_salida = _punto_de_la_marca(ubicacion)
+    # 2. RTF-01 / R3-2: no se cierra la jornada con trabajo a medias.
+    #
+    #    Permitirlo dejaba la tarea «En curso» y al técnico sin poder
+    #    terminarla: finalizar una tarea exige jornada abierta, así que la
+    #    única salida era registrar una entrada nueva al día siguiente —lo que
+    #    falsea la asistencia— o pedirle al supervisor que la cerrara por él.
+    #    La tarea quedaba huérfana y contando como trabajo en marcha en el
+    #    panel y en los reportes.
+    #
+    #    Solo al rol técnico: un admin o un supervisor que marque jornada no
+    #    tiene tareas asignadas en el sentido de este flujo.
+    if current_user.rol == ROL_TECNICO:
+        abiertas_en_curso = await db.execute(
+            select(Tarea.titulo)
+            .join(EmpleadoTarea, EmpleadoTarea.id_tarea == Tarea.id_tarea)
+            .where(
+                EmpleadoTarea.id_empleado == current_user.id_empleado,
+                Tarea.estado_tarea == "en_progreso",
+            )
+            .order_by(Tarea.id_tarea)
+        )
+        titulos = list(abiertas_en_curso.scalars().all())
+        if titulos:
+            # Se nombran: «tienes tareas en curso» obliga al técnico a buscar
+            # cuáles, y desde el móvil eso son tres pantallas.
+            cuales = ", ".join(f"«{titulo}»" for titulo in titulos[:3])
+            resto = f" y {len(titulos) - 3} más" if len(titulos) > 3 else ""
+            raise conflict(
+                f"Tienes {len(titulos)} tarea(s) en curso ({cuales}{resto}). "
+                "Finalízalas o pásalas a pendiente antes de cerrar tu jornada."
+            )
 
-    # 3. Cerrar también el descanso que hubiera quedado en curso: si no, la
+    # 3. Registrar la hora de salida y, si llegó, el lugar (HU-4)
+    asistencia_activa.hora_salida = now.time()
+    coordenadas = marca.coordenadas if marca else None
+    asistencia_activa.coordenada_salida = _punto_de_la_marca(coordenadas)
+    if coordenadas is None and marca is not None:
+        asistencia_activa.motivo_sin_ubicacion_salida = marca.motivo
+
+    # 4. Cerrar también el descanso que hubiera quedado en curso: si no, la
     #    pausa seguiría "abierta" dentro de una jornada ya cerrada y el
     #    historial la contaría hasta la hora de salida.
     result_pausas = await db.execute(
@@ -267,7 +320,8 @@ async def registrar_salida(
         "fecha": str(asistencia_activa.fecha),
         "hora_entrada": str(asistencia_activa.hora_entrada.strftime("%H:%M:%S")),
         "hora_salida": str(now.time().strftime("%H:%M:%S")),
-        "ubicacion_registrada": ubicacion is not None,
+        "ubicacion_registrada": coordenadas is not None,
+        "motivo_sin_ubicacion": asistencia_activa.motivo_sin_ubicacion_salida,
     }
 
 
@@ -355,6 +409,9 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
         lng_entrada=entrada[1] if entrada else None,
         lat_salida=salida[0] if salida else None,
         lng_salida=salida[1] if salida else None,
+        motivo_sin_ubicacion_entrada=asistencia.motivo_sin_ubicacion_entrada,
+        motivo_sin_ubicacion_salida=asistencia.motivo_sin_ubicacion_salida,
+        sin_salida=resumen.sin_salida,
         minutos_brutos=resumen.minutos_brutos,
         minutos_pausa=resumen.minutos_pausa,
         minutos_trabajados=resumen.minutos_trabajados,
@@ -368,6 +425,7 @@ def _construir_jornada(asistencia: Asistencia, hoy: date) -> JornadaResponse:
                 hora_inicio=p.hora_inicio,
                 hora_fin=p.hora_fin,
                 minutos=p.minutos,
+                segundos=p.segundos,
                 en_curso=p.en_curso,
             )
             for p in resumen.pausas
@@ -495,6 +553,7 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
     minutos_pausa = 0
     minutos_trabajados = 0
     abiertas = 0
+    completas = 0
 
     for jornada in jornadas:
         referencia = hora_local() if jornada.fecha == hoy else None
@@ -504,6 +563,11 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
         minutos_trabajados += resumen.minutos_trabajados
         if resumen.jornada_activa:
             abiertas += 1
+        # RTF-01 / R3-12: el mismo umbral con el que el historial las pinta
+        # de verde. Las que el sistema cerró solo cuentan 0 minutos, así que
+        # una jornada inventada nunca entra aquí.
+        if resumen.minutos_trabajados >= MINUTOS_JORNADA_COMPLETA:
+            completas += 1
 
     cantidad = len(jornadas)
     promedio = minutos_trabajados // cantidad if cantidad else 0
@@ -511,6 +575,7 @@ async def _calcular_totales(db: AsyncSession, filtros: list, hoy: date) -> Histo
     return HistorialTotales(
         jornadas=cantidad,
         jornadas_abiertas=abiertas,
+        jornadas_completas=completas,
         minutos_trabajados=minutos_trabajados,
         minutos_pausa=minutos_pausa,
         minutos_brutos=minutos_brutos,

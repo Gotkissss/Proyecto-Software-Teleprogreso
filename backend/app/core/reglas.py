@@ -89,6 +89,145 @@ ROL_TECNICO = "tecnico"
 
 ESTADO_EMPLEADO_ACTIVO = "activo"
 
+# ── Datos de una persona (RTF-01 / R1-3 y R1-4) ─────────────────────────────
+#
+# La revisión técnica encontró al empleado «1235 Fonzi» y nombres como «@@@»:
+# los campos solo comprobaban que no estuvieran vacíos. Un nombre que no es un
+# nombre no se puede buscar, sale así en los reportes y en la bitácora, y
+# convierte la lista de empleados en algo que nadie puede leer.
+#
+# Se aceptan letras (con tildes y ñ), espacios, guiones y apóstrofos, porque
+# «D'León», «Pérez-Luna» y «de la Cruz» son nombres reales. Lo que se rechaza
+# es que NO haya ninguna letra, o que aparezcan dígitos y signos que en un
+# nombre solo entran por error de tecleo.
+
+import re as _re
+
+_PATRON_NOMBRE = _re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ \'\-\.]*$")
+
+# Mínimo de letras: evita que un solo carácter pase por nombre.
+MIN_LETRAS_NOMBRE = 2
+
+
+def validar_nombre_persona(valor: str, campo: str = "nombre") -> str:
+    """
+    Comprueba que un nombre o apellido parezca uno y lo devuelve sin espacios
+    de sobra. Lanza `ValueError`, que es lo que esperan los validadores de
+    Pydantic.
+    """
+    limpio = " ".join(valor.split())
+    if not limpio:
+        raise ValueError("Este campo no puede estar vacio.")
+    if not _PATRON_NOMBRE.match(limpio):
+        raise ValueError(
+            f"El {campo} solo puede llevar letras, espacios, guiones y "
+            "apóstrofos."
+        )
+    letras = sum(1 for c in limpio if c.isalpha())
+    if letras < MIN_LETRAS_NOMBRE:
+        raise ValueError(
+            f"El {campo} tiene que tener al menos {MIN_LETRAS_NOMBRE} letras."
+        )
+    return limpio
+
+
+# Teléfono de Guatemala: 8 dígitos. El campo solo exigía 7, así que había
+# registrados de 10 (6767676767) que no son un teléfono de aquí y que nadie
+# puede marcar. Se admite el formato con guion porque es como se escriben en
+# papel, y se guarda normalizado a ####-#### para que la lista no mezcle las
+# dos formas.
+DIGITOS_TELEFONO = 8
+
+_SOLO_DIGITOS = _re.compile(r"\D")
+
+
+def validar_telefono(valor: str) -> str:
+    """
+    Normaliza un teléfono a `####-####`, o lanza `ValueError`.
+
+    Acepta lo que la gente escribe —con guion, con espacios, con el prefijo
+    +502— y guarda una sola forma.
+    """
+    crudo = valor.strip()
+    if not crudo:
+        raise ValueError("El telefono no puede estar vacio.")
+
+    # El prefijo del país es correcto pero no es parte del número local.
+    if crudo.startswith("+502"):
+        crudo = crudo[4:]
+    elif crudo.startswith("502") and len(_SOLO_DIGITOS.sub("", crudo)) == 11:
+        crudo = crudo[3:]
+
+    digitos = _SOLO_DIGITOS.sub("", crudo)
+    if len(digitos) != DIGITOS_TELEFONO:
+        raise ValueError(
+            f"El telefono tiene que tener {DIGITOS_TELEFONO} digitos "
+            f"(se recibieron {len(digitos)}). Formato: 1234-5678."
+        )
+    return f"{digitos[:4]}-{digitos[4:]}"
+
+
+# ── Jornada completa (RTF-01 / R3-12) ───────────────────────────────────────
+#
+# El historial pinta de verde la jornada que llega a las 8 horas trabajadas, y
+# ahora cuenta cuántas lo hicieron en el rango consultado. El umbral vive aquí
+# para que el conteo del backend y el color del frontend no puedan discrepar.
+MINUTOS_JORNADA_COMPLETA = 8 * 60
+
+
+# ── Correo corporativo (RTF-01 / R1-5) ──────────────────────────────────────
+#
+# El informe encontró cuentas @gmail.com mezcladas con las corporativas en la
+# lista de colaboradores. Un correo personal es un problema real, no estético:
+# no se puede dar de baja cuando la persona deja la empresa, y es el canal por
+# el que llega el aviso de restablecimiento de contraseña.
+#
+# El dominio admitido se configura (`DOMINIOS_CORREO_EMPLEADO`) y se puede
+# dejar vacío: quien despliegue esto con otro dominio, o sin dominio propio,
+# no debería quedarse sin poder registrar a nadie.
+
+
+def normalizar_correo(valor: str) -> str:
+    """Correo en minúsculas y sin espacios alrededor."""
+    return (valor or "").strip().lower()
+
+
+def dominio_de(correo: str) -> str:
+    """
+    Parte de después de la arroba, en minúsculas; cadena vacía si no hay.
+
+    `rpartition` devuelve la cadena entera cuando no encuentra el separador,
+    así que se comprueba que la arroba estaba: sin ella no hay dominio, y
+    devolver el texto completo lo haría pasar por uno.
+    """
+    izquierda, arroba, dominio = normalizar_correo(correo).rpartition("@")
+    return dominio if arroba and izquierda else ""
+
+
+def validar_correo_de_empleado(valor: str, dominios) -> str:
+    """
+    Comprueba que el correo esté en uno de los dominios admitidos.
+
+    `dominios` vacío = sin restricción. Un subdominio también vale
+    (`sistemas.teleprogreso.com` con `teleprogreso.com` configurado): sigue
+    siendo correo de la empresa.
+    """
+    correo = normalizar_correo(valor)
+    if not dominios:
+        return correo
+
+    dominio = dominio_de(correo)
+    if any(dominio == d or dominio.endswith("." + d) for d in dominios):
+        return correo
+
+    permitidos = ", ".join("@" + d for d in dominios)
+    raise ValueError(
+        "El correo de un empleado tiene que ser de la empresa "
+        f"({permitidos}). Un correo personal no se puede dar de baja cuando "
+        "la persona se va, y es por donde llegan los avisos de contraseña."
+    )
+
+
 # ── Política de contraseñas (HU-S9-02, HU-S10-01) ───────────────────────────
 #
 # Una sola política para todos los caminos que fijan una contraseña: crear un
@@ -284,6 +423,23 @@ TOLERANCIA_RELOJ_SEGUNDOS = 120
 # práctica coinciden casi siempre, porque POST /ubicaciones solo acepta puntos
 # con la jornada abierta.
 HORAS_UBICACION_RECIENTE = 8
+
+
+# ── Caducidad de las alertas de «técnico sin entrada» (RTF-01 / R2-2) ───────
+#
+# Un aviso de «no marcó entrada» es de un día concreto: que hoy sí la haya
+# marcado no borra que el martes no lo hizo, así que no se cierra solo cuando
+# la condición deja de cumplirse. El problema es el otro extremo: se quedaba
+# pendiente para siempre. En la revisión técnica aparecieron avisos del 21/08,
+# 02/09 y 01/10 todavía «pendientes», y con el texto en presente («no ha
+# marcado su entrada el día de hoy»), que leído en octubre es falso.
+#
+# Pasados estos días el aviso deja de ser accionable: nadie va a marcar una
+# entrada de hace una semana, y lo que queda por hacer con esa ausencia ya no
+# se resuelve desde la pantalla de alertas. Se cierra como 'resuelta', que
+# conserva la fila y su fecha —el registro de que ese día faltó— pero la saca
+# del contador de pendientes.
+DIAS_VIGENCIA_ALERTA_SIN_ENTRADA = 7
 
 
 # ── Bitácora de auditoría (HU-S9-03) ─────────────────────────────────────────

@@ -1,6 +1,10 @@
+/* RTF-01 / R3-8: los avisos salían abajo y al centro, que es justo donde
+   están los botones de acción del técnico: «Servicio iniciado.» tapaba
+   «Finalizar tarea» durante tres segundos. Arriba no estorban a nada —el
+   encabezado no se pulsa— y además es donde se mira después de actuar. */
 .container {
   position: fixed;
-  bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  top: calc(var(--nav-height, 60px) + var(--space-3) + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -29,7 +33,8 @@
 .info    { background: var(--color-primary-dark); }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(8px); }
+  /* Entra desde arriba, que es de donde ahora viene (RTF-01 / R3-8). */
+  from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 

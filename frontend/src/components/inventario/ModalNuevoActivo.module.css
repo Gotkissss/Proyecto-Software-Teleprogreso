@@ -122,3 +122,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* RTF-01 / R3-7: el error se señala en el campo que está mal. Antes el modal
+   solo tenía un aviso genérico arriba («Los datos enviados no son válidos.»,
+   el 422 de Pydantic) y había que adivinar cuál de los seis campos lo
+   provocaba. */
+.inputError,
+.inputError:focus {
+  border-color: var(--color-danger, #c0392b);
+  box-shadow: none;
+}
+
+.campoError {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--color-danger, #c0392b);
+}

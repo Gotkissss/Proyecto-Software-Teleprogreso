@@ -28,7 +28,15 @@ from datetime import time
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import bad_request, conflict, forbidden, not_found
+from fastapi import status
+
+from app.core.exceptions import (
+    APIException,
+    bad_request,
+    conflict,
+    forbidden,
+    not_found,
+)
 from app.core.reglas import (
     ESTADO_DISPONIBLE,
     ESTADO_EMPLEADO_ACTIVO,
@@ -103,6 +111,10 @@ async def desvincular_recursos(
     for jornada in result_jornadas.scalars().all():
         cierre = ahora.time() if jornada.fecha == ahora.date() else HORA_CIERRE_FORZADO
         jornada.hora_salida = cierre
+        # RTF-01 / R3-3: esta salida la pone el sistema al desactivar la
+        # cuenta, no la persona. Marcarla es lo que impide que sus horas entren
+        # en los reportes como trabajo real.
+        jornada.cierre_automatico = True
 
         # Las pausas en curso se cierran con la jornada; si no, quedarían
         # abiertas dentro de una jornada ya cerrada e inflarían el tiempo de
@@ -173,11 +185,67 @@ async def listar_empleados(
     return unicos
 
 
+# RTF-01 / R1-5: la pantalla lo usa para ofrecer «son dos personas distintas»
+# en vez del mensaje del correo repetido, que es el otro 409 de este módulo.
+ERROR_EMPLEADO_DUPLICADO = "EMPLEADO_DUPLICADO"
+
+
+async def _exigir_que_no_sea_un_duplicado(
+    db: AsyncSession,
+    nombre: str,
+    apellido: str,
+    *,
+    excluir: int | None = None,
+) -> None:
+    """
+    Rechaza un empleado cuyo nombre y apellido ya están registrados.
+
+    RTF-01 / R1-5: el informe encontró a «Luis Fonzi» dos veces, como técnico
+    y como supervisor. No es un dato raro: es la misma persona duplicada, y
+    duplicada parte en dos su historial —sus tareas, sus jornadas y sus horas
+    quedan repartidas entre dos ids— de modo que los reportes del gerente
+    cuentan a medias.
+
+    No se prohíbe del todo porque los homónimos existen; hay muchos «José
+    García». Lo que se hace es parar el alta y decir con quién choca, para que
+    el admin vea si es la misma persona. Si de verdad son dos, repite el alta
+    con `permitir_homonimo`.
+
+    La comparación ignora mayúsculas y espacios de sobra, que es por donde
+    entran los duplicados que no se ven a simple vista.
+    """
+    nombre_limpio = " ".join((nombre or "").split()).lower()
+    apellido_limpio = " ".join((apellido or "").split()).lower()
+
+    condiciones = [
+        func.lower(func.trim(Empleado.nombre)) == nombre_limpio,
+        func.lower(func.trim(Empleado.apellido)) == apellido_limpio,
+    ]
+    if excluir is not None:
+        condiciones.append(Empleado.id_empleado != excluir)
+
+    result = await db.execute(select(Empleado).where(*condiciones))
+    gemelo = result.scalars().first()
+    if gemelo is None:
+        return
+
+    # Código propio para que la pantalla lo distinga del 409 del correo
+    # repetido: los dos son conflictos, pero se resuelven de forma distinta.
+    raise APIException(
+        status.HTTP_409_CONFLICT,
+        f"Ya hay un empleado llamado '{gemelo.nombre} {gemelo.apellido}' "
+        f"(#{gemelo.id_empleado}, {gemelo.rol}, {gemelo.estado}). Si es la "
+        "misma persona, edita ese registro en vez de crear otro; si de verdad "
+        "son dos, vuelve a enviarlo marcando que es un homónimo.",
+        ERROR_EMPLEADO_DUPLICADO,
+    )
+
+
 async def crear_empleado(
     db: AsyncSession,
     data: EmpleadoCreate,
 ) -> Empleado:
-    """Crea un empleado después de verificar que su correo sea único."""
+    """Crea un empleado después de verificar que su correo y su nombre no se repitan."""
     result = await db.execute(
         select(Empleado).where(Empleado.correo == data.correo)
     )
@@ -188,6 +256,9 @@ async def crear_empleado(
                 f"'{data.correo}'."
             )
         )
+
+    if not data.permitir_homonimo:
+        await _exigir_que_no_sea_un_duplicado(db, data.nombre, data.apellido)
 
     nuevo_empleado = Empleado(
         nombre=data.nombre,
@@ -259,7 +330,24 @@ async def editar_empleado(
                 )
             )
 
-    for campo, valor in data.model_dump(exclude_unset=True).items():
+    # La misma regla que al crear: si editar fuera más permisivo, el duplicado
+    # entraría por la otra puerta —renombrando a alguien (RTF-01 / R1-5).
+    nombre_nuevo = data.nombre if data.nombre is not None else empleado.nombre
+    apellido_nuevo = (
+        data.apellido if data.apellido is not None else empleado.apellido
+    )
+    cambia_el_nombre = (
+        nombre_nuevo != empleado.nombre or apellido_nuevo != empleado.apellido
+    )
+    if cambia_el_nombre and not data.permitir_homonimo:
+        await _exigir_que_no_sea_un_duplicado(
+            db, nombre_nuevo, apellido_nuevo, excluir=id_empleado
+        )
+
+    # `permitir_homonimo` no es una columna: es permiso para esta petición.
+    cambios = data.model_dump(exclude_unset=True)
+    cambios.pop("permitir_homonimo", None)
+    for campo, valor in cambios.items():
         setattr(empleado, campo, valor)
 
     return empleado

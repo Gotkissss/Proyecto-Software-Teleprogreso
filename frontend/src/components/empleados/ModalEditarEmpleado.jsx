@@ -14,7 +14,8 @@ const IconAlert = () => (
 )
 
 export default function ModalEditarEmpleado({
-  empleado, onGuardar, onCerrar, cargando, errorMsg, puedeRestablecer = false,
+  empleado, onGuardar, onCerrar, cargando, errorMsg, errorCodigo = null,
+  puedeRestablecer = false,
 }) {
   const [form, setForm] = useState({
     nombre:   empleado?.nombre   ?? '',
@@ -32,23 +33,40 @@ export default function ModalEditarEmpleado({
     if (errores[campo]) setErrores(prev => ({ ...prev, [campo]: null }))
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const erroresValidacion = validarFormularioEdicion(form)
-    setErrores(erroresValidacion)
-    if (Object.keys(erroresValidacion).length > 0) return
+  /** Solo los campos que cambiaron: un PATCH no manda lo que sigue igual. */
+  const cambiosDelFormulario = () => {
     const cambios = {}
     if (form.nombre.trim()   !== empleado.nombre)           cambios.nombre   = form.nombre.trim()
     if (form.apellido.trim() !== empleado.apellido)         cambios.apellido = form.apellido.trim()
     if (form.correo.trim()   !== empleado.correo)           cambios.correo   = form.correo.trim()
     if (form.rol             !== empleado.rol)              cambios.rol      = form.rol
     if (form.telefono.trim() !== (empleado.telefono ?? '')) cambios.telefono = form.telefono.trim() || null
+    return cambios
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const erroresValidacion = validarFormularioEdicion(form)
+    setErrores(erroresValidacion)
+    if (Object.keys(erroresValidacion).length > 0) return
+    const cambios = cambiosDelFormulario()
 
     if (Object.keys(cambios).length === 0) {
       onCerrar()
       return
     }
     onGuardar(empleado.id_empleado, cambios)
+  }
+
+  /**
+   * RTF-01 / R1-5: renombrar a alguien hacia un nombre que ya existe se para
+   * igual que el alta. Si de verdad son dos personas, se repite declarándolo.
+   */
+  const guardarComoHomonimo = () => {
+    onGuardar(empleado.id_empleado, {
+      ...cambiosDelFormulario(),
+      permitir_homonimo: true,
+    })
   }
 
   return (
@@ -58,7 +76,19 @@ export default function ModalEditarEmpleado({
       {errorMsg && (
         <div className={styles.errorBanner}>
           <IconAlert />
-          <span>{errorMsg}</span>
+          <div>
+            <span>{errorMsg}</span>
+            {errorCodigo === 'EMPLEADO_DUPLICADO' && (
+              <button
+                type="button"
+                className={styles.enlaceHomonimo}
+                onClick={guardarComoHomonimo}
+                disabled={cargando}
+              >
+                Son dos personas distintas, guardarlo igual
+              </button>
+            )}
+          </div>
         </div>
       )}
 

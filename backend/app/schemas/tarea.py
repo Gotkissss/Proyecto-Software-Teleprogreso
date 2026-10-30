@@ -64,7 +64,32 @@ class TareaBase(CoordenadasTarea):
 
 # 🔹 CREATE
 class TareaCreate(TareaBase):
-    pass
+    """
+    Cuerpo de `POST /tareas`.
+
+    Exige saber DÓNDE es el servicio: una dirección, un punto en el mapa, o
+    las dos cosas (RTF-01 / R2-5). Los dos campos eran opcionales, así que una
+    tarea de campo podía nacer sin ubicación: no aparecía en el mapa del
+    técnico, que es por donde se trabaja, y el técnico tenía que preguntar por
+    chat a dónde iba.
+
+    Se exige al CREAR y no en el `PATCH`: las tareas que ya existen sin
+    ubicación siguen siendo válidas —hay unas cuantas— y el modal de edición
+    ahora permite ponérsela (T6 del Sprint 10). Bloquear la edición dejaría
+    esas tareas sin forma de arreglarse.
+    """
+
+    @model_validator(mode="after")
+    def sabe_donde_es(self) -> "TareaCreate":
+        sin_direccion = not (self.direccion or "").strip()
+        sin_punto = self.lat is None
+        if sin_direccion and sin_punto:
+            raise ValueError(
+                "Indica la dirección del servicio o su ubicación en el mapa: "
+                "sin una de las dos, el técnico no sabe a dónde ir y la tarea "
+                "no sale en su mapa."
+            )
+        return self
 
 
 # 🔹 UPDATE — edición parcial de una tarea existente (PATCH /tareas/{id})

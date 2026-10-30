@@ -27,16 +27,21 @@ from app.routers.asistencia import (
     registrar_entrada,
     registrar_salida,
 )
-from app.schemas.ubicacion import UbicacionCreate
+from app.schemas.ubicacion import MarcaAsistencia, UbicacionCreate
 
 HOY = date(2026, 9, 23)
 FRAIJANES = UbicacionCreate(lat=14.4653, lng=-90.4408)
+# El cuerpo que mandan los endpoints desde RTF-01 / R3-4: las mismas dos
+# coordenadas más el motivo opcional de «sin ubicación».
+MARCA_FRAIJANES = MarcaAsistencia(lat=14.4653, lng=-90.4408)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _empleado():
-    return SimpleNamespace(id_empleado=2, nombre="Juan", apellido="Pérez")
+    return SimpleNamespace(
+        id_empleado=2, nombre="Juan", apellido="Pérez", rol="tecnico"
+    )
 
 
 def _fijar_reloj(monkeypatch, hora):
@@ -78,7 +83,7 @@ async def test_la_entrada_guarda_la_coordenada_recibida(monkeypatch):
     db = _db(_resultado([]))
 
     respuesta = await registrar_entrada(
-        db=db, current_user=_empleado(), ubicacion=FRAIJANES
+        db=db, current_user=_empleado(), marca=MARCA_FRAIJANES
     )
 
     nueva = db.add.call_args.args[0]
@@ -111,6 +116,10 @@ def _jornada_abierta_de_hoy():
         hora_entrada=time(8, 0),
         hora_salida=None,
         coordenada_salida=None,
+        # RTF-01 / R3-4: una marca sin coordenada guarda lo que el técnico
+        # explicó. Los dobles lo llevan en None, como las marcas con GPS.
+        motivo_sin_ubicacion_entrada=None,
+        motivo_sin_ubicacion_salida=None,
     )
 
 
@@ -118,10 +127,13 @@ def _jornada_abierta_de_hoy():
 async def test_la_salida_guarda_la_coordenada_recibida(monkeypatch):
     _fijar_reloj(monkeypatch, time(17, 5))
     jornada = _jornada_abierta_de_hoy()
-    db = _db(_resultado([jornada]), _resultado([]))
+    # Tres consultas en orden: las jornadas abiertas, las tareas en curso del
+    # técnico (RTF-01 / R3-2: no se cierra la jornada con trabajo a medias) y
+    # las pausas sin cerrar.
+    db = _db(_resultado([jornada]), _resultado([]), _resultado([]))
 
     respuesta = await registrar_salida(
-        db=db, current_user=_empleado(), ubicacion=FRAIJANES
+        db=db, current_user=_empleado(), marca=MARCA_FRAIJANES
     )
 
     assert jornada.hora_salida == time(17, 5)
@@ -133,7 +145,10 @@ async def test_la_salida_guarda_la_coordenada_recibida(monkeypatch):
 async def test_la_salida_sin_ubicacion_se_registra_igual(monkeypatch):
     _fijar_reloj(monkeypatch, time(17, 5))
     jornada = _jornada_abierta_de_hoy()
-    db = _db(_resultado([jornada]), _resultado([]))
+    # Tres consultas en orden: las jornadas abiertas, las tareas en curso del
+    # técnico (RTF-01 / R3-2: no se cierra la jornada con trabajo a medias) y
+    # las pausas sin cerrar.
+    db = _db(_resultado([jornada]), _resultado([]), _resultado([]))
 
     respuesta = await registrar_salida(db=db, current_user=_empleado())
 
@@ -204,6 +219,8 @@ def _jornada_historial(id_asistencia, coordenada_entrada, coordenada_salida):
         empleado=SimpleNamespace(nombre="Juan", apellido="Pérez", rol="tecnico"),
         coordenada_entrada=coordenada_entrada,
         coordenada_salida=coordenada_salida,
+        motivo_sin_ubicacion_entrada=None,
+        motivo_sin_ubicacion_salida=None,
     )
 
 

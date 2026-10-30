@@ -27,8 +27,14 @@ from pydantic import (
     model_validator,
     Field
 )
-from app.core.reglas import validar_politica_contrasena
+from app.core.reglas import (
+    validar_correo_de_empleado,
+    validar_nombre_persona,
+    validar_politica_contrasena,
+    validar_telefono,
+)
 from app.core.reglas import LONGITUD_MAXIMA_CONTRASENA
+from app.core.config import settings
 
 
 # ── Enums de dominio ───────────────────────────────────────────────────────
@@ -59,6 +65,23 @@ class EmpleadoCreate(BaseModel):
     fecha_contratacion: date
     telefono:   Optional[str] = Field(None, max_length=20)
 
+    # RTF-01 / R1-5: el informe encontró a «Luis Fonzi» registrado dos veces,
+    # como técnico y como supervisor. Un homónimo real existe —hay muchos
+    # «José García»— así que no se puede prohibir sin más: el alta se rechaza
+    # con el registro que ya existe a la vista, y el admin la repite con este
+    # campo en true si de verdad son dos personas.
+    permitir_homonimo: bool = False
+
+    @field_validator("correo")
+    @classmethod
+    def correo_de_la_empresa(cls, v):
+        # RTF-01 / R1-5: había cuentas @gmail.com en la lista de
+        # colaboradores. Un correo personal no se puede dar de baja cuando la
+        # persona se va, y es por donde llega el aviso de contraseña.
+        if v is None:
+            return v
+        return validar_correo_de_empleado(v, settings.dominios_correo_empleado)
+
     @field_validator("contrasena")
     @classmethod
     def validar_contrasena(cls, v: str, info: ValidationInfo) -> str:
@@ -76,11 +99,20 @@ class EmpleadoCreate(BaseModel):
 
     @field_validator("nombre", "apellido")
     @classmethod
-    def nombre_no_vacio(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Este campo no puede estar vacio.")
-        return v
+    def nombre_parece_un_nombre(cls, v: str, info: ValidationInfo) -> str:
+        # RTF-01 / R1-3: antes solo se comprobaba que no estuviera vacío, así
+        # que «12345» y «@@@» entraban. Un nombre que no es un nombre no se
+        # puede buscar y sale así en los reportes y en la bitácora.
+        return validar_nombre_persona(v, info.field_name or "nombre")
+
+    @field_validator("telefono")
+    @classmethod
+    def telefono_de_ocho_digitos(cls, v: Optional[str]) -> Optional[str]:
+        # RTF-01 / R1-4: el campo solo exigía 7 dígitos y había registrados de
+        # 10, que no son un teléfono de Guatemala y nadie puede marcar.
+        if v is None or not v.strip():
+            return None
+        return validar_telefono(v)
 
     class Config:
         use_enum_values = True
@@ -95,13 +127,42 @@ class EmpleadoUpdate(BaseModel):
     telefono: Optional[str] = Field(None, max_length=20)
     fecha_contratacion: Optional[date]        = None
 
+    # RTF-01 / R1-5: el informe encontró a «Luis Fonzi» registrado dos veces,
+    # como técnico y como supervisor. Un homónimo real existe —hay muchos
+    # «José García»— así que no se puede prohibir sin más: el alta se rechaza
+    # con el registro que ya existe a la vista, y el admin la repite con este
+    # campo en true si de verdad son dos personas.
+    permitir_homonimo: bool = False
+
+    @field_validator("correo")
+    @classmethod
+    def correo_de_la_empresa(cls, v):
+        # RTF-01 / R1-5: había cuentas @gmail.com en la lista de
+        # colaboradores. Un correo personal no se puede dar de baja cuando la
+        # persona se va, y es por donde llega el aviso de contraseña.
+        if v is None:
+            return v
+        return validar_correo_de_empleado(v, settings.dominios_correo_empleado)
+
     @field_validator("nombre", "apellido")
     @classmethod
-    def nombre_no_vacio(cls, v: Optional[str]) -> Optional[str]:
+    def nombre_parece_un_nombre(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        # La misma regla que al crear: si editar fuera más permisivo, el
+        # agujero seguiría abierto por la otra puerta (RTF-01 / R1-3).
         if v is not None:
-            v = v.strip()
-            if not v:
-                raise ValueError("Este campo no puede estar vacio.")
+            return validar_nombre_persona(v, info.field_name or "nombre")
+        return v
+
+    @field_validator("telefono")
+    @classmethod
+    def telefono_de_ocho_digitos(cls, v: Optional[str]) -> Optional[str]:
+        # La misma regla que al crear (RTF-01 / R1-4). Una cadena vacía se
+        # trata como «quitar el teléfono», no como un número inválido.
+        if v is None or not v.strip():
+            return None
+        return validar_telefono(v)
         return v
 
     @field_validator("fecha_contratacion")

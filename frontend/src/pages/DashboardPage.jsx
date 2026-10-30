@@ -15,6 +15,8 @@ import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
 import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
+import { etiquetaEstado, variantePorEstado } from '../components/mapa/estadoColor'
+import { contarTareas } from '../utils/plural'
 import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
 
@@ -183,14 +185,34 @@ export default function DashboardPage() {
           onClick={() => navigate('/supervisor/historial-tareas')}
           clickable
         />
+        {/* RTF-01 / R2-1: faltaba la tarjeta de las tareas en curso, así que
+            el panel decía «Tareas pendientes: 0» mientras había dos en marcha
+            y vencidas. Una tarea empezada no estaba en «pendientes» (ya no lo
+            está) ni en «completadas» (todavía no): no aparecía en ninguna
+            parte, y los números no cuadraban entre sí. El sufijo con el total
+            de abiertas es lo que deja comprobar la suma de un vistazo. */}
         <MetricCard
-          label="Tareas pendientes"
+          label="Pendientes"
           value={metricas?.tareas_pendientes ?? 0}
+          suffix={
+            metricas?.tareas_activas
+              ? `${metricas.tareas_activas} abiertas`
+              : null
+          }
           variant="warning"
+        />
+        <MetricCard
+          label="En curso"
+          value={metricas?.tareas_en_progreso ?? 0}
+          variant="info"
         />
         <MetricCard
           label="En retraso"
           value={metricas?.tareas_retrasadas ?? 0}
+          /* «De las abiertas»: es un subconjunto de pendientes + en curso, no
+             una cuarta categoría. Sin decirlo, el que suma las cuatro
+             tarjetas obtiene más tareas de las que hay. */
+          suffix="de las abiertas"
           variant="danger"
           onClick={() => navigate('/supervisor/alertas')}
           clickable
@@ -220,7 +242,8 @@ export default function DashboardPage() {
                 <div className={styles.tecnicoInfo}>
                   <span className={styles.tecnicoNombre}>{tec.nombre_completo}</span>
                   <span className={styles.tecnicoTareas}>
-                    {tec.tareas_asignadas ?? 0} tareas activas
+                    {/* RTF-01 / R2-9: decía «1 tareas activas». */}
+                    {contarTareas(tec.tareas_asignadas ?? 0)}
                     {tec.alLimite && ' · al límite'}
                   </span>
                 </div>
@@ -284,13 +307,13 @@ export default function DashboardPage() {
                       </span>
                     </button>
                   )}
+                  {/* RTF-01 / R2-8: salía el valor crudo del backend
+                      («en_progreso») porque se pasaba `tarea.estado` tal cual.
+                      Las dos cosas —texto y color— vienen ahora del mismo sitio
+                      que el resto de la aplicación. */}
                   <Badge
-                    label={tarea.estado}
-                    variant={
-                      tarea.estado === 'completado'  ? 'success' :
-                      tarea.estado === 'en_progreso' ? 'info'    :
-                      tarea.estado === 'retrasado'   ? 'danger'  : 'warning'
-                    }
+                    label={etiquetaEstado(tarea.estado)}
+                    variant={variantePorEstado(tarea.estado)}
                   />
                 </div>
               </li>

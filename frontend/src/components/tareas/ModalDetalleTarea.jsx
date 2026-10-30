@@ -13,16 +13,14 @@
 
 import Badge from '../ui/Badge'
 import Modal, { ModalActions } from '../ui/Modal'
-import { PRIORIDAD_LABEL, variantePorPrioridad } from '../mapa/estadoColor'
+import {
+  PRIORIDAD_LABEL,
+  etiquetaEstado,
+  variantePorPrioridad,
+} from '../mapa/estadoColor'
 import { describirVencimiento, formatearFecha } from '../../utils/vencimiento'
 import styles from './ModalDetalleTarea.module.css'
 
-const ESTADO_LABEL = {
-  pendiente:   'Pendiente',
-  en_progreso: 'En curso',
-  completado:  'Completado',
-  cancelado:   'Cancelado',
-}
 
 const ESTADO_VARIANT = {
   pendiente:   'warning',
@@ -61,7 +59,7 @@ export default function ModalDetalleTarea({
       <div className={styles.cuerpo}>
         <div className={styles.badges}>
           <Badge
-            label={ESTADO_LABEL[estado] ?? estado}
+            label={etiquetaEstado(estado)}
             variant={ESTADO_VARIANT[estado] ?? 'muted'}
           />
           <Badge

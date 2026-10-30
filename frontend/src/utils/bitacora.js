@@ -20,6 +20,13 @@ export const ACCIONES = {
   acceso_denegado:    { texto: 'Acceso denegado',     variante: 'warning' },
   purgar:             { texto: 'Purga',               variante: 'warning' },
   reencadenar:        { texto: 'Re-encadenado',       variante: 'muted' },
+  // RTF-01 / R1-6: estas acciones existían en el backend pero no aquí, así
+  // que la bitácora mostraba el identificador crudo («renovar_sesion»). Un
+  // registro de auditoría que hay que descifrar no lo lee nadie.
+  login:              { texto: 'Inició sesión',       variante: 'success' },
+  renovar_sesion:     { texto: 'Renovó su sesión',    variante: 'muted' },
+  limite_ubicaciones: { texto: 'Exceso de ubicaciones', variante: 'warning' },
+  error_interno:      { texto: 'Error interno',       variante: 'danger' },
 }
 
 export function textoAccion(accion) {

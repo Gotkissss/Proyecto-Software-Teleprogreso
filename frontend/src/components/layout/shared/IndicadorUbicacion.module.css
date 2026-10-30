@@ -11,7 +11,12 @@
   font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
-  max-width: 132px;
+  /* RTF-01 / R3-11: con 132px el aviso salía como «Ubicación no d…», cortado
+     a media palabra. Los textos de alerta se acortaron (ver el componente) y
+     el tope sube a lo que ocupan enteros; la explicación completa sigue en el
+     `title`. En una pantalla estrecha, si aun así no cabe, se recorta — pero
+     ahora lo que se recorta ya se entiende. */
+  max-width: 168px;
   overflow: hidden;
 }
 
