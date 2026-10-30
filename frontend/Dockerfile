@@ -54,13 +54,15 @@ COPY nginx/default.conf.tpl nginx/seguridad.conf.tpl /etc/nginx/plantillas/
 # usuario `nginx`, el pid va a /tmp y el puerto por defecto es uno que no
 # exige privilegios (Railway pone el suyo en $PORT).
 #
-# Lo que el arranque escribe vive bajo /tmp, no bajo /etc. La versión
-# anterior le daba la carpeta de configuración al usuario `nginx` con un
-# `chown`, y eso solo sirve si el contenedor corre con ESE usuario: Railway
-# lo arranca con otro, así que moría en "can't create
+# Lo que el arranque escribe vive bajo /tmp, no bajo /etc. La versión anterior
+# le daba /etc/nginx/conf.d al usuario `nginx` con un `chown`, pero ese cambio
+# de dueño no sobrevive a la imagen que construye Railway: dentro del
+# contenedor desplegado la carpeta llega con dueño root y modo 755 (visto por
+# `railway ssh`), mientras que el proceso sí arranca como `nginx` (uid 101).
+# Así que no podía escribir ahí: moría en "can't create
 # /etc/nginx/conf.d/default.conf: Permission denied" y el sitio pasó cuatro
-# días devolviendo 502, tapado por la caché de la PWA. /tmp lo escribe
-# cualquier usuario, así que arranca corra con el uid que corra.
+# días devolviendo 502, tapado por la caché de la PWA. /tmp es 1777, así que
+# no depende de que ningún `chown` llegue entero al despliegue.
 RUN sed -i '/^user /d' /etc/nginx/nginx.conf \
     && sed -i 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
     && sed -i 's#include /etc/nginx/conf.d/[*].conf;#include /tmp/nginx/conf.d/*.conf;#' /etc/nginx/nginx.conf \
