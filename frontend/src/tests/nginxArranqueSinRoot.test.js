@@ -3,13 +3,14 @@
  * ---------------------------------------------------------------------------
  * Regresión del frontend que estuvo cuatro días devolviendo 502.
  *
- * El contenedor de producción no corre como root. El arranque genera la
- * configuración de nginx a partir de las plantillas y la escribía en
- * /etc/nginx/conf.d, que solo puede escribir su dueño: el Dockerfile se la
- * daba al usuario `nginx` con un `chown`, pero Railway arranca el contenedor
- * con otro usuario, así que moría en "can't create ...: Permission denied" y
- * reiniciaba en bucle. No se notó porque el service worker seguía sirviendo la
- * app desde la caché; el único síntoma visible era el logo roto.
+ * El contenedor de producción corre como `nginx` (uid 101), no como root. El
+ * arranque genera la configuración de nginx a partir de las plantillas y la
+ * escribía en /etc/nginx/conf.d: el Dockerfile le daba esa carpeta al usuario
+ * `nginx` con un `chown`, pero el cambio de dueño no sobrevive a la imagen que
+ * construye Railway y la carpeta llega con dueño root y modo 755. Así que
+ * moría en "can't create ...: Permission denied" y reiniciaba en bucle. No se
+ * notó porque el service worker seguía sirviendo la app desde la caché; el
+ * único síntoma visible era el logo roto.
  *
  * Estos tests fijan dos cosas que tienen que seguir cuadrando entre el
  * Dockerfile y las plantillas, y que nada vuelve a escribir bajo /etc.
