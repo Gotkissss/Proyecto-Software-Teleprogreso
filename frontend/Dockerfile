@@ -51,12 +51,20 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx/default.conf.tpl nginx/seguridad.conf.tpl /etc/nginx/plantillas/
 
 # Sin root (HU-S10-06): el proceso maestro de nginx también corre como el
-# usuario `nginx`. Para eso el pid va a /tmp, nginx puede escribir su caché y
-# la carpeta donde el arranque genera la configuración, y el puerto por
-# defecto es uno que no exige privilegios (Railway pone el suyo en $PORT).
+# usuario `nginx`, el pid va a /tmp y el puerto por defecto es uno que no
+# exige privilegios (Railway pone el suyo en $PORT).
+#
+# Lo que el arranque escribe vive bajo /tmp, no bajo /etc. La versión
+# anterior le daba la carpeta de configuración al usuario `nginx` con un
+# `chown`, y eso solo sirve si el contenedor corre con ESE usuario: Railway
+# lo arranca con otro, así que moría en "can't create
+# /etc/nginx/conf.d/default.conf: Permission denied" y el sitio pasó cuatro
+# días devolviendo 502, tapado por la caché de la PWA. /tmp lo escribe
+# cualquier usuario, así que arranca corra con el uid que corra.
 RUN sed -i '/^user /d' /etc/nginx/nginx.conf \
     && sed -i 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
-    && chown -R nginx:nginx /var/cache/nginx /etc/nginx/conf.d
+    && sed -i 's#include /etc/nginx/conf.d/[*].conf;#include /tmp/nginx/conf.d/*.conf;#' /etc/nginx/nginx.conf \
+    && grep -q '/tmp/nginx/conf.d' /etc/nginx/nginx.conf
 USER nginx
 
 ENV PORT=8080
@@ -66,4 +74,4 @@ EXPOSE 8080
 # fotos. Es la misma VITE_API_URL de la build (en Railway la variable existe al
 # construir y al correr); sin ella, el backend de Railway, igual que el
 # respaldo de api/client.js.
-CMD ["sh", "-c", "API=${VITE_API_URL:-https://backend-production-6d60.up.railway.app}; API=${API%/}; CABECERA=Content-Security-Policy; [ \"$CSP_SOLO_REPORTE\" = true ] && CABECERA=Content-Security-Policy-Report-Only; sed \"s/__PORT__/$PORT/g\" /etc/nginx/plantillas/default.conf.tpl > /etc/nginx/conf.d/default.conf && sed -e \"s#__API__#$API#g\" -e \"s#__CSP_HEADER__#$CABECERA#g\" /etc/nginx/plantillas/seguridad.conf.tpl > /etc/nginx/conf.d/seguridad.inc && exec nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "echo \"nginx arranca como $(id)\"; mkdir -p /tmp/nginx/conf.d; API=${VITE_API_URL:-https://backend-production-6d60.up.railway.app}; API=${API%/}; CABECERA=Content-Security-Policy; [ \"$CSP_SOLO_REPORTE\" = true ] && CABECERA=Content-Security-Policy-Report-Only; sed \"s/__PORT__/$PORT/g\" /etc/nginx/plantillas/default.conf.tpl > /tmp/nginx/conf.d/default.conf && sed -e \"s#__API__#$API#g\" -e \"s#__CSP_HEADER__#$CABECERA#g\" /etc/nginx/plantillas/seguridad.conf.tpl > /tmp/nginx/conf.d/seguridad.inc && exec nginx -g 'daemon off;'"]
