@@ -44,18 +44,25 @@ import { DURACION_CONTEO, retraso, variantes } from './movimiento'
  *   login, donde la entrada no empieza al montarse sino cuando el splash se
  *   va: el splash tapa la pantalla casi dos segundos, así que animar antes
  *   significa animar detrás de él y que el formulario aparezca ya puesto.
+ * @param {string}  props.ritmo  'normal' para una pantalla que se abre una vez
+ *   al entrar; 'rapido' para las listas y tablas de trabajo, que alguien abre
+ *   veinte veces al día y donde el gesto del panel se vuelve una espera.
  */
 export function Entra({
   as = 'div',
   desde = 'abajo',
   turno = 0,
   activo = true,
+  ritmo = 'normal',
   children,
   ...resto
 }) {
   const reducido = useReducedMotion()
   const Pieza = m[as] ?? m.div
-  const pasos = useMemo(() => variantes(desde, Boolean(reducido)), [desde, reducido])
+  const pasos = useMemo(
+    () => variantes(desde, Boolean(reducido), ritmo),
+    [desde, reducido, ritmo],
+  )
 
   return (
     <LazyMotion features={domAnimation}>
@@ -90,8 +97,10 @@ export function Entra({
  * @param {number}   props.turno    Mismo turno que la pieza que la contiene.
  * @param {function} props.formato  Cómo se escribe cada paso ("85 %", "3,4 h").
  *   Tiene que ser estable entre renders: si cambia, el conteo vuelve a empezar.
+ * @param {string}   props.ritmo    El mismo que la pieza que la contiene, para
+ *   que la cifra empiece a contar cuando su tarjeta llega y no antes.
  */
-export function NumeroAnimado({ valor, turno = 0, formato = null }) {
+export function NumeroAnimado({ valor, turno = 0, formato = null, ritmo = 'normal' }) {
   const reducido = useReducedMotion()
   const ref = useRef(null)
   const esNumero = typeof valor === 'number' && Number.isFinite(valor)
@@ -119,13 +128,13 @@ export function NumeroAnimado({ valor, turno = 0, formato = null }) {
 
     const conteo = animate(0, valor, {
       duration: DURACION_CONTEO,
-      delay: retraso(turno),
+      delay: retraso(turno, ritmo),
       ease: 'easeOut',
       onUpdate: (n) => { nodo.textContent = pintar(n) },
       onComplete: () => { nodo.textContent = pintar(valor) },
     })
     return () => conteo.stop()
-  }, [valor, esNumero, reducido, turno, pintar])
+  }, [valor, esNumero, reducido, turno, ritmo, pintar])
 
   // Lo que se pinta en el primer render es el principio del conteo, no el
   // final: con el final puesto se veria la cifra correcta y acto seguido

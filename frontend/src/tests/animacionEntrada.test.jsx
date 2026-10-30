@@ -30,7 +30,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { act } from 'react'
-import { PASO, RECORRIDOS, TOPE, retraso, variantes } from '../anim/movimiento'
+import { RECORRIDOS, RITMOS, TOPE, retraso, variantes } from '../anim/movimiento'
 import { NumeroAnimado } from '../anim/Entra'
 
 vi.mock('react-router-dom', () => ({
@@ -51,11 +51,17 @@ const REPOSO = {
   rotateX: 0,
   rotateY: 0,
   scale: 1,
+  scaleX: 1,
 }
 
+/** Cada recorrido con cada ritmo: las dos cosas que se combinan en pantalla. */
+const COMBINACIONES = Object.keys(RECORRIDOS).flatMap((desde) =>
+  Object.keys(RITMOS).map((ritmo) => [desde, ritmo]),
+)
+
 describe('recorridos: toda pieza que se mueve vuelve a su sitio', () => {
-  it.each(Object.keys(RECORRIDOS))('%s deja la pieza en su posicion final', (desde) => {
-    const { oculto, visible } = variantes(desde)
+  it.each(COMBINACIONES)('%s a ritmo %s deja la pieza en su posicion final', (desde, ritmo) => {
+    const { oculto, visible } = variantes(desde, false, ritmo)
     const llegada = visible(0)
 
     expect(oculto.opacity).toBe(0)
@@ -84,8 +90,8 @@ describe('recorridos: toda pieza que se mueve vuelve a su sitio', () => {
 })
 
 describe('menos movimiento', () => {
-  it.each(Object.keys(RECORRIDOS))('%s se queda sin recorrido pero igual aparece', (desde) => {
-    const { oculto, visible } = variantes(desde, true)
+  it.each(COMBINACIONES)('%s a ritmo %s se queda sin recorrido pero igual aparece', (desde, ritmo) => {
+    const { oculto, visible } = variantes(desde, true, ritmo)
 
     // Aparecer no es opcional: la pieza arranca invisible.
     expect(oculto).toEqual({ opacity: 0 })
@@ -103,22 +109,72 @@ describe('menos movimiento', () => {
 describe('turnos', () => {
   it('reparte el retraso pieza por pieza', () => {
     expect(retraso(0)).toBe(0)
-    expect(retraso(1)).toBeCloseTo(PASO)
-    expect(retraso(3)).toBeCloseTo(3 * PASO)
+    expect(retraso(1)).toBeCloseTo(RITMOS.normal.paso)
+    expect(retraso(3)).toBeCloseTo(3 * RITMOS.normal.paso)
   })
 
-  it('congela el retraso en el tope, asi una lista larga no se hace eterna', () => {
-    expect(retraso(TOPE)).toBeCloseTo(TOPE * PASO)
-    expect(retraso(TOPE + 1)).toBe(retraso(TOPE))
-    expect(retraso(30)).toBe(retraso(TOPE))
-    // Media ruta esperando: lo que el tope existe para evitar.
-    expect(retraso(30)).toBeLessThan(1)
+  it.each(Object.keys(RITMOS))('congela el retraso en el tope a ritmo %s', (ritmo) => {
+    expect(retraso(TOPE, ritmo)).toBeCloseTo(TOPE * RITMOS[ritmo].paso)
+    expect(retraso(TOPE + 1, ritmo)).toBe(retraso(TOPE, ritmo))
+    expect(retraso(30, ritmo)).toBe(retraso(TOPE, ritmo))
+    // Media lista esperando: lo que el tope existe para evitar.
+    expect(retraso(30, ritmo)).toBeLessThan(1)
   })
 
   it('una pieza sin turno, o mal marcada, entra enseguida', () => {
     expect(retraso(undefined)).toBe(0)
     expect(retraso(-5)).toBe(0)
     expect(retraso(Number.NaN)).toBe(0)
+  })
+
+  it('un ritmo que no existe cae en el normal en vez de romperse', () => {
+    expect(retraso(3, 'turbo')).toBe(retraso(3, 'normal'))
+  })
+})
+
+/**
+ * El ritmo rapido no es el normal con otro numero: es el que llevan las listas
+ * de trabajo, que alguien abre veinte veces al dia. Si deja de ser mas corto
+ * que el del panel, vuelve a estorbar y nadie lo nota leyendo el codigo.
+ */
+describe('ritmo rapido', () => {
+  it('escalona mas apretado que el del panel', () => {
+    expect(RITMOS.rapido.paso).toBeLessThan(RITMOS.normal.paso)
+    expect(retraso(TOPE, 'rapido')).toBeLessThan(retraso(TOPE, 'normal'))
+    // Una lista larga termina de entrar en algo mas de medio segundo.
+    expect(retraso(40, 'rapido')).toBeLessThan(0.35)
+  })
+
+  it('acorta el recorrido sin cambiar su direccion', () => {
+    const normal = variantes('abajo', false, 'normal').oculto
+    const rapido = variantes('abajo', false, 'rapido').oculto
+
+    expect(rapido.y).toBeLessThan(normal.y)
+    expect(Math.sign(rapido.y)).toBe(Math.sign(normal.y))
+    expect(rapido.y).toBeCloseTo(normal.y * RITMOS.rapido.recorrido)
+  })
+
+  it('acerca las escalas a 1 en vez de encogerlas hacia 0', () => {
+    // La trampa: `scale` reposa en 1, no en 0. Multiplicar por el factor
+    // haria que la pieza saliera de un punto diminuto justo cuando se
+    // pedia un gesto mas discreto.
+    const normal = variantes('cae', false, 'normal').oculto
+    const rapido = variantes('cae', false, 'rapido').oculto
+
+    expect(normal.scale).toBeCloseTo(0.86)
+    expect(rapido.scale).toBeGreaterThan(normal.scale)
+    expect(rapido.scale).toBeLessThan(1)
+    expect(rapido.scale).toBeCloseTo(1 - (1 - 0.86) * RITMOS.rapido.recorrido)
+  })
+
+  it('conserva la perspectiva tal cual, que no es un desplazamiento', () => {
+    const normal = variantes('derecha', false, 'normal').oculto
+    const rapido = variantes('derecha', false, 'rapido').oculto
+    expect(rapido.transformPerspective).toBe(normal.transformPerspective)
+  })
+
+  it('llega antes a destino que el ritmo del panel', () => {
+    expect(RITMOS.rapido.muelle.stiffness).toBeGreaterThan(RITMOS.normal.muelle.stiffness)
   })
 })
 

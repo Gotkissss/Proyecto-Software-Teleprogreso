@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Entra } from '../anim/Entra'
 import { useAuth } from '../context/AuthContext'
 import { urlArchivo } from '../api/client'
 import { getTareasCompletadas } from '../api/rutaService'
@@ -81,7 +82,7 @@ function horaDe(isoDateTime) {
 
 /* ── Tarjeta de una tarea cerrada ─────────────────────────────────────────── */
 
-function TareaCompletadaCard({ tarea, mostrarTecnico, alExpirar }) {
+function TareaCompletadaCard({ tarea, mostrarTecnico, alExpirar, turno = 0 }) {
   const [idAmpliada, setIdAmpliada] = useState(null)
   // Se busca por id para que el visor use el enlace renovado, no el del clic.
   const fotoAmpliada = urlArchivo(
@@ -89,7 +90,7 @@ function TareaCompletadaCard({ tarea, mostrarTecnico, alExpirar }) {
   )
 
   return (
-    <article className={styles.card}>
+    <Entra as="article" ritmo="rapido" turno={turno} className={styles.card}>
       <div className={styles.cardHead}>
         <span className={styles.checkIcon}><IconCheck /></span>
         <div className={styles.cardTitulo}>
@@ -157,7 +158,7 @@ function TareaCompletadaCard({ tarea, mostrarTecnico, alExpirar }) {
           <FotoEvidencia src={fotoAmpliada} alt="Evidencia ampliada" alExpirar={alExpirar} />
         </div>
       )}
-    </article>
+    </Entra>
   )
 }
 
@@ -349,9 +350,10 @@ export default function HistorialTareasPage() {
                 </span>
               </div>
               <div className={styles.diaLista}>
-                {dia.tareas.map((tarea) => (
+                {dia.tareas.map((tarea, i) => (
                   <TareaCompletadaCard
                     key={tarea.id_tarea}
+                    turno={i}
                     tarea={tarea}
                     mostrarTecnico={esSupervision}
                     alExpirar={renovarEnlaces}

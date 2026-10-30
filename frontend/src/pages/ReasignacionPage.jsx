@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Entra } from '../anim/Entra'
 import { useNavigate } from 'react-router-dom'
 import Modal, { ModalActions } from '../components/ui/Modal'
 import PageState from '../components/ui/PageState'
@@ -703,7 +704,7 @@ export default function ReasignacionPage() {
                 {grupo.tareas.length === 0 ? (
                   <p className={styles.boardColumnEmpty}>Sin tareas</p>
                 ) : (
-                  grupo.tareas.map((tarea) => {
+                  grupo.tareas.map((tarea, i) => {
                     const id = tarea.id_tarea ?? tarea.id
                     const estado = estadoDe(tarea)
                     const prioridad = (tarea.prioridad ?? 'media').toLowerCase()
@@ -726,7 +727,9 @@ export default function ReasignacionPage() {
                       : null
 
                     return (
-                      <div
+                      <Entra
+                        ritmo="rapido"
+                        turno={i}
                         key={id}
                         className={`${styles.tareaCard} ${styles[`acento_${acentoDe(estado)}`]}`}
                       >
@@ -835,7 +838,7 @@ export default function ReasignacionPage() {
                             Reasignar
                           </button>
                         </div>
-                      </div>
+                      </Entra>
                     )
                   })
                 )}
