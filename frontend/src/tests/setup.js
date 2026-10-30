@@ -8,7 +8,18 @@
  */
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
+import { MotionGlobalConfig } from 'motion/react'
 import { afterEach, vi } from 'vitest'
+
+// Las animaciones de entrada llegan a su destino al instante en las pruebas.
+// Sin esto, cada pantalla renderiza con sus piezas invisibles y sus cifras en
+// cero, y cualquier comprobación de que algo se ve acabaría fallando por el
+// movimiento y no por lo que estaba probando.
+//
+// Es `instantAnimations` y no `skipAnimations`: el segundo no salta al final,
+// deja la pieza en su estado inicial, que es precisamente el invisible. El
+// contrato del movimiento se comprueba aparte, en animacionEntrada.test.jsx.
+MotionGlobalConfig.instantAnimations = true
 
 // jsdom no implementa la API de object URLs. Los componentes que muestran el
 // preview de una foto antes de subirla (ModalFinalizarTarea, ModalEvidencias)

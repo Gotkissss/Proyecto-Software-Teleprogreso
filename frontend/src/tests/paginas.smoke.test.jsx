@@ -306,18 +306,22 @@ function renderizar(Pagina) {
 }
 
 /**
- * Falla si la pantalla no reparte turnos de entrada.
+ * Falla si la pantalla no reparte turnos de entrada, o si alguna pieza se
+ * queda por el camino.
  *
- * Las clases `entra*` las define index.css y lo que hacen es visual, pero el
- * cableado sí se puede comprobar aquí: si alguien quita la clase de un
- * contenedor al reordenar el JSX, la pantalla vuelve a aparecer de golpe y
- * nadie se entera hasta verlo en el navegador.
+ * El recorrido es visual y no se puede comprobar aquí, pero sí las dos cosas
+ * que lo rompen sin avisar: que alguien saque un `<Entra>` al reordenar el
+ * JSX y la pantalla vuelva a aparecer de golpe, y que una pieza se quede
+ * invisible porque su animación nunca llegó a arrancar. Eso último no se nota
+ * en las demás pruebas, que buscan textos sin mirar si se ven.
  */
-function esperarEntradaEscalonada(container) {
-  const piezas = container.querySelectorAll(
-    '.entra, .entraIzquierda, .entraDerecha, .entraHijos',
-  )
-  expect(piezas.length).toBeGreaterThan(0)
+async function esperarEntradaEscalonada(container) {
+  const piezas = () => [...container.querySelectorAll('[style*="opacity"]')]
+  expect(piezas().length).toBeGreaterThan(2)
+
+  await waitFor(() => {
+    expect(piezas().filter((el) => el.style.opacity !== '1')).toHaveLength(0)
+  })
 }
 
 /** Falla si la página termina de cargar y no pinta ningún texto. */
@@ -340,7 +344,7 @@ describe('Pantallas del técnico', () => {
     const { container } = renderizar(RutaDiariaPage)
     await esperarContenido(container)
     expect(await screen.findByText('Instalación fibra óptica')).toBeInTheDocument()
-    esperarEntradaEscalonada(container)
+    await esperarEntradaEscalonada(container)
   })
 
   it('EquipoPage muestra el vehículo asignado', async () => {
@@ -387,7 +391,7 @@ describe('Pantallas del supervisor', () => {
     expect(await screen.findByText('Panel de control')).toBeInTheDocument()
     // La exportación se mudó a Reportes (HU-S9-04): el supervisor ya no la ve.
     expect(screen.queryByRole('button', { name: /Exportar reporte/i })).not.toBeInTheDocument()
-    esperarEntradaEscalonada(container)
+    await esperarEntradaEscalonada(container)
   })
 
   it('ReportesPage muestra indicadores, tendencia y el resumen por empleado', async () => {
@@ -397,7 +401,7 @@ describe('Pantallas del supervisor', () => {
     expect(await screen.findByText('Juan Pérez', { selector: 'td' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Reportes' })).toBeInTheDocument()
     expect(screen.getByText('Tareas completadas', { selector: 'span' })).toBeInTheDocument()
-    esperarEntradaEscalonada(container)
+    await esperarEntradaEscalonada(container)
   })
 
   it('ReasignacionPage muestra la lista de tareas', async () => {
