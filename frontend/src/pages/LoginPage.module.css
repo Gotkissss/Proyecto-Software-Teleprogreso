@@ -154,9 +154,11 @@
   margin: 0 auto;
   min-height: 100dvh;
   width: 100%;
+  /* El bloque solo deja de estar oculto; el movimiento lo hacen sus piezas,
+     que entran escalonadas (clases `entra*` de index.css). Antes el bloque
+     entero se desvanecía durante 700ms y la pantalla llegaba de una pieza. */
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 700ms ease-out, transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 180ms ease-out;
 }
 
 /* En monitores grandes mantenemos el contenido centrado y compacto
@@ -169,8 +171,6 @@
 }
 .layoutVisible {
   opacity: 1;
-  transform: translateY(0);
-  transition-delay: 200ms;
 }
 
 /* ── Lado izquierdo: branding ────────────────────────── */
@@ -438,4 +438,19 @@
    fuera de la pantalla. */
 .avisoSlot {
   min-height: 48px;
+}
+
+/* Quien pidió menos movimiento ve el splash quieto. El `splashOut` solo
+   hacía el desvanecido: el splash se desmonta por el temporizador de
+   `splashDone`, así que sin animación tampoco se queda pegado. */
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .splashLogo,
+  .splashTagline,
+  .splashDots span {
+    animation: none;
+  }
+  .layout {
+    transition: none;
+  }
 }

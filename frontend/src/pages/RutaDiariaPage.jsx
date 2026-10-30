@@ -482,7 +482,7 @@ export default function RutaDiariaPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.pageHeader}>
+      <header className={`${styles.pageHeader} entra`} style={{ '--orden': 0 }}>
         <div className={styles.dateRow}>
           <span className={styles.dateLabel}>
             <IconCalendar />
@@ -497,7 +497,7 @@ export default function RutaDiariaPage() {
       </header>
 
       {/* Contadores — derivados de las tareas reales del día */}
-      <section className={styles.resumen}>
+      <section className={`${styles.resumen} entra`} style={{ '--orden': 1 }}>
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconPin /></span>
           <span className={styles.resumenValue}>
@@ -545,6 +545,8 @@ export default function RutaDiariaPage() {
         </div>
       )}
 
+      {/* La seccion no se mueve: el movimiento lo hacen sus tarjetas, y
+          animar las dos cosas a la vez se ve como un doble empujon. */}
       <section className={styles.listSection}>
         <div className={styles.listHeader}>
           <h3 className={styles.listTitle}>Cronograma del Día</h3>
@@ -561,8 +563,10 @@ export default function RutaDiariaPage() {
             : 'Por prioridad · activa tu ubicación para ordenar por cercanía'}
         </p>
 
+        {/* Las paradas del día caen una tras otra. El turno se congela en la
+            novena, así una ruta larga no tarda más en terminar de entrar. */}
         {servicios.length > 0 ? (
-          <div className={styles.list}>
+          <div className={`${styles.list} entraHijos`}>
             {servicios.map((s) => (
               <ServicioCard
                 key={s.id_servicio}

@@ -55,6 +55,11 @@ export default function LoginPage() {
   const [parametros] = useSearchParams()
   const sesionExpirada = parametros.get('expirado') === '1'
 
+  // Las piezas de la pantalla entran cuando el splash se va, no al montarse:
+  // el splash las tapa casi dos segundos, así que animarlas antes significa
+  // que la entrada ocurre detrás de él y el formulario aparece ya puesto.
+  const anima = (variante) => (splashDone ? variante : '')
+
   // Splash screen: muestra el logo grande durante 1.6s antes
   // de revelar el formulario. Se omite si el usuario ya inició
   // sesión esta sesión del navegador.
@@ -108,7 +113,7 @@ export default function LoginPage() {
       {/* ── SPLASH SCREEN ─────────────────────────────────── */}
       {!splashDone && (
         <div className={styles.splash} aria-hidden="true">
-          <div className={styles.splashLogoRing}>
+          <div className={`${styles.splashLogoRing} destello`}>
             <img
               src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
@@ -128,45 +133,49 @@ export default function LoginPage() {
       <div className={`${styles.layout} ${splashDone ? styles.layoutVisible : ''}`}>
         {/* Lado izquierdo: branding */}
         <aside className={styles.brandSide}>
+          {/* El `--orden` dice en qué turno entra cada pieza; el retraso lo
+              calcula `.entraIzquierda` en index.css. La marca entra desde el
+              borde, igual que el lado en el que vive. */}
           <div className={styles.brandContent}>
             <img
               src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
-              className={styles.brandLogo}
+              className={`${styles.brandLogo} ${anima('entraIzquierda')}`}
+              style={{ '--orden': 0 }}
             />
-            <h2 className={styles.brandTitle}>
+            <h2 className={`${styles.brandTitle} ${anima('entraIzquierda')}`} style={{ '--orden': 1 }}>
               Control de Personal Operativo
             </h2>
-            <p className={styles.brandSubtitle}>
+            <p className={`${styles.brandSubtitle} ${anima('entraIzquierda')}`} style={{ '--orden': 2 }}>
               Gestión inteligente de técnicos, tareas y operaciones de campo
               en tiempo real.
             </p>
 
             {/* Highlights */}
             <ul className={styles.brandFeatures}>
-              <li>
-                <span className={styles.featDot} />
-                Monitoreo de jornadas en vivo
-              </li>
-              <li>
-                <span className={styles.featDot} />
-                Reasignación dinámica de tareas
-              </li>
-              <li>
-                <span className={styles.featDot} />
-                Alertas operativas inmediatas
-              </li>
+              {[
+                'Monitoreo de jornadas en vivo',
+                'Reasignación dinámica de tareas',
+                'Alertas operativas inmediatas',
+              ].map((texto, i) => (
+                <li key={texto} className={anima('entraIzquierda')} style={{ '--orden': 3 + i }}>
+                  <span className={styles.featDot} />
+                  {texto}
+                </li>
+              ))}
             </ul>
           </div>
 
-          <p className={styles.brandFooter}>
+          <p className={`${styles.brandFooter} ${anima('entraIzquierda')}`} style={{ '--orden': 6 }}>
             © {new Date().getFullYear()} Teleprogreso S.A.
           </p>
         </aside>
 
         {/* Lado derecho: formulario */}
         <main className={styles.formSide}>
-          <div className={styles.card}>
+          {/* La tarjeta entra como una pieza, desde su lado; dentro, los
+              campos se van colocando uno tras otro. */}
+          <div className={`${styles.card} ${anima('entraDerecha')}`} style={{ '--orden': 0 }}>
             {/* Logo móvil (oculto en desktop) */}
             <img
               src="/teleprogreso-logo.jpg"
@@ -209,7 +218,7 @@ export default function LoginPage() {
               </div>
 
               {/* Correo */}
-              <div className={styles.field}>
+              <div className={`${styles.field} ${anima('entra')}`} style={{ '--orden': 1 }}>
                 <label htmlFor="correo" className={styles.label}>
                   Correo electrónico
                 </label>
@@ -229,7 +238,7 @@ export default function LoginPage() {
               </div>
 
               {/* Contraseña */}
-              <div className={styles.field}>
+              <div className={`${styles.field} ${anima('entra')}`} style={{ '--orden': 2 }}>
                 <label htmlFor="contrasena" className={styles.label}>
                   Contraseña
                 </label>
@@ -259,7 +268,8 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                className={styles.submitBtn}
+                className={`${styles.submitBtn} ${anima('entra')}`}
+                style={{ '--orden': 3 }}
                 disabled={loading}
               >
                 {loading ? (
@@ -279,7 +289,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className={styles.helpText}>
+            <p className={`${styles.helpText} ${anima('entra')}`} style={{ '--orden': 4 }}>
               ¿Problemas para acceder? Contacta a tu supervisor.
             </p>
           </div>

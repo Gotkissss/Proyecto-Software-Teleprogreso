@@ -148,7 +148,7 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
+      <div className={`${styles.pageHeader} entra`} style={{ '--orden': 0 }}>
         <div>
           <h1 className={styles.title}>Panel de control</h1>
           <p className={styles.subtitle}>
@@ -162,7 +162,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Métricas ── */}
-      <section className={styles.metricsGrid}>
+      {/* Las tarjetas entran una tras otra; el turno lo pone `entraHijos` por
+          posicion, sin que cada MetricCard tenga que saberlo. */}
+      <section className={`${styles.metricsGrid} entraHijos`}>
         {/* Antes esta tarjeta decía "Técnicos activos" y, si el backend
             devolvía 0, mostraba el total de la plantilla. Resultado: el número
             no cuadraba con la lista de abajo. Ahora dice explícitamente
@@ -225,7 +227,7 @@ export default function DashboardPage() {
       <div className={styles.panelesGrid}>
 
       {/* ── Técnicos ── */}
-      <section className={styles.section}>
+      <section className={`${styles.section} entra`} style={{ '--orden': 5 }}>
         <h2 className={styles.sectionTitle}>Técnicos hoy</h2>
         {tecnicosList.length === 0 ? (
           <EmptyState
@@ -255,7 +257,7 @@ export default function DashboardPage() {
       </section>
 
       {/* ── Tareas recientes ── */}
-      <section className={styles.section}>
+      <section className={`${styles.section} entra`} style={{ '--orden': 6 }}>
         <h2 className={styles.sectionTitle}>Tareas recientes</h2>
         {tareasList.length === 0 ? (
           <EmptyState
