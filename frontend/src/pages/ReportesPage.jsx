@@ -223,7 +223,7 @@ export default function ReportesPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.cabecera}>
+      <div className={`${styles.cabecera} entra`} style={{ '--orden': 0 }}>
         <div>
           <h1 className={styles.title}>Reportes</h1>
           <p className={styles.subtitle}>
@@ -243,7 +243,7 @@ export default function ReportesPage() {
       </div>
 
       {/* ── Filtros: el rango manda sobre todo lo de abajo ── */}
-      <div className={styles.filtros}>
+      <div className={`${styles.filtros} entra`} style={{ '--orden': 1 }}>
         <div className={styles.atajos} role="group" aria-label="Periodo">
           {RANGOS_RAPIDOS.map((item) => (
             <button
@@ -301,7 +301,9 @@ export default function ReportesPage() {
             </p>
           )}
 
-          <section className={styles.kpis} aria-label="Indicadores del periodo">
+          {/* Los indicadores entran uno tras otro; el resto de la pantalla sigue
+              detras, en su turno. */}
+          <section className={`${styles.kpis} entraHijos`} aria-label="Indicadores del periodo">
             {KPIS.map((definicion) => (
               <Kpi
                 key={definicion.clave}
@@ -313,7 +315,7 @@ export default function ReportesPage() {
             ))}
           </section>
 
-          <section className={styles.tarjeta} aria-labelledby="titulo-tendencia">
+          <section className={`${styles.tarjeta} entra`} style={{ '--orden': 4 }} aria-labelledby="titulo-tendencia">
             <div className={styles.tarjetaCabecera}>
               <h2 id="titulo-tendencia" className={styles.tarjetaTitulo}>
                 {metricaSerie(metrica).etiqueta} por {agrupar === 'semana' ? 'semana' : 'día'}
@@ -356,7 +358,7 @@ export default function ReportesPage() {
             />
           ) : (
             <>
-              <section className={styles.tarjeta} aria-labelledby="titulo-productividad">
+              <section className={`${styles.tarjeta} entra`} style={{ '--orden': 5 }} aria-labelledby="titulo-productividad">
                 <div className={styles.tarjetaCabecera}>
                   <h2 id="titulo-productividad" className={styles.tarjetaTitulo}>
                     Tareas por hora trabajada, por técnico
@@ -369,7 +371,7 @@ export default function ReportesPage() {
                 />
               </section>
 
-              <section className={styles.tarjeta} aria-labelledby="titulo-resumen">
+              <section className={`${styles.tarjeta} entra`} style={{ '--orden': 6 }} aria-labelledby="titulo-resumen">
                 <div className={styles.tarjetaCabecera}>
                   <h2 id="titulo-resumen" className={styles.tarjetaTitulo}>Resumen por empleado</h2>
                   <span className={styles.ayuda}>Elige una fila para ver el detalle de esa persona.</span>

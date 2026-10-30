@@ -397,3 +397,120 @@ a {
   0%   { background-position: -1000px 0; }
   100% { background-position: 1000px 0; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Entrada de pantalla
+ *
+ * Las pantallas que se abren al entrar (login y el panel de cada rol) no
+ * aparecen de golpe: sus piezas entran escalonadas, de abajo hacia arriba.
+ * El orden lo decide cada pantalla con `--orden` (0, 1, 2...) y aqui se
+ * traduce a un retraso, asi el JSX solo dice "yo voy tercero" y el ritmo se
+ * ajusta desde un solo lugar.
+ *
+ * Solo se animan `opacity` y `transform`, que el navegador resuelve en la
+ * GPU sin rehacer el layout: la lista de tareas de un tecnico con un telefono
+ * modesto no se entrecorta. Nada de `filter: blur()`, que es justo lo que se
+ * atraganta en esos equipos.
+ *
+ * `backwards` mantiene la pieza oculta durante su retraso; sin el, todo
+ * aparece y luego salta a su sitio.
+ * ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --entrada-dur:   520ms;  /* notorio sin hacerse esperar */
+  --entrada-paso:   70ms;  /* separacion entre una pieza y la siguiente */
+  --entrada-tope:      8;  /* a partir de aqui ya no se acumula retraso */
+  --entrada-curva: cubic-bezier(0.22, 0.68, 0.32, 1);
+}
+
+@keyframes entradaSube {
+  from { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.97); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes entradaIzquierda {
+  from { opacity: 0; transform: translate3d(-26px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes entradaDerecha {
+  from { opacity: 0; transform: translate3d(26px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.entra,
+.entraIzquierda,
+.entraDerecha {
+  /* El tope evita que el elemento 30 de una lista espere dos segundos. */
+  animation-delay: calc(
+    min(var(--orden, 0), var(--entrada-tope)) * var(--entrada-paso)
+  );
+  animation-duration: var(--entrada-dur);
+  animation-timing-function: var(--entrada-curva);
+  animation-fill-mode: backwards;
+}
+
+.entra           { animation-name: entradaSube; }
+.entraIzquierda  { animation-name: entradaIzquierda; }
+.entraDerecha    { animation-name: entradaDerecha; }
+
+/* Un contenedor que escalona a sus hijos sin que el JSX diga nada: el turno
+ * sale de la posición en el DOM. Es lo que usan las rejillas de tarjetas y
+ * las listas, donde marcar pieza por pieza sería repetir lo mismo diez veces.
+ * A partir del noveno el turno se congela, así una lista de treinta tareas
+ * termina de entrar igual de rápido que una de nueve. */
+.entraHijos > * {
+  animation-name: entradaSube;
+  animation-duration: var(--entrada-dur);
+  animation-timing-function: var(--entrada-curva);
+  animation-fill-mode: backwards;
+  animation-delay: calc(
+    min(var(--orden, 0), var(--entrada-tope)) * var(--entrada-paso)
+  );
+}
+.entraHijos > *:nth-child(1) { --orden: 0; }
+.entraHijos > *:nth-child(2) { --orden: 1; }
+.entraHijos > *:nth-child(3) { --orden: 2; }
+.entraHijos > *:nth-child(4) { --orden: 3; }
+.entraHijos > *:nth-child(5) { --orden: 4; }
+.entraHijos > *:nth-child(6) { --orden: 5; }
+.entraHijos > *:nth-child(7) { --orden: 6; }
+.entraHijos > *:nth-child(8) { --orden: 7; }
+.entraHijos > *:nth-child(n+9) { --orden: 8; }
+
+/* Un brillo cruza la pieza una sola vez, al terminar de entrar. Se usa con
+ * moderacion: solo en el logo del login, que es donde se mira primero. */
+.destello {
+  position: relative;
+  overflow: hidden;
+}
+.destello::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 65%
+  );
+  transform: translate3d(-130%, 0, 0);
+  animation: destelloCruza 900ms var(--entrada-curva) 620ms 1 backwards;
+  pointer-events: none;
+}
+@keyframes destelloCruza {
+  to { transform: translate3d(130%, 0, 0); }
+}
+
+/* Quien pidio menos movimiento ve la pantalla puesta, sin recorridos. El
+ * `backwards` dejaria las piezas invisibles si solo se quitara la animacion,
+ * asi que se anulan por nombre y no por `animation: none` a medias. */
+@media (prefers-reduced-motion: reduce) {
+  .entra,
+  .entraIzquierda,
+  .entraDerecha,
+  .entraHijos > * {
+    animation: none;
+  }
+  .destello::after {
+    animation: none;
+    content: none;
+  }
+}
