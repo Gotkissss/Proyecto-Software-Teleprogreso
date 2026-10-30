@@ -110,7 +110,7 @@ export default function LoginPage() {
         <div className={styles.splash} aria-hidden="true">
           <div className={styles.splashLogoRing}>
             <img
-              src="/teleprogreso-logo.png"
+              src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
               className={styles.splashLogo}
             />
@@ -130,7 +130,7 @@ export default function LoginPage() {
         <aside className={styles.brandSide}>
           <div className={styles.brandContent}>
             <img
-              src="/teleprogreso-logo.png"
+              src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
               className={styles.brandLogo}
             />
@@ -169,7 +169,7 @@ export default function LoginPage() {
           <div className={styles.card}>
             {/* Logo móvil (oculto en desktop) */}
             <img
-              src="/teleprogreso-logo.png"
+              src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
               className={styles.mobileLogo}
             />

@@ -35,7 +35,7 @@ export default function CambioObligatorioPage() {
     <main className={styles.page}>
       <section className={styles.card} aria-labelledby="cambio-obligatorio-titulo">
         <img
-          src="/teleprogreso-logo.png"
+          src="/teleprogreso-logo.jpg"
           alt="Teleprogreso"
           className={styles.logo}
         />
