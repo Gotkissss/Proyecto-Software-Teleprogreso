@@ -97,18 +97,17 @@
 }
 
 /* ── Grid de métricas ─────────────────────────────────────── */
+/* Flex y no grid a proposito. Con `repeat(4, 1fr)` y cinco tarjetas, la
+   quinta —"En retraso", la que mas le importa a un supervisor— caia sola en
+   una segunda fila con tres huecos vacios a su derecha, y eso es lo que hacia
+   que el panel se viera a medio llenar. En flex, las tarjetas de la ultima
+   fila se reparten el ancho sobrante, asi que nunca queda hueco, haya cuatro
+   tarjetas, cinco o siete. */
 .metricsGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-5);
   margin-bottom: var(--space-8);
-}
-
-@media (max-width: 1024px) {
-  .metricsGrid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 520px) {
-  .metricsGrid { grid-template-columns: 1fr; }
 }
 
 /* ── Tarjeta de métrica ───────────────────────────────────── */
@@ -124,12 +123,10 @@
   overflow: hidden;
   box-shadow: var(--shadow-xs);
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
-  animation: fadeIn var(--transition-slow) ease-out backwards;
+  /* El reparto del ancho: cada tarjeta pide 190px y crece con lo que sobre. */
+  flex: 1 1 190px;
+  min-width: 0;
 }
-.metricCard:nth-child(1) { animation-delay: 0ms;   }
-.metricCard:nth-child(2) { animation-delay: 60ms;  }
-.metricCard:nth-child(3) { animation-delay: 120ms; }
-.metricCard:nth-child(4) { animation-delay: 180ms; }
 
 .metricCard::after {
   content: '';
@@ -383,4 +380,173 @@
     row-gap: var(--space-2);
     justify-content: space-between;
   }
+}
+/* ── Frescura de los datos ────────────────────────────────────
+   El panel carga al entrar y no vuelve a pedir nada. Decir de cuando son las
+   cifras es lo que evita decidir con numeros de hace dos horas creyendo que
+   son de ahora. El punto late despacio para que se lea como "esto esta vivo"
+   sin convertirse en una alarma parpadeando en la esquina. */
+.frescura {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.pulso {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  flex-shrink: 0;
+  animation: latido 2.4s ease-in-out infinite;
+}
+@keyframes latido {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
+.frescuraTexto {
+  white-space: nowrap;
+}
+.refrescarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-left: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+.refrescarBtn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+/* `capitalize` subiria cada palabra y dejaria "Viernes, 30 De Octubre". Solo
+   hace falta la primera letra, porque `toLocaleDateString` entrega el dia y el
+   mes en minuscula. `inline-block` es necesario: `::first-letter` no aplica a
+   una caja en linea. */
+.fecha {
+  display: inline-block;
+}
+.fecha::first-letter {
+  text-transform: uppercase;
+}
+
+/* En pantalla estrecha la cabecera ya se apila; el sello de frescura no debe
+   quedarse colgando a la derecha de un titulo partido en dos lineas. */
+@container (max-width: 640px) {
+  .refrescarTexto { display: none; }
+}
+
+/* ── Avance del día ───────────────────────────────────────────
+   Las cifras de las tarjetas, repartidas en una sola barra. No hay ningun
+   dato nuevo aqui: es la misma informacion contada de una forma que se lee
+   de un vistazo en vez de sumando cuatro numeros. */
+.avance {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-8);
+  box-shadow: var(--shadow-xs);
+}
+.avanceCabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.avanceTitulo {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+.avancePorcentaje {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-success);
+}
+
+.avanceBarra {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--color-border);
+  /* Sin esto la barra se abriria desde el centro hacia los dos lados en vez
+     de dibujarse de izquierda a derecha (ver el recorrido `barra`). */
+  transform-origin: left center;
+}
+.avanceTramo {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+}
+.tramo_completadas { background: var(--color-success); }
+.tramo_enCurso     { background: var(--color-primary); }
+.tramo_pendientes  { background: var(--color-warning); }
+
+.avanceLeyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.avanceItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.avancePunto {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.avanceRetraso {
+  color: var(--color-danger);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* ── Micro-barra de la tarjeta de métrica ─────────────────────
+   Solo la llevan las cifras que son parte de un total real. "En curso" no
+   tiene con que compararse y por eso no lleva barra: una inventada se leeria
+   como un dato. */
+.metricPista {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  overflow: hidden;
+}
+.metricPistaRelleno {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transform-origin: left center;
+}
+.metricCard.info    .metricPistaRelleno { background: var(--color-primary); }
+.metricCard.success .metricPistaRelleno { background: var(--color-success); }
+.metricCard.warning .metricPistaRelleno { background: var(--color-warning); }
+.metricCard.danger  .metricPistaRelleno { background: var(--color-danger);  }
+
+/* Quien pidio menos movimiento no ve el punto latiendo. */
+@media (prefers-reduced-motion: reduce) {
+  .pulso { animation: none; }
 }

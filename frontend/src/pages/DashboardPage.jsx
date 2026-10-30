@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getTareas } from '../api/tareaService'
 import { Entra, NumeroAnimado } from '../anim/Entra'
+import { useAuth } from '../context/AuthContext'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
@@ -18,6 +19,7 @@ import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
 import ModalEvidencias from '../components/tareas/ModalEvidencias'
 import { etiquetaEstado, variantePorEstado } from '../components/mapa/estadoColor'
 import { contarTareas } from '../utils/plural'
+import { fechaLarga, hace, proporcion, repartoDelDia, saludoPorHora } from '../utils/panel'
 import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
 
@@ -26,6 +28,13 @@ const IconFoto = () => (
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
     <polyline points="21 15 16 10 5 21" />
+  </svg>
+)
+
+const IconRefrescar = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <polyline points="21 3 21 9 15 9" />
   </svg>
 )
 
@@ -69,6 +78,7 @@ function estadoJornada(tec) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [metricas,      setMetricas]      = useState(null)
   const [tecnicosList,  setTecnicosList]  = useState([])
@@ -79,6 +89,11 @@ export default function DashboardPage() {
   const [tareaEvidencias, setTareaEvidencias] = useState(null)
   // Tarea abierta en la ficha de detalle (clic en la tarjeta)
   const [tareaDetalle, setTareaDetalle] = useState(null)
+  // Cuando se cargaron estos datos, y un reloj que avanza para poder decirlo.
+  // El panel no se refresca solo: sin esto, alguien puede decidir con cifras
+  // de hace dos horas creyendo que son de ahora.
+  const [cargadoEn, setCargadoEn] = useState(null)
+  const [ahora, setAhora] = useState(() => Date.now())
 
 
   const fetchData = useCallback(async () => {
@@ -118,6 +133,7 @@ export default function DashboardPage() {
               estado_tarea:       t.estado_tarea,
             }))
           )
+          setCargadoEn(Date.now())
       } catch (err) {
         console.error('Error al cargar el dashboard:', err)
         setError(
@@ -134,6 +150,14 @@ export default function DashboardPage() {
     fetchData()
   }, [fetchData])
 
+  // Medio minuto es el paso más largo que deja pasar de "hace un momento" a
+  // "hace 1 min" sin que se note el salto. No pide nada al servidor: solo
+  // mueve el reloj con el que se escribe esa frase.
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 30000)
+    return () => clearInterval(reloj)
+  }, [])
+
 
   if (loading || error) {
     return (
@@ -147,20 +171,47 @@ export default function DashboardPage() {
     )
   }
 
+  const primerNombre = (user?.nombre || 'supervisor').split(' ')[0]
+  const desdeCuando  = hace(cargadoEn, ahora) ?? 'ahora mismo'
+  const reparto      = repartoDelDia(metricas)
+
   return (
     <div className={styles.page}>
       <Entra turno={0} className={styles.pageHeader}>
         <div>
           <h1 className={styles.title}>Panel de control</h1>
+          {/* Antes aquí decía "en tiempo real", y no lo es: el panel carga al
+              entrar y no vuelve a pedir nada. Ahora dice de cuándo son las
+              cifras, que es lo que de verdad hace falta saber para fiarse de
+              ellas. */}
           <p className={styles.subtitle}>
-            Vista general de la operación en tiempo real
+            {saludoPorHora()}, {primerNombre} · <span className={styles.fecha}>{fechaLarga()}</span>
           </p>
         </div>
 
         {/* La exportación de reportes se mudó a la pantalla de Reportes
             (HU-S9-04), que es de admin y gerente: el Excel exige el mismo
             rol que el reporte que contiene. */}
+        <div className={styles.frescura}>
+          <span className={styles.pulso} aria-hidden="true" />
+          <span className={styles.frescuraTexto}>Actualizado {desdeCuando}</span>
+          <button
+            type="button"
+            className={styles.refrescarBtn}
+            onClick={fetchData}
+            title="Volver a pedir los datos"
+          >
+            <IconRefrescar />
+            <span className={styles.refrescarTexto}>Actualizar</span>
+          </button>
+        </div>
       </Entra>
+
+      {/* ── Avance del día ──
+          Las cuatro cifras de arriba, en una sola imagen. No añade ningún
+          dato: reparte los que ya están, que es lo que deja ver de un vistazo
+          si el día va bien o va justo. */}
+      <AvanceDelDia reparto={reparto} turno={1} />
 
       {/* ── Métricas ── */}
       {/* Las tarjetas caen de plano y se enderezan una tras otra, y cada cifra
@@ -173,14 +224,18 @@ export default function DashboardPage() {
             no cuadraba con la lista de abajo. Ahora dice explícitamente
             cuántos están en jornada sobre el total. */}
         <MetricCard
-          turno={1}          label="Técnicos en jornada"
+          turno={2}
+          label="Técnicos en jornada"
           value={metricas?.tecnicos_en_jornada ?? 0}
+          parteDe={metricas?.tecnicos_total ?? null}
           suffix={metricas?.tecnicos_total ? `de ${metricas.tecnicos_total}` : null}
           variant="info"
         />
         <MetricCard
-          turno={2}          label="Completadas hoy"
+          turno={3}
+          label="Completadas hoy"
           value={metricas?.tareas_completadas_hoy ?? 0}
+          parteDe={reparto.total || null}
           suffix={
             metricas?.tareas_completadas_total
               ? `${metricas.tareas_completadas_total} en total`
@@ -197,7 +252,8 @@ export default function DashboardPage() {
             parte, y los números no cuadraban entre sí. El sufijo con el total
             de abiertas es lo que deja comprobar la suma de un vistazo. */}
         <MetricCard
-          turno={3}          label="Pendientes"
+          turno={4}
+          label="Pendientes"
           value={metricas?.tareas_pendientes ?? 0}
           suffix={
             metricas?.tareas_activas
@@ -207,13 +263,16 @@ export default function DashboardPage() {
           variant="warning"
         />
         <MetricCard
-          turno={4}          label="En curso"
+          turno={5}
+          label="En curso"
           value={metricas?.tareas_en_progreso ?? 0}
           variant="info"
         />
         <MetricCard
-          turno={5}          label="En retraso"
+          turno={6}
+          label="En retraso"
           value={metricas?.tareas_retrasadas ?? 0}
+          parteDe={metricas?.tareas_activas ?? null}
           /* «De las abiertas»: es un subconjunto de pendientes + en curso, no
              una cuarta categoría. Sin decirlo, el que suma las cuatro
              tarjetas obtiene más tareas de las que hay. */
@@ -230,7 +289,7 @@ export default function DashboardPage() {
       <div className={styles.panelesGrid}>
 
       {/* ── Técnicos ── */}
-      <Entra as="section" turno={6} className={styles.section}>
+      <Entra as="section" turno={7} className={styles.section}>
         <h2 className={styles.sectionTitle}>Técnicos hoy</h2>
         {tecnicosList.length === 0 ? (
           <EmptyState
@@ -260,7 +319,7 @@ export default function DashboardPage() {
       </Entra>
 
       {/* ── Tareas recientes ── */}
-      <Entra as="section" turno={7} className={styles.section}>
+      <Entra as="section" turno={8} className={styles.section}>
         <h2 className={styles.sectionTitle}>Tareas recientes</h2>
         {tareasList.length === 0 ? (
           <EmptyState
@@ -351,7 +410,82 @@ export default function DashboardPage() {
   )
 }
 
-function MetricCard({ label, value, variant, onClick, clickable, suffix, turno = 0 }) {
+/**
+ * El día en una barra: lo cerrado, lo que está en marcha y lo que espera.
+ *
+ * No pide nada nuevo al backend; reparte las cifras que ya tienen las
+ * tarjetas de arriba. Las retrasadas se señalan aparte y no suman al total,
+ * porque son un subconjunto de pendientes y en curso: contarlas como cuarto
+ * tramo daría un porcentaje que no cuadra con las tarjetas.
+ */
+function AvanceDelDia({ reparto, turno = 0 }) {
+  const { completadas, enCurso, pendientes, retrasadas, total, porcentaje } = reparto
+
+  // Sin trabajo hoy no hay nada que repartir, y una barra vacía al 0 % se lee
+  // como "vas muy mal" en vez de "no hay tareas".
+  if (total === 0) return null
+
+  const tramos = [
+    { clave: 'completadas', n: completadas, etiqueta: 'completadas' },
+    { clave: 'enCurso',     n: enCurso,     etiqueta: 'en curso' },
+    { clave: 'pendientes',  n: pendientes,  etiqueta: 'pendientes' },
+  ].filter((tramo) => tramo.n > 0)
+
+  return (
+    <Entra turno={turno} className={styles.avance}>
+      <div className={styles.avanceCabecera}>
+        <h2 className={styles.avanceTitulo}>Avance del día</h2>
+        <span className={styles.avancePorcentaje}>
+          <NumeroAnimado valor={porcentaje} turno={turno} formato={(n) => `${Math.round(n)} %`} />
+        </span>
+      </div>
+
+      {/* La barra se dibuja de izquierda a derecha con `scaleX`, que el
+          navegador resuelve en la GPU; animar el ancho de cada tramo
+          obligaría a rehacer el layout en cada fotograma. */}
+      <Entra
+        desde="barra"
+        turno={turno}
+        className={styles.avanceBarra}
+        role="img"
+        aria-label={`${completadas} de ${total} tareas completadas hoy`}
+      >
+        {tramos.map((tramo) => (
+          <span
+            key={tramo.clave}
+            className={`${styles.avanceTramo} ${styles[`tramo_${tramo.clave}`]}`}
+            style={{ flexGrow: tramo.n }}
+          />
+        ))}
+      </Entra>
+
+      <div className={styles.avanceLeyenda}>
+        {tramos.map((tramo) => (
+          <span key={tramo.clave} className={styles.avanceItem}>
+            <span className={`${styles.avancePunto} ${styles[`tramo_${tramo.clave}`]}`} />
+            {tramo.n} {tramo.etiqueta}
+          </span>
+        ))}
+        {retrasadas > 0 && (
+          <span className={`${styles.avanceItem} ${styles.avanceRetraso}`}>
+            {retrasadas} en retraso
+          </span>
+        )}
+      </div>
+    </Entra>
+  )
+}
+
+/**
+ * `parteDe` es el total con el que se compara la cifra, y solo se pasa cuando
+ * existe de verdad: "3 técnicos en jornada" es parte de la plantilla, pero
+ * "4 tareas en curso" no es parte de nada en concreto. Sin total no se pinta
+ * barra, porque una barra obliga a elegir un denominador y uno inventado se
+ * lee como un dato.
+ */
+function MetricCard({ label, value, variant, onClick, clickable, suffix, turno = 0, parteDe = null }) {
+  const parte = proporcion(value, parteDe)
+
   return (
     <Entra
       desde="cae"
@@ -366,6 +500,17 @@ function MetricCard({ label, value, variant, onClick, clickable, suffix, turno =
       {/* Contexto del número (p. ej. "de 5"), para que la cifra no se lea
           suelta y se pueda contrastar con las listas de abajo. */}
       {suffix && <span className={styles.metricSuffix}>{suffix}</span>}
+
+      {parte !== null && (
+        <span className={styles.metricPista} aria-hidden="true">
+          <Entra
+            desde="barra"
+            turno={turno}
+            className={styles.metricPistaRelleno}
+            style={{ width: `${parte * 100}%` }}
+          />
+        </span>
+      )}
     </Entra>
   )
 }
