@@ -20,6 +20,7 @@
  * ---------------------------------------------------------------------------
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Entra, NumeroAnimado } from '../anim/Entra'
 import PageState from '../components/ui/PageState'
 import { useToast } from '../components/ui/Toast'
 import ModalExportarReporte from '../components/reportes/ModalExportarReporte'
@@ -62,12 +63,21 @@ function detalleDe(err, porDefecto) {
 }
 
 /* ── Indicador con su variación ─────────────────────────────────────────── */
-function Kpi({ definicion, actual, variacion, rangoAnterior }) {
+function Kpi({ definicion, actual, variacion, rangoAnterior, turno = 0 }) {
   const tono = tonoVariacion(variacion, definicion.sentido)
   return (
-    <article className={styles.kpi}>
+    <Entra as="article" desde="cae" turno={turno} className={styles.kpi}>
       <span className={styles.kpiEtiqueta}>{definicion.etiqueta}</span>
-      <span className={styles.kpiValor}>{definicion.formato(actual?.[definicion.clave] ?? 0)}</span>
+      {/* La cifra cuenta desde cero con el formato del propio indicador, así
+          "4 h 20 min" y "1,25" cuentan cada uno en su unidad en vez de pasar
+          por un número pelado que luego salta a su forma final. */}
+      <span className={styles.kpiValor}>
+        <NumeroAnimado
+          valor={actual?.[definicion.clave] ?? 0}
+          turno={turno}
+          formato={definicion.formato}
+        />
+      </span>
       <span className={`${styles.kpiVariacion} ${styles[`tono_${tono}`]}`}>
         {variacion === null || variacion === undefined ? (
           <>Sin base para comparar con {textoRango(rangoAnterior)}</>
@@ -79,7 +89,7 @@ function Kpi({ definicion, actual, variacion, rangoAnterior }) {
           </>
         )}
       </span>
-    </article>
+    </Entra>
   )
 }
 
@@ -223,7 +233,7 @@ export default function ReportesPage() {
 
   return (
     <div className={styles.page}>
-      <div className={`${styles.cabecera} entra`} style={{ '--orden': 0 }}>
+      <Entra turno={0} className={styles.cabecera}>
         <div>
           <h1 className={styles.title}>Reportes</h1>
           <p className={styles.subtitle}>
@@ -240,10 +250,10 @@ export default function ReportesPage() {
         >
           <IconDescarga /> Exportar a Excel
         </button>
-      </div>
+      </Entra>
 
       {/* ── Filtros: el rango manda sobre todo lo de abajo ── */}
-      <div className={`${styles.filtros} entra`} style={{ '--orden': 1 }}>
+      <Entra turno={1} className={styles.filtros}>
         <div className={styles.atajos} role="group" aria-label="Periodo">
           {RANGOS_RAPIDOS.map((item) => (
             <button
@@ -273,7 +283,7 @@ export default function ReportesPage() {
             onChange={(e) => cambiarFecha('fecha_fin', e.target.value)}
           />
         </label>
-      </div>
+      </Entra>
 
       {rangoInvalido && (
         <p className={styles.errorRango} role="alert">
@@ -301,21 +311,22 @@ export default function ReportesPage() {
             </p>
           )}
 
-          {/* Los indicadores entran uno tras otro; el resto de la pantalla sigue
-              detras, en su turno. */}
-          <section className={`${styles.kpis} entraHijos`} aria-label="Indicadores del periodo">
-            {KPIS.map((definicion) => (
+          {/* Los indicadores caen uno tras otro, contando su cifra; el resto
+              de la pantalla sigue detras, en su turno. */}
+          <section className={styles.kpis} aria-label="Indicadores del periodo">
+            {KPIS.map((definicion, i) => (
               <Kpi
                 key={definicion.clave}
                 definicion={definicion}
                 actual={resumen}
                 variacion={comparacion.variaciones[definicion.clave]}
                 rangoAnterior={comparacion.periodoAnterior}
+                turno={2 + i}
               />
             ))}
           </section>
 
-          <section className={`${styles.tarjeta} entra`} style={{ '--orden': 4 }} aria-labelledby="titulo-tendencia">
+          <Entra as="section" turno={8} className={styles.tarjeta} aria-labelledby="titulo-tendencia">
             <div className={styles.tarjetaCabecera}>
               <h2 id="titulo-tendencia" className={styles.tarjetaTitulo}>
                 {metricaSerie(metrica).etiqueta} por {agrupar === 'semana' ? 'semana' : 'día'}
@@ -348,7 +359,7 @@ export default function ReportesPage() {
                 />
               </div>
             )}
-          </section>
+          </Entra>
 
           {sinActividad ? (
             <PageState
@@ -358,7 +369,7 @@ export default function ReportesPage() {
             />
           ) : (
             <>
-              <section className={`${styles.tarjeta} entra`} style={{ '--orden': 5 }} aria-labelledby="titulo-productividad">
+              <Entra as="section" turno={8} className={styles.tarjeta} aria-labelledby="titulo-productividad">
                 <div className={styles.tarjetaCabecera}>
                   <h2 id="titulo-productividad" className={styles.tarjetaTitulo}>
                     Tareas por hora trabajada, por técnico
@@ -369,15 +380,15 @@ export default function ReportesPage() {
                   seleccionado={seleccionado?.id ?? null}
                   onSeleccionar={elegir}
                 />
-              </section>
+              </Entra>
 
-              <section className={`${styles.tarjeta} entra`} style={{ '--orden': 6 }} aria-labelledby="titulo-resumen">
+              <Entra as="section" turno={8} className={styles.tarjeta} aria-labelledby="titulo-resumen">
                 <div className={styles.tarjetaCabecera}>
                   <h2 id="titulo-resumen" className={styles.tarjetaTitulo}>Resumen por empleado</h2>
                   <span className={styles.ayuda}>Elige una fila para ver el detalle de esa persona.</span>
                 </div>
                 <TablaResumen resumen={resumen} seleccionado={seleccionado?.id ?? null} onSeleccionar={elegir} />
-              </section>
+              </Entra>
 
               {seleccionado && (
                 <DetalleEmpleado

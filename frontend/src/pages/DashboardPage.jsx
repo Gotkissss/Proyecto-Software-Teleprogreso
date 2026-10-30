@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getTareas } from '../api/tareaService'
+import { Entra, NumeroAnimado } from '../anim/Entra'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
@@ -148,7 +149,7 @@ export default function DashboardPage() {
 
   return (
     <div className={styles.page}>
-      <div className={`${styles.pageHeader} entra`} style={{ '--orden': 0 }}>
+      <Entra turno={0} className={styles.pageHeader}>
         <div>
           <h1 className={styles.title}>Panel de control</h1>
           <p className={styles.subtitle}>
@@ -159,24 +160,26 @@ export default function DashboardPage() {
         {/* La exportación de reportes se mudó a la pantalla de Reportes
             (HU-S9-04), que es de admin y gerente: el Excel exige el mismo
             rol que el reporte que contiene. */}
-      </div>
+      </Entra>
 
       {/* ── Métricas ── */}
-      {/* Las tarjetas entran una tras otra; el turno lo pone `entraHijos` por
-          posicion, sin que cada MetricCard tenga que saberlo. */}
-      <section className={`${styles.metricsGrid} entraHijos`}>
+      {/* Las tarjetas caen de plano y se enderezan una tras otra, y cada cifra
+          cuenta desde cero hasta su valor: es lo primero que se mira al entrar
+          y lo que hace que el panel se lea como algo vivo. El turno va a mano
+          porque es el que encadena la tarjeta con el conteo de su cifra. */}
+      <section className={styles.metricsGrid}>
         {/* Antes esta tarjeta decía "Técnicos activos" y, si el backend
             devolvía 0, mostraba el total de la plantilla. Resultado: el número
             no cuadraba con la lista de abajo. Ahora dice explícitamente
             cuántos están en jornada sobre el total. */}
         <MetricCard
-          label="Técnicos en jornada"
+          turno={1}          label="Técnicos en jornada"
           value={metricas?.tecnicos_en_jornada ?? 0}
           suffix={metricas?.tecnicos_total ? `de ${metricas.tecnicos_total}` : null}
           variant="info"
         />
         <MetricCard
-          label="Completadas hoy"
+          turno={2}          label="Completadas hoy"
           value={metricas?.tareas_completadas_hoy ?? 0}
           suffix={
             metricas?.tareas_completadas_total
@@ -194,7 +197,7 @@ export default function DashboardPage() {
             parte, y los números no cuadraban entre sí. El sufijo con el total
             de abiertas es lo que deja comprobar la suma de un vistazo. */}
         <MetricCard
-          label="Pendientes"
+          turno={3}          label="Pendientes"
           value={metricas?.tareas_pendientes ?? 0}
           suffix={
             metricas?.tareas_activas
@@ -204,12 +207,12 @@ export default function DashboardPage() {
           variant="warning"
         />
         <MetricCard
-          label="En curso"
+          turno={4}          label="En curso"
           value={metricas?.tareas_en_progreso ?? 0}
           variant="info"
         />
         <MetricCard
-          label="En retraso"
+          turno={5}          label="En retraso"
           value={metricas?.tareas_retrasadas ?? 0}
           /* «De las abiertas»: es un subconjunto de pendientes + en curso, no
              una cuarta categoría. Sin decirlo, el que suma las cuatro
@@ -227,7 +230,7 @@ export default function DashboardPage() {
       <div className={styles.panelesGrid}>
 
       {/* ── Técnicos ── */}
-      <section className={`${styles.section} entra`} style={{ '--orden': 5 }}>
+      <Entra as="section" turno={6} className={styles.section}>
         <h2 className={styles.sectionTitle}>Técnicos hoy</h2>
         {tecnicosList.length === 0 ? (
           <EmptyState
@@ -254,10 +257,10 @@ export default function DashboardPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Entra>
 
       {/* ── Tareas recientes ── */}
-      <section className={`${styles.section} entra`} style={{ '--orden': 6 }}>
+      <Entra as="section" turno={7} className={styles.section}>
         <h2 className={styles.sectionTitle}>Tareas recientes</h2>
         {tareasList.length === 0 ? (
           <EmptyState
@@ -323,7 +326,7 @@ export default function DashboardPage() {
             })}
           </ul>
         )}
-      </section>
+      </Entra>
 
       </div>
 
@@ -348,17 +351,21 @@ export default function DashboardPage() {
   )
 }
 
-function MetricCard({ label, value, variant, onClick, clickable, suffix }) {
+function MetricCard({ label, value, variant, onClick, clickable, suffix, turno = 0 }) {
   return (
-    <div
+    <Entra
+      desde="cae"
+      turno={turno}
       className={`${styles.metricCard} ${styles[variant]} ${clickable ? styles.clickable : ''}`}
       onClick={onClick}
     >
-      <span className={styles.metricValue}>{value}</span>
+      <span className={styles.metricValue}>
+        <NumeroAnimado valor={value} turno={turno} />
+      </span>
       <span className={styles.metricLabel}>{label}</span>
       {/* Contexto del número (p. ej. "de 5"), para que la cifra no se lea
           suelta y se pueda contrastar con las listas de abajo. */}
       {suffix && <span className={styles.metricSuffix}>{suffix}</span>}
-    </div>
+    </Entra>
   )
 }

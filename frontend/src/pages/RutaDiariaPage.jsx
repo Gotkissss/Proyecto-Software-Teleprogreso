@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUbicacion } from '../context/UbicacionContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
+import { Entra, NumeroAnimado } from '../anim/Entra'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
@@ -160,12 +161,15 @@ function DetallePanel({
   )
 }
 
-function ServicioCard({ servicio, onVerDetalle }) {
+function ServicioCard({ servicio, onVerDetalle, turno = 0 }) {
   const isActive    = servicio.estado === 'en_progreso'
   const isCompleted = servicio.estado === 'completado'
 
   return (
-    <article
+    <Entra
+      as="article"
+      desde="izquierda"
+      turno={turno}
       className={`
         ${styles.card}
         ${isActive    ? styles.cardActive    : ''}
@@ -257,7 +261,7 @@ function ServicioCard({ servicio, onVerDetalle }) {
           </span>
         </button>
       )}
-    </article>
+    </Entra>
   )
 }
 
@@ -482,7 +486,7 @@ export default function RutaDiariaPage() {
 
   return (
     <div className={styles.page}>
-      <header className={`${styles.pageHeader} entra`} style={{ '--orden': 0 }}>
+      <Entra as="header" turno={0} className={styles.pageHeader}>
         <div className={styles.dateRow}>
           <span className={styles.dateLabel}>
             <IconCalendar />
@@ -494,24 +498,28 @@ export default function RutaDiariaPage() {
           </span>
         </div>
         <h2 className={styles.greeting}>Hola, {primerNombre}</h2>
-      </header>
+      </Entra>
 
       {/* Contadores — derivados de las tareas reales del día */}
-      <section className={`${styles.resumen} entra`} style={{ '--orden': 1 }}>
+      <Entra as="section" turno={1} className={styles.resumen}>
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconPin /></span>
           <span className={styles.resumenValue}>
-            {paradasCompletadas}/{totalServicios}
+            <NumeroAnimado valor={paradasCompletadas} turno={1} />
+            /
+            <NumeroAnimado valor={totalServicios} turno={1} />
           </span>
           <span className={styles.resumenLabel}>COMPLETADAS</span>
         </div>
         <div className={styles.resumenDivider} />
         <div className={styles.resumenItem}>
           <span className={styles.resumenIcon}><IconRoute /></span>
-          <span className={styles.resumenValue}>{paradasPendientes}</span>
+          <span className={styles.resumenValue}>
+            <NumeroAnimado valor={paradasPendientes} turno={1} />
+          </span>
           <span className={styles.resumenLabel}>PENDIENTES</span>
         </div>
-      </section>
+      </Entra>
 
       {/* HU-5: aviso de que sin jornada abierta no se trabaja en tareas. */}
       {sinJornada && (
@@ -563,15 +571,17 @@ export default function RutaDiariaPage() {
             : 'Por prioridad · activa tu ubicación para ordenar por cercanía'}
         </p>
 
-        {/* Las paradas del día caen una tras otra. El turno se congela en la
-            novena, así una ruta larga no tarda más en terminar de entrar. */}
+        {/* Las paradas del día entran desde el borde una tras otra. El turno
+            se congela en la novena (ver TOPE), así una ruta de treinta paradas
+            no tarda más en terminar de entrar que una de nueve. */}
         {servicios.length > 0 ? (
-          <div className={`${styles.list} entraHijos`}>
-            {servicios.map((s) => (
+          <div className={styles.list}>
+            {servicios.map((s, i) => (
               <ServicioCard
                 key={s.id_servicio}
                 servicio={s}
                 onVerDetalle={handleVerDetalle}
+                turno={2 + i}
               />
             ))}
           </div>

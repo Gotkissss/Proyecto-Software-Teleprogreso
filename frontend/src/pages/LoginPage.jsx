@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { Entra } from '../anim/Entra'
 import Spinner from '../components/ui/Spinner'
 import styles from './LoginPage.module.css'
 
@@ -54,11 +55,6 @@ export default function LoginPage() {
   // cuál fue, para que el usuario no crea que falló algo.
   const [parametros] = useSearchParams()
   const sesionExpirada = parametros.get('expirado') === '1'
-
-  // Las piezas de la pantalla entran cuando el splash se va, no al montarse:
-  // el splash las tapa casi dos segundos, así que animarlas antes significa
-  // que la entrada ocurre detrás de él y el formulario aparece ya puesto.
-  const anima = (variante) => (splashDone ? variante : '')
 
   // Splash screen: muestra el logo grande durante 1.6s antes
   // de revelar el formulario. Se omite si el usuario ya inició
@@ -133,23 +129,27 @@ export default function LoginPage() {
       <div className={`${styles.layout} ${splashDone ? styles.layoutVisible : ''}`}>
         {/* Lado izquierdo: branding */}
         <aside className={styles.brandSide}>
-          {/* El `--orden` dice en qué turno entra cada pieza; el retraso lo
-              calcula `.entraIzquierda` en index.css. La marca entra desde el
-              borde, igual que el lado en el que vive. */}
+          {/* El `turno` dice en qué orden entra cada pieza. La marca entra
+              desde el borde, igual que el lado en el que vive; el logo se
+              planta con un rebote, que es donde se mira primero. Todas
+              esperan a que el splash se vaya: `activo`. */}
           <div className={styles.brandContent}>
-            <img
+            <Entra
+              as="img"
+              desde="sello"
+              turno={0}
+              activo={splashDone}
               src="/teleprogreso-logo.jpg"
               alt="Teleprogreso"
-              className={`${styles.brandLogo} ${anima('entraIzquierda')}`}
-              style={{ '--orden': 0 }}
+              className={styles.brandLogo}
             />
-            <h2 className={`${styles.brandTitle} ${anima('entraIzquierda')}`} style={{ '--orden': 1 }}>
+            <Entra as="h2" desde="izquierda" turno={1} activo={splashDone} className={styles.brandTitle}>
               Control de Personal Operativo
-            </h2>
-            <p className={`${styles.brandSubtitle} ${anima('entraIzquierda')}`} style={{ '--orden': 2 }}>
+            </Entra>
+            <Entra as="p" desde="izquierda" turno={2} activo={splashDone} className={styles.brandSubtitle}>
               Gestión inteligente de técnicos, tareas y operaciones de campo
               en tiempo real.
-            </p>
+            </Entra>
 
             {/* Highlights */}
             <ul className={styles.brandFeatures}>
@@ -158,24 +158,26 @@ export default function LoginPage() {
                 'Reasignación dinámica de tareas',
                 'Alertas operativas inmediatas',
               ].map((texto, i) => (
-                <li key={texto} className={anima('entraIzquierda')} style={{ '--orden': 3 + i }}>
+                <Entra as="li" desde="izquierda" turno={3 + i} activo={splashDone} key={texto}>
                   <span className={styles.featDot} />
                   {texto}
-                </li>
+                </Entra>
               ))}
             </ul>
           </div>
 
-          <p className={`${styles.brandFooter} ${anima('entraIzquierda')}`} style={{ '--orden': 6 }}>
+          <Entra as="p" desde="izquierda" turno={6} activo={splashDone} className={styles.brandFooter}>
             © {new Date().getFullYear()} Teleprogreso S.A.
-          </p>
+          </Entra>
         </aside>
 
         {/* Lado derecho: formulario */}
         <main className={styles.formSide}>
-          {/* La tarjeta entra como una pieza, desde su lado; dentro, los
-              campos se van colocando uno tras otro. */}
-          <div className={`${styles.card} ${anima('entraDerecha')}`} style={{ '--orden': 0 }}>
+          {/* La tarjeta llega girando sobre su eje, como una puerta al
+              cerrarse, y ya puesta se va poblando: los campos entran después
+              (turnos 5 a 8), no mientras gira, porque las dos cosas a la vez
+              se leen como un revoltijo. */}
+          <Entra desde="derecha" turno={0} activo={splashDone} className={styles.card}>
             {/* Logo móvil (oculto en desktop) */}
             <img
               src="/teleprogreso-logo.jpg"
@@ -218,7 +220,7 @@ export default function LoginPage() {
               </div>
 
               {/* Correo */}
-              <div className={`${styles.field} ${anima('entra')}`} style={{ '--orden': 1 }}>
+              <Entra turno={5} activo={splashDone} className={styles.field}>
                 <label htmlFor="correo" className={styles.label}>
                   Correo electrónico
                 </label>
@@ -235,10 +237,10 @@ export default function LoginPage() {
                     disabled={loading}
                   />
                 </div>
-              </div>
+              </Entra>
 
               {/* Contraseña */}
-              <div className={`${styles.field} ${anima('entra')}`} style={{ '--orden': 2 }}>
+              <Entra turno={6} activo={splashDone} className={styles.field}>
                 <label htmlFor="contrasena" className={styles.label}>
                   Contraseña
                 </label>
@@ -264,12 +266,14 @@ export default function LoginPage() {
                     {showPass ? <IconEyeOff /> : <IconEye />}
                   </button>
                 </div>
-              </div>
+              </Entra>
 
-              <button
+              <Entra
+                as="button"
+                turno={7}
+                activo={splashDone}
                 type="submit"
-                className={`${styles.submitBtn} ${anima('entra')}`}
-                style={{ '--orden': 3 }}
+                className={styles.submitBtn}
                 disabled={loading}
               >
                 {loading ? (
@@ -286,13 +290,13 @@ export default function LoginPage() {
                     </svg>
                   </>
                 )}
-              </button>
+              </Entra>
             </form>
 
-            <p className={`${styles.helpText} ${anima('entra')}`} style={{ '--orden': 4 }}>
+            <Entra as="p" turno={8} activo={splashDone} className={styles.helpText}>
               ¿Problemas para acceder? Contacta a tu supervisor.
-            </p>
-          </div>
+            </Entra>
+          </Entra>
         </main>
       </div>
     </div>
