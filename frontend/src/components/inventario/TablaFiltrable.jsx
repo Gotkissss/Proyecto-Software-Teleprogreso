@@ -32,6 +32,7 @@
  * ---------------------------------------------------------------------------
  */
 
+import { Entra } from '../../anim/Entra'
 import PageState from '../ui/PageState'
 import styles from './TablaFiltrable.module.css'
 
@@ -118,8 +119,11 @@ export default function TablaFiltrable({
             </tr>
           </thead>
           <tbody>
-            {datos.map(item => (
-              <tr key={rowKey(item)} className={styles.tr}>
+            {/* Las filas entran escalonadas a ritmo rapido: esta tabla se
+                abre muchas veces al dia y el gesto del panel, repetido, deja
+                de ser un detalle y pasa a ser una espera. */}
+            {datos.map((item, i) => (
+              <Entra as="tr" ritmo="rapido" turno={i} key={rowKey(item)} className={styles.tr}>
                 {columns.map(col => (
                   <td
                     key={col.key}
@@ -128,7 +132,7 @@ export default function TablaFiltrable({
                     {col.render(item)}
                   </td>
                 ))}
-              </tr>
+              </Entra>
             ))}
           </tbody>
         </table>

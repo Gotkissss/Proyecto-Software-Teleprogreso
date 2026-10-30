@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Entra } from '../anim/Entra'
 import { useNavigate } from 'react-router-dom'
 import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
@@ -401,14 +402,18 @@ export default function AlertasPage() {
         />
       ) : (
         <ul className={styles.alertasList}>
-          {lista.map((alerta) => {
+          {/* Ritmo rapido: esta pantalla se revisa muchas veces al dia. */}
+          {lista.map((alerta, i) => {
             const esCritica = alerta.severidad === 'critica'
             const nivelClase = esCritica ? 'critico' : 'advertencia'
             const info = TIPO_ALERTA_INFO[alerta.tipo] ?? TIPO_ALERTA_SEGURIDAD_INFO[alerta.tipo]
             const enProceso = actualizando === alerta.id_alerta
 
             return (
-              <li
+              <Entra
+                as="li"
+                ritmo="rapido"
+                turno={i}
                 key={alerta.id_alerta}
                 className={`${styles.alertaItem} ${styles[nivelClase] ?? ''}`}
               >
@@ -481,7 +486,7 @@ export default function AlertasPage() {
                       '✓ Resuelta sola — la causa ya no existe'}
                   </span>
                 )}
-              </li>
+              </Entra>
             )
           })}
         </ul>

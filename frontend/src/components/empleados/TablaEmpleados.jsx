@@ -1,3 +1,4 @@
+import { Entra } from '../../anim/Entra'
 import Badge from '../ui/Badge'
 import EmptyState from '../ui/EmptyState'
 import styles from './TablaEmpleados.module.css'
@@ -233,11 +234,11 @@ export default function TablaEmpleados({
                 </tr>
               </thead>
               <tbody>
-                {empleados.map(emp => {
+                {empleados.map((emp, i) => {
                   const inicial = (emp.nombre?.[0] ?? 'E').toUpperCase()
                   const esActivo = emp.estado === 'activo'
                   return (
-                    <tr key={emp.id_empleado} className={styles.tr}>
+                    <Entra as="tr" ritmo="rapido" turno={i} key={emp.id_empleado} className={styles.tr}>
                       <td className={styles.td}>
                         <div className={styles.userCell}>
                           {/* El color del avatar sigue al rol, igual que su
@@ -349,7 +350,7 @@ export default function TablaEmpleados({
                           </div>
                         </td>
                       )}
-                    </tr>
+                    </Entra>
                   )
                 })}
               </tbody>

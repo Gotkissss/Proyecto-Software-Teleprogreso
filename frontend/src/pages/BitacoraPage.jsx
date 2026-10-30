@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Entra } from '../anim/Entra'
 import { useSearchParams } from 'react-router-dom'
 import Badge from '../components/ui/Badge'
 import PageState from '../components/ui/PageState'
@@ -407,8 +408,13 @@ export default function BitacoraPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((fila) => (
-                    <tr
+                  {/* Ritmo rapido: la bitacora se consulta a diario y es
+                      la lista mas larga de la aplicacion. */}
+                  {items.map((fila, i) => (
+                    <Entra
+                      as="tr"
+                      ritmo="rapido"
+                      turno={i}
                       key={fila.id_bitacora}
                       className={`${styles.fila} ${seleccionada?.id_bitacora === fila.id_bitacora ? styles.filaActiva : ''}`}
                       onClick={() => setSeleccionada(fila)}
@@ -429,7 +435,7 @@ export default function BitacoraPage() {
                         {fila.id_entidad != null && <span className={styles.idEntidad}> #{fila.id_entidad}</span>}
                       </td>
                       <td className={styles.mono}>{fila.ip ?? '—'}</td>
-                    </tr>
+                    </Entra>
                   ))}
                 </tbody>
               </table>
