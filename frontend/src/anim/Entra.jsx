@@ -14,8 +14,15 @@
  * Se usa `m` y no `motion`: `motion.div` arrastra en el bundle todo lo que
  * Motion sabe hacer (arrastrar piezas, animar cambios de layout) aunque aquí
  * no se use nada de eso. `m` trae solo el componente y las capacidades las
- * aporta el `<LazyMotion>` de App.jsx. Son unas decenas de kB de diferencia
- * en una app que se abre con datos móviles.
+ * aporta un `<LazyMotion>`. Son unas decenas de kB de diferencia en una app
+ * que se abre con datos móviles.
+ *
+ * Ese proveedor va aquí dentro, en cada pieza, y no una sola vez en lo alto
+ * de la app a propósito: sin él `m` no anima y la pieza se queda invisible
+ * para siempre, porque arranca invisible. Teniéndolo que recordar, basta con
+ * montar un `<Entra>` en un sitio nuevo —un modal, un portal, una prueba que
+ * renderiza una pantalla suelta— para dejar un hueco en blanco que nadie
+ * relaciona con esto. Cuesta un contexto de React por pieza, que es nada.
  *
  * Quien pidió menos movimiento en su sistema ve las piezas aparecer sin
  * recorrido y las cifras ya puestas. No se "apaga" la animación sin más: la
@@ -23,7 +30,7 @@
  * ---------------------------------------------------------------------------
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { animate, m, useReducedMotion } from 'motion/react'
+import { LazyMotion, animate, domAnimation, m, useReducedMotion } from 'motion/react'
 import { DURACION_CONTEO, retraso, variantes } from './movimiento'
 
 /**
@@ -51,15 +58,17 @@ export function Entra({
   const pasos = useMemo(() => variantes(desde, Boolean(reducido)), [desde, reducido])
 
   return (
-    <Pieza
-      variants={pasos}
-      custom={turno}
-      initial="oculto"
-      animate={activo ? 'visible' : 'oculto'}
-      {...resto}
-    >
-      {children}
-    </Pieza>
+    <LazyMotion features={domAnimation}>
+      <Pieza
+        variants={pasos}
+        custom={turno}
+        initial="oculto"
+        animate={activo ? 'visible' : 'oculto'}
+        {...resto}
+      >
+        {children}
+      </Pieza>
+    </LazyMotion>
   )
 }
 

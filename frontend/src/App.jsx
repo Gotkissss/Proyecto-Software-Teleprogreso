@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { LazyMotion, domAnimation } from 'motion/react'
 import { AuthProvider }    from './context/AuthContext'
 import { ToastProvider }   from './components/ui/Toast'
 import ProtectedRoute      from './components/layout/ProtectedRoute'
@@ -43,11 +42,6 @@ function protegida(ruta, pagina) {
 
 export default function App() {
   return (
-    /* Las capacidades de animacion que de verdad se usan (variantes, muelles,
-       opacity y transform), y ninguna mas. Las pantallas montan `<Entra>` con
-       el componente ligero de Motion, que sin este proveedor no se mueve; el
-       paquete completo pesaria casi el doble sin aportar nada aqui. */
-    <LazyMotion features={domAnimation} strict>
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
@@ -127,6 +121,5 @@ export default function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
-    </LazyMotion>
   )
 }
