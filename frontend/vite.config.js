@@ -7,8 +7,18 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Los archivos de /public que deben acompañar al service worker.
-      includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+      // Los archivos de /public que deben acompañar al service worker. El
+      // logo va aquí porque es la única imagen de la marca que pinta la app
+      // (login, cambio de contraseña y la barra del supervisor) y fuera de
+      // esta lista no se guarda: el shell salía de la caché y el logo se
+      // pedía a la red, así que con el servidor caído o sin señal la pantalla
+      // aparecía entera y con el hueco roto donde va la marca.
+      includeAssets: [
+        'icon-192.png',
+        'icon-512.png',
+        'apple-touch-icon.png',
+        'teleprogreso-logo.jpg',
+      ],
       manifest: {
         name: 'Teleprogreso S.A.',
         short_name: 'Teleprogreso',

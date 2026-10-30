@@ -205,7 +205,7 @@ export default function SupervisorLayout() {
         rol={user?.rol ?? ''}
         brand={
           <>
-            <img src="/teleprogreso-logo.png" alt="Teleprogreso" className={styles.logo} />
+            <img src="/teleprogreso-logo.jpg" alt="Teleprogreso" className={styles.logo} />
             <span className={styles.brand}>
               <span className={styles.brandName}>Teleprogreso</span>
               <span className={styles.brandSub}>{subtitulo}</span>
