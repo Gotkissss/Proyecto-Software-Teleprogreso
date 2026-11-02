@@ -3,7 +3,7 @@
 # ============================================================
 
 # ---------- Etapa: Development (para docker-compose local) ----------
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS development
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS development
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "80"]
 
 
 # ---------- Etapa: Build (para producción) ----------
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN npm run build
 
 
 # ---------- Etapa: Producción (Nginx en Railway) ----------
-FROM nginx:stable-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 AS production
+FROM nginx:stable-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949 AS production
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
