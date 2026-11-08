@@ -20,7 +20,7 @@ posiciones a nombre de un compañero y fabricarle una coartada.
 """
 
 from datetime import date
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 import logging
 
@@ -39,6 +39,7 @@ from app.services.asistencia import es_del_turno_en_curso
 from app.services.ubicaciones import (
     jornada_en_curso,
     obtener_recorrido,
+    obtener_ubicaciones_de_hoy,
     obtener_ultimas_ubicaciones,
     registrar_lote,
 )
@@ -187,12 +188,31 @@ async def registrar_ubicacion(
     "/tecnicos",
     dependencies=[auditar_lectura("ubicacion")],
     response_model=list[UbicacionTecnicoResponse],
-    summary="Última posición conocida de cada técnico en jornada",
+    summary="Última posición conocida de cada técnico",
 )
 async def listar_ubicaciones_tecnicos(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
     _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    alcance: Annotated[
+        Literal["jornada", "dia"],
+        Query(
+            description=(
+                "`jornada` (por omisión): solo los técnicos con jornada "
+                "abierta ahora. `dia`: además los que no la tienen abierta, en "
+                "su último punto de hoy y con estado `fuera_de_jornada`."
+            )
+        ),
+    ] = "jornada",
 ):
+    """
+    El mapa del supervisor usa el alcance por omisión, porque ahí la posición
+    se cruza con las tareas abiertas del momento. El mapa del panel usa `dia`:
+    es una foto de dónde anduvo el equipo hoy, y quien no está en jornada
+    también cuenta, pintado aparte para que no se confunda con los que siguen
+    en la calle.
+    """
+    if alcance == "dia":
+        return await obtener_ubicaciones_de_hoy(db)
     return await obtener_ultimas_ubicaciones(db)
 
 

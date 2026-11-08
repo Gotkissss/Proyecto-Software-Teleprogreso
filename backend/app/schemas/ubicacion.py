@@ -93,7 +93,11 @@ class UbicacionTecnicoResponse(BaseModel):
     lat: float
     lng: float
     fecha_hora_registro: datetime
-    estado: Literal["en_tarea", "en_pausa", "disponible"]
+    # "fuera_de_jornada" solo aparece con alcance=dia: es el ultimo punto
+    # que dejo un tecnico que ya marco salida, y por eso se pinta aparte.
+    estado: Literal[
+        "en_tarea", "en_pausa", "disponible", "fuera_de_jornada"
+    ]
 
 
 # ─── HU-5: envío en lote (cola sin conexión) ─────────────────────────────────

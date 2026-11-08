@@ -1,0 +1,109 @@
+/* components/mapa/MapaEquipoHoy.module.css
+   El bloque del mapa dentro del panel. La tarjeta (fondo, borde, sombra) la
+   pone la sección que lo envuelve en DashboardPage; aquí solo va lo de dentro,
+   para que el mapa herede el mismo marco que las demás tarjetas del panel. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Mismo tratamiento que .sectionTitle del panel: barrita de color, línea
+   inferior y tipografía de display. Se repite aquí en vez de importarse
+   porque son módulos CSS distintos. */
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.titulo {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  letter-spacing: -0.015em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.titulo::before {
+  content: '';
+  width: var(--space-1);
+  height: 16px;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+
+.conteo {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.conteo strong {
+  color: var(--color-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El alto lo fija este contenedor y no el mapa: MapaBase crece al 100 % del
+   suyo, así que sin una altura concreta Leaflet se queda en su mínimo y el
+   mapa sale más bajo que la lista de técnicos de al lado. */
+.mapa {
+  height: 340px;
+}
+
+/* El zoom con la rueda va apagado (lo pide el componente): el panel se
+   recorre con la rueda y pasar por encima del mapa no debe secuestrarla. */
+.mapa :global(.leaflet-container) {
+  cursor: grab;
+}
+
+.leyenda {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.leyendaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.punto {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.aviso {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-alt);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .mapa {
+    height: 260px;
+  }
+}

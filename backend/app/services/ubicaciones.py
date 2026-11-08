@@ -455,6 +455,72 @@ async def obtener_ultimas_ubicaciones(
     return sorted(respuesta, key=lambda u: u.nombre)
 
 
+async def obtener_ubicaciones_de_hoy(
+    db: AsyncSession,
+    ahora: Optional[datetime] = None,
+) -> list[UbicacionTecnicoResponse]:
+    """
+    Donde esta hoy cada tecnico: los que tienen jornada abierta, con su estado
+    en vivo, mas los que no la tienen -porque ya marcaron salida o porque hoy
+    no marcaron entrada-, en el ultimo punto que dejaron en el dia y con estado
+    "fuera_de_jornada".
+
+    Lo usa el mapa del panel, que no filtra nada y solo quiere las posiciones a
+    la mano. La distincion de estado NO es decorativa: un punto de las nueve de
+    la manana de alguien que ya cerro su jornada se leeria como "ahi esta
+    ahora" si se pintara igual que los demas, y mandar a un supervisor a ese
+    punto es el error que esta funcion tiene que hacer imposible.
+
+    Un tecnico que no reporto nada hoy no sale: no hay punto que pintar, y un
+    marcador en su ultima posicion de ayer diria algo que no es.
+    """
+    ahora = ahora or ahora_local()
+    en_vivo = await obtener_ultimas_ubicaciones(db, ahora)
+    ya_estan = {u.id_empleado for u in en_vivo}
+
+    coord = cast(UbicacionEmpleado.coordenada, Geometry)
+    filas = await db.execute(
+        select(
+            UbicacionEmpleado.id_empleado,
+            UbicacionEmpleado.fecha_hora_registro,
+            func.ST_Y(coord).label("lat"),
+            func.ST_X(coord).label("lng"),
+            Empleado.nombre,
+            Empleado.apellido,
+        )
+        .join(Empleado, Empleado.id_empleado == UbicacionEmpleado.id_empleado)
+        .where(
+            UbicacionEmpleado.fecha_hora_registro
+            >= datetime.combine(ahora.date(), time.min),
+            Empleado.rol == ROL_TECNICO,
+            Empleado.estado == "activo",
+        )
+        # Mismo DISTINCT ON que obtener_ultimas_ubicaciones, con el id como
+        # desempate para que dos lecturas con la misma hora no alternen.
+        .distinct(UbicacionEmpleado.id_empleado)
+        .order_by(
+            UbicacionEmpleado.id_empleado,
+            UbicacionEmpleado.fecha_hora_registro.desc(),
+            UbicacionEmpleado.id_ubicacion.desc(),
+        )
+    )
+
+    cerrados = [
+        UbicacionTecnicoResponse(
+            id_empleado=id_empleado,
+            nombre=f"{nombre} {apellido}",
+            lat=lat,
+            lng=lng,
+            fecha_hora_registro=registro,
+            estado="fuera_de_jornada",
+        )
+        for id_empleado, registro, lat, lng, nombre, apellido in filas.all()
+        if id_empleado not in ya_estan
+    ]
+
+    return sorted(en_vivo + cerrados, key=lambda u: u.nombre)
+
+
 async def distancias_a_la_tarea(
     db: AsyncSession,
     ids_empleados: List[int],

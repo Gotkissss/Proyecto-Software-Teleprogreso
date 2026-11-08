@@ -133,4 +133,16 @@ describe('getUbicacionesTecnicos', () => {
 
     expect(resultado).toEqual([])
   })
+
+  it('con alcance "dia" lo manda como parámetro', async () => {
+    // Es lo que pide el mapa del panel: suma a quien ya marcó salida, en su
+    // último punto de hoy.
+    getMock.mockResolvedValue({ data: [] })
+
+    await getUbicacionesTecnicos({ alcance: 'dia' })
+
+    expect(getMock).toHaveBeenCalledWith('/ubicaciones/tecnicos', {
+      params: { alcance: 'dia' },
+    })
+  })
 })
