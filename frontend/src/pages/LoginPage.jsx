@@ -193,31 +193,48 @@ export default function LoginPage() {
             </div>
 
             <form className={styles.form} onSubmit={handleSubmit} noValidate>
-              {/* RTF-01 / R1-10: el hueco del aviso está reservado siempre. Antes
-                  el mensaje aparecía de la nada y empujaba el formulario hacia
-                  abajo, y en una ventana baja eso sacaba el contenido de la
-                  pantalla. */}
-              <div className={styles.avisoSlot}>
-                {sesionExpirada && !error && (
-                  <div className={styles.avisoBanner} role="status">
-                    <span>
-                      Tu sesión se cerró por seguridad. Volvé a entrar para seguir
-                      donde estabas.
-                    </span>
-                  </div>
-                )}
+              {/* Los avisos ya no van dentro de un hueco reservado. Lo
+                  estuvieron (RTF-01 / R1-10) para que el formulario no se
+                  moviera al aparecer el mensaje, pero el hueco se pintaba
+                  siempre y el mensaje casi nunca: en una entrada normal lo
+                  único que se veía era un vacío de 48 px entre el subtítulo y
+                  «Correo electrónico». Se pagaba en cada visita un salto que
+                  ocurre de vez en cuando.
 
-                {error && (
-                  <div className={styles.errorBanner} role="alert">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                    <span>{error}</span>
-                  </div>
-                )}
-              </div>
+                  Lo que aquel hallazgo arregló de verdad no fue el hueco, sino
+                  el `overflow: hidden` de `.page` (ver el encabezado del CSS):
+                  era eso lo que, al desplazarse el navegador para traer el
+                  campo a la vista, dejaba el degradado cortado sin forma de
+                  volver. Con el recorte ya movido a `.bgDecor`, la página
+                  crece con su contenido y un mensaje que aparece solo empuja
+                  el formulario unos píxeles, sin romper nada. Además ninguno
+                  de los dos llega por sorpresa: el de sesión vencida ya está
+                  en la primera pintada, y el de error, justo después de que la
+                  persona pulse «Iniciar sesión».
+
+                  Sin envoltorio: cada aviso es hijo directo del formulario, de
+                  modo que cuando no hay ninguno no queda ni el elemento ni su
+                  hueco del `gap`, y cuando hay uno lo separa el mismo `gap`
+                  que separa los campos. */}
+              {sesionExpirada && !error && (
+                <div className={styles.avisoBanner} role="status">
+                  <span>
+                    Tu sesión se cerró por seguridad. Volvé a entrar para seguir
+                    donde estabas.
+                  </span>
+                </div>
+              )}
+
+              {error && (
+                <div className={styles.errorBanner} role="alert">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>{error}</span>
+                </div>
+              )}
 
               {/* Correo */}
               <Entra turno={5} activo={splashDone} className={styles.field}>

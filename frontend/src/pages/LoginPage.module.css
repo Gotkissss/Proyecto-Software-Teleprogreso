@@ -283,8 +283,10 @@
   flex-direction: column;
   gap: var(--space-5);
 }
-/* RTF-01 / R1-10: el hueco está reservado desde el principio (ver
-   `.avisoSlot`), así que al aparecer el mensaje el formulario no se mueve. */
+/* El mensaje de error aparece al pulsar «Iniciar sesión» y empuja el
+   formulario unos píxeles hacia abajo. Antes había un hueco reservado para
+   que no se moviera; ver por qué se quitó más abajo, donde estaba
+   `.avisoSlot`. */
 .errorBanner {
   display: flex;
   align-items: center;
@@ -424,21 +426,26 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-primary-light);
   color: var(--color-primary-deep);
   font-size: 0.875rem;
   line-height: 1.5;
+  animation: fadeIn 200ms ease-out;
 }
 
-/* RTF-01 / R1-10 — hueco para el aviso de sesión expirada o de error.
-   Se reserva su alto mínimo aunque esté vacío: así el formulario no salta
-   hacia abajo al mostrarse el mensaje, que es lo que empujaba el contenido
-   fuera de la pantalla. */
-.avisoSlot {
-  min-height: 48px;
-}
+/* Aquí estaba `.avisoSlot`, el contenedor de los dos mensajes, con
+   `min-height: 48px` para que el formulario no se moviera al aparecer el
+   aviso (RTF-01 / R1-10). Se quitó entero: el contenedor se pintaba siempre y
+   el mensaje casi nunca, así que lo que se veía en una entrada normal era un
+   vacío fijo entre el subtítulo y «Correo electrónico». Ahora los avisos son
+   hijos directos del formulario y los separa el mismo `gap` que separa los
+   campos —por eso `.avisoBanner` tampoco lleva ya `margin-bottom`, que se
+   sumaba al gap y lo dejaba más suelto que el resto.
+
+   Lo que de verdad arreglaba aquel hallazgo sigue en pie: el recorte que
+   dejaba el degradado cortado se movió de `.page` a `.bgDecor` (ver el
+   encabezado de este archivo). */
 
 /* Quien pidió menos movimiento ve el splash quieto. El `splashOut` solo
    hacía el desvanecido: el splash se desmonta por el temporizador de
