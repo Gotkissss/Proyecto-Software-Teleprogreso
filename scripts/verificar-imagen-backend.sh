@@ -42,6 +42,29 @@ comprobar "app no puede escribir el código" \
 comprobar "app puede escribir en backend/static" \
   "correr $IMAGEN sh -c 'touch /app/static/prueba'"
 
+# El respaldo diario corre con esta misma imagen, y en Railway es el único
+# sitio desde el que se puede correr: la base no se alcanza desde fuera. Lo
+# que no esté aquí dentro no existe allí, y eso ya pasó — el script vivía en
+# la carpeta scripts/ de la raíz, que no entra en el contexto de build, y el
+# servicio moría con "No such file or directory".
+comprobar "el script de respaldo está en la imagen" \
+  "correr --entrypoint sh $IMAGEN -c '[ -f /app/scripts/respaldo.sh ]'"
+comprobar "la imagen trae pg_dump" \
+  "correr --entrypoint sh $IMAGEN -c 'command -v pg_dump'"
+# El volcado y el motor tienen que ser de la misma versión mayor: pg_dump 16
+# se niega contra un servidor 17, y pg_dump 17 vuelca un servidor 16 pero deja
+# un `SET transaction_timeout` que al restaurar en el 16 revienta. respaldo.sh
+# elige el cliente según lo que diga el servidor, así que los dos tienen que
+# estar.
+comprobar "está el cliente de PostgreSQL 16" \
+  "correr --entrypoint sh $IMAGEN -c '[ -x /usr/lib/postgresql/16/bin/pg_dump ]'"
+comprobar "está el cliente de PostgreSQL 17" \
+  "correr --entrypoint sh $IMAGEN -c '[ -x /usr/lib/postgresql/17/bin/pg_dump ]'"
+comprobar "la imagen trae gpg" \
+  "correr --entrypoint sh $IMAGEN -c 'command -v gpg'"
+comprobar "el respaldo arranca dentro de la imagen" \
+  "correr --entrypoint sh $IMAGEN -c 'cd /app && bash scripts/respaldo.sh listar'"
+
 limpiar
 docker volume create "$VOLUMEN" >/dev/null
 correr -v "$VOLUMEN:/datos" --entrypoint sh "$IMAGEN" \

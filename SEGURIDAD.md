@@ -773,9 +773,37 @@ el rol de la aplicación), a qué migración corresponde el esquema, y que la
 cadena de hashes de la bitácora sigue cuadrando después de restaurar — una
 bitácora restaurada con la cadena rota no vale como evidencia de nada.
 
-**Última prueba de restauración: 2026-10-28.** Resultado: correcta. Base de
-origen con el escenario del seed y 73 filas de bitácora; las 73 se restauraron
-y la cadena quedó íntegra. Esquema en la migración `0013`.
+**Última prueba de restauración: 2026-11-07.** Resultado: correcta, y esta
+vez **desde dentro de la imagen del backend**, que es como corre en Railway.
+207 filas de bitácora restauradas de 207 y la cadena íntegra; esquema en la
+migración `0015`.
+
+Esa prueba es la que destapó que el procedimiento entero no podía correr en el
+despliegue, y lo que se corrigió:
+
+- `scripts/respaldo.sh` vivía en la raíz del repositorio, fuera del contexto
+  con el que se construye la imagen del backend, así que nunca llegaba al
+  contenedor. El servicio de respaldo diario de Railway moría en la primera
+  línea con «No such file or directory». Ahora el script vive en
+  `backend/scripts/` y en la raíz queda un atajo que lo llama.
+- La imagen no traía `pg_dump` ni `gpg`, los dos programas que el script
+  necesita. Ahora los trae.
+- GPG se quedaba sin carpeta donde escribir su llavero y el socket de
+  `gpg-agent`: por omisión usa `$HOME/.gnupg`, que en el contenedor es `/app`,
+  de root, con el proceso corriendo como `app`. El script se crea ahora una
+  carpeta temporal propia y la borra al terminar.
+- El volcado y el motor tienen que ser de la misma versión mayor. La imagen
+  lleva los clientes 16 y 17 y el script usa el que diga el servidor: uno más
+  viejo se niega a volcar, y uno más nuevo vuelca bien pero deja un archivo
+  que no se puede restaurar.
+- `probar` dejaba viva su base temporal cuando la restauración fallaba: el
+  `trap` que la borraba lo pisaba otro `trap` posterior, porque solo hay una
+  ranura. Las limpiezas van ahora en una lista y se ejecutan todas.
+
+`scripts/verificar-imagen-backend.sh` comprueba en cada PR que el script, los
+dos clientes y `gpg` siguen dentro de la imagen y que el respaldo arranca ahí
+dentro. Era un procedimiento documentado, probado desde el host y roto en el
+único sitio donde tenía que funcionar.
 
 Cuando se restaure sobre un despliegue hay que volver a aplicar el
 endurecimiento del rol (`python backend/db/aplicar_rol_aplicacion.py`): el
