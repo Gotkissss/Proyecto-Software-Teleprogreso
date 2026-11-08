@@ -56,7 +56,16 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.10'
+          # La misma versión que la imagen que se despliega (backend/Dockerfile
+          # usa python:3.11-slim). Corría en 3.10, así que la suite nunca se
+          # ejecutaba sobre el intérprete que llega a producción.
+          #
+          # Además, en 3.10 el proyecto no puede dejar de ser vulnerable:
+          # email-validator arrastra dnspython, su CVE-2026-114605 se corrige en
+          # dnspython 2.9.0 y esa versión pide Python >= 3.11, así que en 3.10 el
+          # resolvedor se queda en la 2.8.0 y la auditoría de dependencias no
+          # puede pasar por mucho que se actualice nada.
+          python-version: '3.11'
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt

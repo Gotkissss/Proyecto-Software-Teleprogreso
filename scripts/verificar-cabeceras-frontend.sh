@@ -35,7 +35,14 @@ done
 cabeceras() { curl -fsS -D - -o /dev/null "$1" | tr -d '\r'; }
 
 exigir() { # exigir <ruta> <texto que debe aparecer en las cabeceras>
-  if cabeceras "$BASE$1" | grep -qiF -- "$2"; then
+  # `grep -iF ... >/dev/null` y no `grep -qiF`: con `-q` grep cierra la tubería
+  # en cuanto encuentra la línea, `tr` muere con SIGPIPE y, como el script usa
+  # `pipefail`, la tubería entera cuenta como fallida aunque la cabecera esté
+  # ahí. Es una carrera —depende de si a `tr` le dio tiempo a terminar— y se
+  # veía como el job cayendo en el CI con tres cabeceras distintas cada vez,
+  # cada una precedida de un «tr: write error: Broken pipe», mientras en local
+  # pasaba siempre. Sin `-q`, grep lee el flujo completo y no cierra nada.
+  if cabeceras "$BASE$1" | grep -iF -- "$2" >/dev/null; then
     echo "  ok    $1  ${2}"
   else
     echo "  FALLA $1  falta: ${2}"
@@ -71,7 +78,12 @@ if [ "$uid" = "0" ]; then
 else
   echo "  ok    uid ${uid}"
 fi
-if docker exec "$CONTENEDOR" ps -o user,args | grep "nginx: master" | grep -q '^root'; then
+# Misma historia que en `exigir`, y aquí importa más: el `grep -q` final
+# cerraba la tubería, el `grep` de en medio moría con SIGPIPE y con `pipefail`
+# el `if` daba falso. O sea que la comprobación se saltaba justo cuando
+# encontraba lo que busca: nginx corriendo como root habría pasado como bueno.
+procesos="$(docker exec "$CONTENEDOR" ps -o user,args)"
+if grep "nginx: master" <<<"$procesos" | grep '^root' >/dev/null; then
   echo "  FALLA el proceso maestro de nginx corre como root"
   fallos=$((fallos + 1))
 fi

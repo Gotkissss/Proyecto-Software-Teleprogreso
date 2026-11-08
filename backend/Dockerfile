@@ -36,6 +36,41 @@ ARG APP_UID=1000
 RUN groupadd --system --gid "$APP_UID" app \
     && useradd --system --uid "$APP_UID" --gid app --home-dir /app --shell /usr/sbin/nologin app
 
+# pg_dump y gpg: lo que necesita scripts/respaldo.sh (T3 del Sprint 10). Van
+# en la imagen porque en un despliegue como Railway la base no se alcanza
+# desde fuera: el respaldo solo se puede tomar desde un contenedor con esta
+# imagen. Sin ellos, el servicio de respaldo diario que documenta el README
+# arrancaba y moría en la primera línea.
+#
+# Dos clientes de PostgreSQL, no uno, porque el volcado y el motor tienen que
+# ser de la MISMA versión mayor y no basta con que el cliente sea más nuevo:
+# pg_dump 16 se niega a volcar un servidor 17 («server version mismatch»), y
+# pg_dump 17 sí vuelca un servidor 16 pero escribe en el archivo un
+# `SET transaction_timeout`, que el 16 no conoce, así que el respaldo se crea
+# y no se puede restaurar — el peor de los dos fallos, porque no se nota hasta
+# el día que hace falta. respaldo.sh pregunta al servidor su versión y usa el
+# cliente que le toca; así la imagen sirve lo mismo contra un 16 que contra un
+# 17 y una actualización del motor no rompe los respaldos en silencio.
+#
+# Debian 13 solo trae el 17, de ahí el repositorio oficial de PostgreSQL
+# (PGDG), con su llave guardada aparte y el repositorio firmado con ella.
+# Ninguno trae compilador, así que la imagen final sigue sin gcc (HU-S10-06),
+# y scripts/verificar-imagen-backend.sh lo comprueba en cada PR.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-client-16 \
+        postgresql-client-17 \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=dependencias /opt/venv /opt/venv
 

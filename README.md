@@ -242,8 +242,22 @@ Prográmalo a diario:
   persistente —el disco del contenedor es efímero— y `RESPALDO_PASSPHRASE` en
   las variables del servicio.
 
-Hacen falta `pg_dump` y `gpg`; la imagen del backend trae el primero, y el
-segundo se instala con `gnupg`. `backups/` está en `.gitignore`.
+Hacen falta `pg_dump` y `gpg`, y **la imagen del backend trae los dos**, junto
+con el propio script: el servicio de Railway de arriba corre dentro de esa
+imagen y en Railway la base no se alcanza desde fuera, así que lo que no entre
+en la imagen no existe allí. Por eso el script vive en `backend/scripts/` —
+dentro del contexto con el que se construye— y `scripts/respaldo.sh` es un
+atajo que llama al de verdad, para que los comandos de arriba funcionen igual
+desde la raíz del repositorio. `backups/` está en `.gitignore`.
+
+La imagen lleva los clientes de PostgreSQL 16 y 17, y el script usa el que
+corresponda a la versión del servidor: pg_dump tiene que ser de la misma
+versión mayor que el motor. Uno más viejo se niega a volcar; uno más nuevo
+vuelca bien y produce un archivo que **no se puede restaurar**, que es el
+fallo que no se descubre hasta el día que hace falta.
+
+En una máquina propia (sin Docker) hacen falta los paquetes
+`postgresql-client` y `gnupg`.
 
 Variables: `RETENCION_BITACORA_DIAS` y `RETENCION_UBICACIONES_DIAS` (90 por
 defecto). En un despliegue de un solo contenedor con rol de privilegio mínimo
