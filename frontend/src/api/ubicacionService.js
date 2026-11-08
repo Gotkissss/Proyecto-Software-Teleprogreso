@@ -73,6 +73,11 @@ export const enviarUbicacion = async ({ lat, lng }) => {
  * GET /ubicaciones/tecnicos en el backend), así que no hace falta filtrar
  * nada más aquí.
  *
+ * Con `{ alcance: 'dia' }` la respuesta suma a los que ya cerraron su jornada,
+ * en el último punto que dejaron hoy y con estado 'fuera_de_jornada'. Eso es
+ * lo que pide el mapa del panel (<MapaEquipoHoy>), que no cruza posiciones con
+ * tareas abiertas: solo quiere la foto de dónde anduvo el equipo hoy.
+ *
  * @returns {Promise<Array<{
  *   id_empleado: number,
  *   nombre: string,
@@ -82,8 +87,11 @@ export const enviarUbicacion = async ({ lat, lng }) => {
  *   estado: 'en_tarea' | 'en_pausa' | 'disponible'
  * }>>}
  */
-export async function getUbicacionesTecnicos() {
-  const { data } = await apiClient.get('/ubicaciones/tecnicos')
+export async function getUbicacionesTecnicos({ alcance } = {}) {
+  // Sin alcance NO se manda el segundo argumento: el mapa del supervisor pide
+  // la ruta pelada y así queda claro en la petición que no pasa parámetros.
+  const opciones = alcance ? [{ params: { alcance } }] : []
+  const { data } = await apiClient.get('/ubicaciones/tecnicos', ...opciones)
   return Array.isArray(data) ? data : []
 }
 

@@ -127,18 +127,25 @@ export const ESTADO_TECNICO_COLOR = {
   en_tarea:   'var(--color-primary)',
   en_pausa:   'var(--color-warning)',
   disponible: 'var(--color-success)',
+  // Solo lo devuelve GET /ubicaciones/tecnicos?alcance=dia, que es lo que pide
+  // el mapa del panel: el último punto de quien ya marcó salida. Va en gris
+  // porque ese punto es de hace horas; con el verde de "disponible" se leería
+  // como que sigue ahí, y a ese sitio no hay a quién mandar.
+  fuera_de_jornada: 'var(--color-text-muted)',
 }
 
 export const ESTADO_TECNICO_LABEL = {
   en_tarea:   'En tarea',
   en_pausa:   'En pausa',
   disponible: 'Disponible',
+  fuera_de_jornada: 'Fuera de jornada',
 }
 
 export const ESTADO_TECNICO_BADGE_VARIANT = {
   en_tarea:   'info',
   en_pausa:   'warning',
   disponible: 'success',
+  fuera_de_jornada: 'muted',
 }
 
 export function colorPorEstadoTecnico(estado) {

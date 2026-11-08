@@ -2,34 +2,24 @@
  * pages/DashboardPage.jsx
  * ---------------------------------------------------------------------------
  * Dashboard principal del supervisor.
- * Muestra: técnicos activos, tareas completadas, pendientes y en retraso.
+ * Muestra: el avance del día, las cifras de técnicos y tareas, quién está en
+ * jornada y, al lado, dónde anda hoy cada técnico (<MapaEquipoHoy>).
  * ---------------------------------------------------------------------------
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
-import { getTareas } from '../api/tareaService'
+import { getUbicacionesTecnicos } from '../api/ubicacionService'
 import { Entra, NumeroAnimado } from '../anim/Entra'
 import { useAuth } from '../context/AuthContext'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageState from '../components/ui/PageState'
-import ModalDetalleTarea from '../components/tareas/ModalDetalleTarea'
-import ModalEvidencias from '../components/tareas/ModalEvidencias'
-import { etiquetaEstado, variantePorEstado } from '../components/mapa/estadoColor'
+import MapaEquipoHoy from '../components/mapa/MapaEquipoHoy'
 import { contarTareas } from '../utils/plural'
 import { fechaLarga, hace, proporcion, repartoDelDia, saludoPorHora } from '../utils/panel'
-import { describirVencimiento } from '../utils/vencimiento'
 import styles from './DashboardPage.module.css'
-
-const IconFoto = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <polyline points="21 15 16 10 5 21" />
-  </svg>
-)
 
 const IconRefrescar = () => (
   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -82,13 +72,13 @@ export default function DashboardPage() {
 
   const [metricas,      setMetricas]      = useState(null)
   const [tecnicosList,  setTecnicosList]  = useState([])
-  const [tareasList,    setTareasList]    = useState([])
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState(null)
-  // Tarea cuyas evidencias está revisando el supervisor (SCRUM-141/142)
-  const [tareaEvidencias, setTareaEvidencias] = useState(null)
-  // Tarea abierta en la ficha de detalle (clic en la tarjeta)
-  const [tareaDetalle, setTareaDetalle] = useState(null)
+  // Dónde está hoy cada técnico (mapa del panel). El fallo se guarda aparte y
+  // no corta la carga: el panel sirve igual sin el mapa, y antes un 500 de
+  // esta llamada habría dejado la pantalla entera en el estado de error.
+  const [ubicaciones,      setUbicaciones]      = useState([])
+  const [errorUbicaciones, setErrorUbicaciones] = useState(false)
   // Cuando se cargaron estos datos, y un reloj que avanza para poder decirlo.
   // El panel no se refresca solo: sin esto, alguien puede decidir con cifras
   // de hace dos horas creyendo que son de ahora.
@@ -101,38 +91,20 @@ export default function DashboardPage() {
       setError(null)
       try {
         // Llamadas paralelas para minimizar el tiempo de carga
-        const [metricas, tecnicos, tareas] = await Promise.all([
+        const [metricas, tecnicos, mapa] = await Promise.all([
             fetchMetricasReal(),
             fetchTecnicosReal(),
-            getTareas(),
+            // El mapa es secundario: si falla, se queda el aviso dentro de su
+            // tarjeta y el resto del panel entra igual.
+            getUbicacionesTecnicos({ alcance: 'dia' }).then(
+              (puntos) => ({ puntos }),
+              () => ({ puntos: [], fallo: true }),
+            ),
           ])
           setMetricas(metricas)
           setTecnicosList(tecnicos)
-          // Adaptar tareas al formato que usa la tabla del dashboard
-          setTareasList(
-            (Array.isArray(tareas) ? tareas : []).map((t) => ({
-              id:       t.id_tarea,
-              id_tarea: t.id_tarea,
-              titulo:   t.titulo,
-              estado:   t.estado_tarea,
-              // SCRUM-141: el backend ya dice cuántas evidencias tiene cada
-              // tarea, así no hay que pedir el detalle de todas para saber
-              // cuáles muestran el botón de "ver evidencias".
-              total_incidencias: t.total_incidencias ?? 0,
-              tecnico: t.tecnico
-                ? { nombre: t.tecnico.nombre, nombre_completo: t.tecnico.nombre }
-                : null,
-              // Campos que necesita la ficha de detalle. Antes se descartaban
-              // en este mapeo, así que el panel no tenía con qué mostrarlos.
-              descripcion:        t.descripcion,
-              prioridad:          t.prioridad,
-              direccion_servicio: t.direccion_servicio,
-              fecha_inicio:       t.fecha_inicio,
-              fecha_finalizacion: t.fecha_finalizacion,
-              fecha_asignacion:   t.fecha_asignacion,
-              estado_tarea:       t.estado_tarea,
-            }))
-          )
+          setUbicaciones(mapa.puntos)
+          setErrorUbicaciones(Boolean(mapa.fallo))
           setCargadoEn(Date.now())
       } catch (err) {
         console.error('Error al cargar el dashboard:', err)
@@ -283,9 +255,10 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* Los dos bloques van uno al lado del otro cuando la pantalla da de sí.
-          Apilados dejaban media pantalla en blanco a la derecha y obligaban a
-          bajar para ver las tareas del día. */}
+      {/* Los dos bloques van uno al lado del otro cuando la pantalla da de sí:
+          la lista de quién está en jornada y el mapa de dónde está cada uno
+          cuentan lo mismo, y leerlos juntos es lo que los hace útiles.
+          Apilados dejaban media pantalla en blanco a la derecha. */}
       <div className={styles.panelesGrid}>
 
       {/* ── Técnicos ── */}
@@ -318,94 +291,17 @@ export default function DashboardPage() {
         )}
       </Entra>
 
-      {/* ── Tareas recientes ── */}
+      {/* ── Dónde está el equipo ──
+          Ocupa el sitio que tenía "Tareas recientes", que repetía en cinco
+          filas lo que ya dicen las tarjetas de arriba y la pantalla de
+          Reasignación entera. El mapa, en cambio, responde algo que el panel
+          no contestaba en ninguna parte: dónde anda la gente ahora mismo. */}
       <Entra as="section" turno={8} className={styles.section}>
-        <h2 className={styles.sectionTitle}>Tareas recientes</h2>
-        {tareasList.length === 0 ? (
-          <EmptyState
-            title="No hay tareas registradas"
-            description="Crea una tarea desde Reasignación para empezar a operar."
-          />
-        ) : (
-          <ul className={styles.tareasList}>
-            {tareasList.slice(0, 5).map((tarea) => {
-              const vencimiento = describirVencimiento(tarea)
-              return (
-              <li key={tarea.id} className={styles.tareaItem}>
-                {/* Antes este clic saltaba a Reasignación, que obliga a
-                    buscar la tarea otra vez en otra lista. Ahora abre la ficha
-                    con los datos completos, sin salir del panel. */}
-                <div
-                  className={styles.tareaInfo}
-                  role="button"
-                  tabIndex={0}
-                  title="Ver detalle de la tarea"
-                  onClick={() => setTareaDetalle(tarea)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setTareaDetalle(tarea)
-                    }
-                  }}
-                >
-                  <span className={styles.tareaTitulo}>{tarea.titulo}</span>
-                  <span className={styles.tareaTecnico}>
-                    {tarea.tecnico?.nombre_completo ?? 'Sin asignar'}
-                  </span>
-                </div>
-
-                <div className={styles.tareaAcciones}>
-                  {vencimiento && (
-                    <Badge label={vencimiento.texto} variant={vencimiento.variant} />
-                  )}
-                  {tarea.total_incidencias > 0 && (
-                    <button
-                      className={`btn btn-secondary btn-sm ${styles.evidenciasBtn}`}
-                      onClick={() => setTareaEvidencias(tarea)}
-                      title="Ver las evidencias que dejó el técnico"
-                    >
-                      <IconFoto />
-                      Evidencias
-                      <span className={styles.evidenciasCount}>
-                        {tarea.total_incidencias}
-                      </span>
-                    </button>
-                  )}
-                  {/* RTF-01 / R2-8: salía el valor crudo del backend
-                      («en_progreso») porque se pasaba `tarea.estado` tal cual.
-                      Las dos cosas —texto y color— vienen ahora del mismo sitio
-                      que el resto de la aplicación. */}
-                  <Badge
-                    label={etiquetaEstado(tarea.estado)}
-                    variant={variantePorEstado(tarea.estado)}
-                  />
-                </div>
-              </li>
-              )
-            })}
-          </ul>
-        )}
+        <MapaEquipoHoy puntos={ubicaciones} error={errorUbicaciones} />
       </Entra>
 
       </div>
 
-      {/* Ficha de solo lectura de la tarea. Desde el panel no se reasigna:
-          para eso está su pantalla, a la que se salta desde aquí. */}
-      <ModalDetalleTarea
-        tarea={tareaDetalle}
-        onClose={() => setTareaDetalle(null)}
-        onReasignar={() => navigate('/supervisor/reasignacion')}
-        onVerEvidencias={(t) => { setTareaDetalle(null); setTareaEvidencias(t) }}
-      />
-
-      {/* SCRUM-141/142: evidencias de la tarea seleccionada */}
-      <ModalEvidencias
-        open={Boolean(tareaEvidencias)}
-        tarea={tareaEvidencias}
-        onClose={() => setTareaEvidencias(null)}
-        puedeEliminar
-        onCambio={fetchData}
-      />
     </div>
   )
 }
