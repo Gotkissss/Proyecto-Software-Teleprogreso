@@ -121,7 +121,6 @@ async def test_admin_y_supervisor_si_pueden_registrar(rol):
 @pytest.mark.parametrize(
     "ruta",
     [
-        "/activos/materiales",
         "/activos/materiales/bajo-stock",
         "/activos/herramientas",
         "/activos/carros",
@@ -131,10 +130,32 @@ def test_tecnico_no_lista_el_inventario(ruta):
     """
     Un técnico solo ve lo que lleva asignado (GET /empleados/mi-equipo). Si
     necesita otra herramienta o material, lo pide al supervisor.
+
+    `/materiales/bajo-stock` se queda aquí a propósito aunque el catálogo ya
+    no: actuar ante un mínimo es trabajo del supervisor.
     """
     app.dependency_overrides[get_db] = override_db(_empleado("tecnico"))
     try:
         assert client.get(ruta, headers=auth("tecnico")).status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_tecnico_si_lee_el_catalogo_de_materiales():
+    """
+    El catálogo sí, desde la HU-S10-07, porque es de donde la pantalla de
+    cierre saca la lista para que el técnico anote lo que gastó.
+
+    Antes respondía 403 y las dos mitades de la misma función se
+    contradecían: `PATCH /tareas/{id}/finalizar` aceptaba el consumo del
+    técnico y lo descontaba del almacén, pero el catálogo no se dejaba leer,
+    así que el modal de finalizar mostraba «no se pudo cargar el inventario»
+    y el campo de materiales quedaba muerto. Se podía gastar del almacén sin
+    poder ver qué hay en él.
+    """
+    app.dependency_overrides[get_db] = override_db(_empleado("tecnico"))
+    try:
+        assert client.get("/activos/materiales", headers=auth("tecnico")).status_code != 403
     finally:
         app.dependency_overrides.clear()
 

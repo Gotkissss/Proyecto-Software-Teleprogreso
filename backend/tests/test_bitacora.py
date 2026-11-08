@@ -283,14 +283,18 @@ def test_login_fallido_queda_registrado(cliente, eventos_bitacora):
 
 
 def test_403_por_rol_queda_registrado_con_actor_y_rol(cliente, eventos_bitacora):
+    # Hace falta una ruta que de verdad le niegue el paso a un tecnico; sirve
+    # cualquiera. Era /activos/materiales, hasta que el catalogo se le abrio
+    # para que pudiera anotar el material que gasta al cerrar una tarea
+    # (HU-S10-07). Reaccionar a un minimo de stock sigue siendo del supervisor.
     tecnico = _persona(5, "tecnico")
     app.dependency_overrides[get_db] = _db_con(tecnico)
-    res = cliente.get("/activos/materiales", headers=_token(tecnico))
+    res = cliente.get("/activos/materiales/bajo-stock", headers=_token(tecnico))
 
     assert res.status_code == 403
     [evento] = _de(eventos_bitacora, "acceso_denegado")
     assert (evento["id_actor"], evento["rol_actor"]) == (5, "tecnico")
-    assert evento["cambios"]["ruta"] == "/activos/materiales"
+    assert evento["cambios"]["ruta"] == "/activos/materiales/bajo-stock"
 
 
 def test_logout_queda_registrado(cliente, eventos_bitacora, monkeypatch):
