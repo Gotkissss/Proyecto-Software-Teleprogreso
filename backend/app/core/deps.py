@@ -169,6 +169,11 @@ require_tecnico     = require_roles("admin", "supervisor", "tecnico")
 # Para vistas/endpoints de gestión visibles a roles administrativos
 # (admin, supervisor y gerente). Pe. dashboards y métricas operativas.
 require_admin_supervisor_gerente = require_roles("admin", "supervisor", "gerente")
+# Para lo que necesitan los cuatro roles. Hoy solo el catálogo de materiales:
+# los tres de gestión lo usan para el inventario y el técnico para elegir lo
+# que gastó al cerrar una tarea (HU-S10-07). No es "sin control de acceso":
+# sigue exigiendo sesión válida, y deja fuera a quien no la tiene.
+require_cualquier_rol = require_roles("admin", "supervisor", "gerente", "tecnico")
 
 
 def auditar_lectura(entidad: str):

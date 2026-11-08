@@ -488,10 +488,13 @@ async def test_lo_que_se_sube_se_puede_ver_con_su_enlace(cliente, carpeta):
 # --- 5. El 403 por rol --------------------------------------------------------------
 
 def test_el_403_por_rol_no_nombra_roles_pero_la_bitacora_si(cliente, eventos_bitacora):
+    # Igual que en test_bitacora: lo que importa es que la ruta le responda
+    # 403 a un tecnico, no cual sea. El catalogo de materiales dejo de valer
+    # como ejemplo cuando se le abrio al tecnico (HU-S10-07).
     tecnico = _persona(5, "tecnico")
     app.dependency_overrides[get_db] = _db_con(tecnico)
 
-    res = cliente.get("/activos/materiales", headers=_token(tecnico))
+    res = cliente.get("/activos/materiales/bajo-stock", headers=_token(tecnico))
 
     assert res.status_code == 403
     detalle = res.json()["detail"]

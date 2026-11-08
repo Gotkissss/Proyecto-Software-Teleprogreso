@@ -6,7 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import require_admin_supervisor_gerente, require_supervisor
+from app.core.deps import (
+    require_admin_supervisor_gerente,
+    require_cualquier_rol,
+    require_supervisor,
+)
 from app.db.session import get_db
 from app.models.activo import Activo, Carro, CarroHerramienta, Herramienta, Material
 from app.models.empleado import Empleado, EmpleadoCarro
@@ -80,14 +84,26 @@ async def get_materiales_bajo_stock(
 )
 async def get_materiales(
     db: Annotated[AsyncSession, Depends(get_db, scope="function")],
-    _current_user: Annotated[Empleado, Depends(require_admin_supervisor_gerente)],
+    _current_user: Annotated[Empleado, Depends(require_cualquier_rol)],
 ):
     """
     Lista todos los materiales del inventario.
-    Roles: admin, supervisor y gerente.
+    Roles: admin, supervisor, gerente y tecnico.
 
-    Un tecnico NO lista el inventario: solo ve lo que lleva asignado, en
-    GET /empleados/mi-equipo. Lo que necesite de mas lo pide al supervisor.
+    El tecnico entro en la lista con la HU-S10-07. Antes no: la regla era que
+    solo veia lo que llevaba asignado (GET /empleados/mi-equipo) y lo demas lo
+    pedia al supervisor. Esa regla se quedo sin actualizar cuando el kardex
+    puso al tecnico a anotar el material que gasto al cerrar una tarea, y el
+    resultado era una contradiccion: PATCH /tareas/{id}/finalizar aceptaba su
+    consumo y descontaba del almacen, pero este catalogo le respondia 403, asi
+    que la pantalla de cierre no tenia de donde sacar la lista y mostraba "no
+    se pudo cargar el inventario". Se podia gastar del almacen sin poder leer
+    que hay en el.
+
+    Es solo lectura del catalogo. Mover el stock a mano sigue siendo de
+    admin/supervisor (POST /activos/materiales/{id}/movimientos), ver quien
+    movio que tambien, y /materiales/bajo-stock se queda fuera porque actuar
+    ante un minimo es trabajo del supervisor, no del tecnico.
     """
     result = await db.execute(
         select(Activo, Material)
