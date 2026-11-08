@@ -17,7 +17,7 @@ export default defineConfig({
         'icon-192.png',
         'icon-512.png',
         'apple-touch-icon.png',
-        'teleprogreso-logo.jpg',
+        'teleprogreso-logo.webp',
       ],
       manifest: {
         name: 'Teleprogreso S.A.',

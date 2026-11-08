@@ -111,7 +111,7 @@ export default function LoginPage() {
         <div className={styles.splash} aria-hidden="true">
           <div className={`${styles.splashLogoRing} destello`}>
             <img
-              src="/teleprogreso-logo.jpg"
+              src="/teleprogreso-logo.webp"
               alt="Teleprogreso"
               className={styles.splashLogo}
             />
@@ -139,7 +139,7 @@ export default function LoginPage() {
               desde="sello"
               turno={0}
               activo={splashDone}
-              src="/teleprogreso-logo.jpg"
+              src="/teleprogreso-logo.webp"
               alt="Teleprogreso"
               className={styles.brandLogo}
             />
@@ -180,7 +180,7 @@ export default function LoginPage() {
           <Entra desde="derecha" turno={0} activo={splashDone} className={styles.card}>
             {/* Logo móvil (oculto en desktop) */}
             <img
-              src="/teleprogreso-logo.jpg"
+              src="/teleprogreso-logo.webp"
               alt="Teleprogreso"
               className={styles.mobileLogo}
             />
