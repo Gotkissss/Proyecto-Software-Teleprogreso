@@ -164,6 +164,7 @@ export default function EquipoPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando tu equipo..."
+        skeleton="detail"
         error={error}
         onRetry={fetchEquipo}
         errorTitle="No se pudo cargar tu equipo"

@@ -386,6 +386,7 @@ export default function BitacoraPage() {
         <PageState
           loading={loading}
           loadingLabel="Cargando bitácora..."
+          skeleton="table"
           error={error}
           onRetry={cargar}
           errorTitle="No se pudo cargar la bitácora"

@@ -127,6 +127,7 @@ export default function MapaPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando el mapa de tu ruta..."
+        skeleton="map"
         error={error}
         onRetry={fetchServicios}
         errorTitle="No se pudo cargar el mapa"

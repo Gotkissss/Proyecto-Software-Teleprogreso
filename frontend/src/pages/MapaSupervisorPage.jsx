@@ -331,6 +331,7 @@ export default function MapaSupervisorPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando el mapa del equipo..."
+        skeleton="map"
         error={error}
         onRetry={fetchTareas}
         errorTitle="No se pudo cargar el mapa"

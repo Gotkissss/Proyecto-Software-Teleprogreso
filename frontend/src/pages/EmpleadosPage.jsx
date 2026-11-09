@@ -233,6 +233,7 @@ export default function EmpleadosPage() {
             <PageState
               loading={cargando}
               loadingLabel="Cargando colaboradores..."
+              skeleton="table"
               error={error}
               onRetry={fetchEmpleados}
               errorTitle="No se pudo cargar la lista de personal"

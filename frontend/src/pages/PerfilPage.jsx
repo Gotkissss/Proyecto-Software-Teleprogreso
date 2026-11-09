@@ -135,6 +135,7 @@ export default function PerfilPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando tu perfil..."
+        skeleton="detail"
         error={error}
         onRetry={cargarPerfil}
         errorTitle="No se pudo cargar tu perfil"

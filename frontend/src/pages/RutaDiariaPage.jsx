@@ -469,6 +469,7 @@ export default function RutaDiariaPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando tu ruta del día..."
+        skeleton="list"
         error={error}
         onRetry={() => fetchRuta()}
         errorTitle="No se pudo cargar tu ruta"
