@@ -3,7 +3,7 @@
 # ============================================================
 
 # ---------- Etapa: Development (para docker-compose local) ----------
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS development
+FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS development
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "80"]
 
 
 # ---------- Etapa: Build (para producción) ----------
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS builder
 
 WORKDIR /app
 
