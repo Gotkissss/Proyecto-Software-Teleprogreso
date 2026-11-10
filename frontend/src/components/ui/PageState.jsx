@@ -12,15 +12,6 @@
  *     return <PageState loading={loading} error={error} onRetry={fetchDatos} />
  *   }
  *
- * Con `skeleton` la carga se dibuja como la pantalla que viene (gris, con su
- * reparto de bloques) en lugar de un spinner centrado:
- *
- *   <PageState loading={loading} skeleton="dashboard" ... />
- *
- * Las formas disponibles están en components/ui/Skeleton.jsx. Sin la prop
- * queda el spinner, que es lo que conviene en una sección pequeña dentro de
- * una página ya montada.
- *
  * Uso inline (cuando solo reemplaza una sección):
  *
  *   {loading || error || items.length === 0 ? (
@@ -40,7 +31,6 @@
  */
 
 import EmptyState from './EmptyState'
-import Skeleton from './Skeleton'
 import Spinner from './Spinner'
 import styles from './PageState.module.css'
 
@@ -65,7 +55,6 @@ export default function PageState({
   onRetry,
   empty = false,
   loadingLabel,
-  skeleton,
   errorTitle = 'No se pudieron cargar los datos',
   emptyIcon,
   emptyTitle = 'No hay nada que mostrar',
@@ -73,14 +62,6 @@ export default function PageState({
   emptyAction,
 }) {
   if (loading) {
-    // Con `skeleton` la pantalla se dibuja en gris con la forma que va a
-    // tener; sin él se queda el spinner de siempre. Es opcional a propósito:
-    // una sección pequeña dentro de una página ya montada no gana nada con un
-    // esqueleto, y el spinner dice lo mismo ocupando menos.
-    if (skeleton) {
-      return <Skeleton variant={skeleton} label={loadingLabel || 'Cargando...'} />
-    }
-
     return (
       <div className={styles.center}>
         <Spinner size="lg" />

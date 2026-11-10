@@ -359,7 +359,6 @@ export default function PausasPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando asistencia..."
-        skeleton="list"
         error={!estado ? error : null}
         onRetry={fetchData}
         errorTitle="No se pudo cargar tu asistencia"

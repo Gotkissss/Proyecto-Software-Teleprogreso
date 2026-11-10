@@ -136,7 +136,6 @@ export default function DashboardPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando el panel..."
-        skeleton="dashboard"
         error={error}
         onRetry={fetchData}
         errorTitle="No se pudo cargar el panel"
