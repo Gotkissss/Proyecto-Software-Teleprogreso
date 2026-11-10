@@ -588,6 +588,7 @@ export default function ReasignacionPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando tareas..."
+        skeleton="list"
         error={error}
         onRetry={fetchData}
         errorTitle="No se pudieron cargar las tareas"

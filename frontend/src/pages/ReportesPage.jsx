@@ -301,7 +301,7 @@ export default function ReportesPage() {
       {/* Sin datos todavía cuenta como carga: entre un rango bloqueado y uno
           válido hay un render antes de que arranque la petición. */}
       {bloqueado ? null : !comparacion ? (
-        <PageState loading={!error} error={error} onRetry={cargarResumen} loadingLabel="Cargando reportes..." />
+        <PageState loading={!error} error={error} onRetry={cargarResumen} loadingLabel="Cargando reportes..." skeleton="cards" />
       ) : (
         <div className={`${styles.cuerpo} ${cargando ? styles.actualizando : ''}`} aria-busy={cargando}>
           {error && (

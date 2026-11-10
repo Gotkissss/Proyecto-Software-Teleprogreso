@@ -1,0 +1,177 @@
+/* ===================================================
+   Skeleton — el dibujo gris de una pantalla cargando
+   =================================================== */
+
+.wrap {
+  width: 100%;
+}
+
+.dibujo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+/* El bloque gris. El brillo que lo cruza va en un pseudoelemento con
+   `transform`, que el navegador resuelve sin repintar: animar el fondo
+   obligaría a redibujar cada bloque en cada cuadro, y en el panel hay
+   más de treinta a la vez. */
+.bloque {
+  display: block;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-alt);
+}
+
+.bloque::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.75) 50%,
+    transparent 70%
+  );
+  transform: translate3d(-100%, 0, 0);
+  animation: brilloCruza 1.5s ease-in-out infinite;
+}
+
+@keyframes brilloCruza {
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+/* Sin el brillo, el esqueleto se quedaría quieto y se leería como contenido
+   roto en vez de como algo cargando: para quien pidió menos movimiento, el
+   bloque late en su sitio, que es un cambio de opacidad y no un movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .bloque::after {
+    animation: none;
+    content: none;
+  }
+  .bloque {
+    animation: late 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes late {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* ── Piezas ─────────────────────────────────────────── */
+
+.cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.metricas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* Mismo reparto que la rejilla real del panel: si aquí fuera `grid` de cuatro
+   columnas, la quinta tarjeta caería sola y el esqueleto prometería una
+   pantalla distinta de la que llega. */
+.tarjeta {
+  flex: 1 1 190px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.relleno {
+  display: block;
+}
+
+.panelGrande {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.dosColumnas {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.filaLista {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filaLista:last-child {
+  border-bottom: none;
+}
+
+.filaTexto {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.filaDato {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.tabla {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.filaTabla {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.mapa {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-5);
+  /* El mapa real ocupa lo que queda de pantalla; el esqueleto reserva un alto
+     fijo para no dejar un hueco distinto del que vendrá después. */
+  height: 420px;
+}
+
+@media (max-width: 900px) {
+  .dosColumnas,
+  .mapa {
+    grid-template-columns: 1fr;
+  }
+  .mapa {
+    height: auto;
+  }
+}
