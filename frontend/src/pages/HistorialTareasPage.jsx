@@ -249,7 +249,6 @@ export default function HistorialTareasPage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando el historial..."
-        skeleton="table"
         error={error}
         onRetry={fetchHistorial}
         errorTitle="No se pudo cargar el historial"

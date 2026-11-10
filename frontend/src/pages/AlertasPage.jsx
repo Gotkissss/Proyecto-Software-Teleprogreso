@@ -384,7 +384,6 @@ export default function AlertasPage() {
         <PageState
           loading={loadingAl}
           loadingLabel="Buscando alertas..."
-          skeleton="list"
           error={errorAl}
           onRetry={fetchAlertas}
           errorTitle="No se pudieron cargar las alertas"

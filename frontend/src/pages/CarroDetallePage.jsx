@@ -228,7 +228,6 @@ export default function CarroDetallePage() {
       <PageState
         loading={loading}
         loadingLabel="Cargando vehículo..."
-        skeleton="detail"
         error={error}
         onRetry={fetchData}
         errorTitle="No se pudo cargar el vehículo"
