@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUbicacion } from '../context/UbicacionContext'
 import { getMiRuta, iniciarServicio } from '../api/rutaService'
+import { duracionCorta, segundosEnJornada } from '../utils/jornada'
 import { Entra, NumeroAnimado } from '../anim/Entra'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -22,7 +23,7 @@ import { obtenerPosicionActual } from '../utils/posicionActual'
 import styles from './RutaDiariaPage.module.css'
 
 const IconPin      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-const IconRoute    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+const IconReloj    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
 const IconNav      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
 const IconChevron  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 const IconCalendar = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -271,7 +272,8 @@ export default function RutaDiariaPage() {
   // (UbicacionContext); no se abre un segundo watchPosition.
   // HU-5: jornadaActiva bloquea iniciar/finalizar tareas sin haber marcado
   // entrada; refrescarJornada evita esperar el ciclo de 30 s del contexto.
-  const { posicion, jornadaActiva, jornadaCargada, pausaActiva, refrescarJornada } =
+  const [ahora, setAhora] = useState(() => Date.now())
+  const { posicion, jornadaActiva, jornadaCargada, pausaActiva, horaEntrada, refrescarJornada } =
     useUbicacion()
   const sinJornada = jornadaCargada && !jornadaActiva
   // RTF-01 / R3-1: una pausa en curso bloquea el trabajo en tareas igual que
@@ -345,6 +347,14 @@ export default function RutaDiariaPage() {
   useEffect(() => {
     refrescarJornada?.()
   }, [refrescarJornada])
+
+  // Medio minuto: es el paso más largo que no deja ver un minuto detenido en
+  // el contador de jornada. No pide nada al servidor, solo mueve el reloj con
+  // el que se hace la resta.
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 30000)
+    return () => clearInterval(reloj)
+  }, [])
 
   // Tras un cambio local, las completadas bajan al final sin alterar el orden
   // que decidió el backend para el resto.
@@ -480,9 +490,13 @@ export default function RutaDiariaPage() {
   const primerNombre = nombre.split(' ')[0]
   const totalServicios = servicios.length
   const paradasCompletadas = servicios.filter((s) => s.estado === 'completado').length
-  const paradasPendientes = servicios.filter(
-    (s) => s.estado === 'pendiente' || s.estado === 'en_progreso'
-  ).length
+  // El segundo contador era "pendientes", que es la resta del primero: con
+  // "1/3 completadas" a la vista, "2 pendientes" no agrega nada. En su lugar
+  // va lo único de esta pantalla que cambia solo y que el técnico mira varias
+  // veces al día, y que además le avisa si olvidó marcar entrada.
+  const tiempoJornada = jornadaActiva
+    ? duracionCorta(segundosEnJornada(horaEntrada, new Date(ahora)))
+    : null
 
   return (
     <div className={styles.page}>
@@ -513,11 +527,11 @@ export default function RutaDiariaPage() {
         </div>
         <div className={styles.resumenDivider} />
         <div className={styles.resumenItem}>
-          <span className={styles.resumenIcon}><IconRoute /></span>
-          <span className={styles.resumenValue}>
-            <NumeroAnimado valor={paradasPendientes} turno={1} />
+          <span className={styles.resumenIcon}><IconReloj /></span>
+          <span className={styles.resumenValue}>{tiempoJornada ?? '—'}</span>
+          <span className={styles.resumenLabel}>
+            {tiempoJornada ? 'EN JORNADA' : 'SIN ENTRADA'}
           </span>
-          <span className={styles.resumenLabel}>PENDIENTES</span>
         </div>
       </Entra>
 
