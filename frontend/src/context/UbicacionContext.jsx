@@ -24,6 +24,8 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
   // HU-5: false hasta la primera respuesta. Evita que la ruta muestre por un
   // instante "registra tu entrada" a quien ya tiene la jornada abierta.
   const [jornadaCargada, setJornadaCargada] = useState(false)
+  // "07:35:00" del día de hoy, o null si todavía no marcó entrada.
+  const [horaEntrada, setHoraEntrada] = useState(null)
   const montadoRef = useRef(true)
 
   const consultarJornada = useCallback(async () => {
@@ -32,6 +34,11 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
       if (montadoRef.current) {
         setJornadaActiva(Boolean(estadoPausas.jornada_activa))
         setPausaActiva(estadoPausas.pausa_activa ?? null)
+        // La hora de entrada la usa la ruta para decir cuánto lleva el
+        // técnico en la calle. Se guarda aquí y no se vuelve a pedir: es la
+        // misma consulta que ya se hacía para saber si la jornada está
+        // abierta.
+        setHoraEntrada(estadoPausas.hora_entrada ?? null)
       }
     } catch {
       // Sin dato confiable de jornada se asume cerrada: es la opción
@@ -40,6 +47,7 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
       // hay jornada abierta no tiene forma de corregirse después.
       if (montadoRef.current) {
         setJornadaActiva(false)
+        setHoraEntrada(null)
         // La pausa se deja como estaba: a diferencia de la jornada, asumir
         // «sin pausa» por un fallo de red es la opción insegura — dejaría
         // iniciar una tarea en pausa, que es justo lo que se bloquea.
@@ -71,6 +79,7 @@ export function UbicacionProvider({ children, idEmpleado = null }) {
   const value = {
     jornadaActiva,
     jornadaCargada,
+    horaEntrada,
     pausaActiva,
     posicion,
     estado,
